@@ -1602,6 +1602,101 @@ body.dark-theme {
   background: #4d4d4d;
 }
 
+/* ================================
+   摄像头预览
+   ================================ */
+.camera-preview-container {
+  position: fixed;
+  bottom: 20px;
+  left: 20px;
+  width: 240px;
+  background: white;
+  border-radius: 12px;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.15);
+  overflow: hidden;
+  z-index: 9999;
+  transition: opacity 0.3s;
+}
+
+.camera-preview-container.hidden {
+  opacity: 0;
+  pointer-events: none;
+  visibility: hidden;
+}
+
+.camera-preview-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 10px 12px;
+  background: linear-gradient(135deg, #4CAF50, #45a049);
+  color: white;
+  font-size: 13px;
+  font-weight: 500;
+}
+
+.camera-preview-header .btn-icon-small {
+  background: none;
+  border: none;
+  color: white;
+  cursor: pointer;
+  padding: 4px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 4px;
+  transition: background 0.2s;
+}
+
+.camera-preview-header .btn-icon-small:hover {
+  background: rgba(255, 255, 255, 0.2);
+}
+
+#camera-preview {
+  width: 100%;
+  height: 180px;
+  object-fit: cover;
+  background: #000;
+}
+
+.camera-select {
+  width: 100%;
+  padding: 8px 12px;
+  border: none;
+  border-top: 1px solid #e0e0e0;
+  background: #f8f9fa;
+  font-size: 12px;
+  cursor: pointer;
+  transition: background 0.2s;
+}
+
+.camera-select:hover {
+  background: #e9ecef;
+}
+
+.camera-select:focus {
+  outline: none;
+  background: white;
+}
+
+.dark-theme .camera-preview-container {
+  background: #2a2a2a;
+}
+
+.dark-theme .camera-select {
+  background: #1e1e1e;
+  border-top-color: #444;
+  color: #d4d4d4;
+}
+
+.dark-theme .camera-select:hover {
+  background: #252525;
+}
+
+.dark-theme .camera-select:focus {
+  background: #2a2a2a;
+}
+
 .btn-confirm {
   background: #1976d2;
   color: white;

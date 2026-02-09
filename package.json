@@ -5,7 +5,7 @@
   "main": "dist/main.js",
   "scripts": {
     "start": "npm run compile && electron .",
-    "dev": "npm run compile:dev && electron . --dev",
+    "dev": "npm run compile:dev && DYLD_LIBRARY_PATH=\"$PWD/node_modules/sherpa-onnx-darwin-arm64:$DYLD_LIBRARY_PATH\" LD_LIBRARY_PATH=\"$PWD/node_modules/sherpa-onnx-linux-x64:$LD_LIBRARY_PATH\" electron . --dev",
     "build": "npm run compile && electron-builder",
     "build:win": "npm run compile && electron-builder --win",
     "build:mac": "npm run compile && electron-builder --mac",
@@ -37,19 +37,36 @@
     "lucide": "^0.563.0",
     "pixi-live2d-display": "^0.4.0",
     "pixi.js": "^7.3.2",
+    "sherpa-onnx-node": "^1.12.23",
     "ws": "^8.16.0"
   },
   "build": {
-    "appdist/**/*": "NyaDeskPet",
+    "appId": "com.nyadeskpet.app",
+    "productName": "NyaDeskPet",
     "directories": {
       "output": "dist"
     },
     "files": [
-      "main.js",
-      "preload.js",
+      "dist/**/*",
       "renderer/**/*",
       "models/**/*",
-      "assets/**/*"
+      "!models/live2d/nya",
+      "assets/**/*",
+      "node_modules/sherpa-onnx-node/**/*",
+      "node_modules/sherpa-onnx-darwin-arm64/**/*",
+      "node_modules/sherpa-onnx-darwin-x64/**/*",
+      "node_modules/sherpa-onnx-linux-x64/**/*",
+      "node_modules/sherpa-onnx-win32-x64/**/*",
+      "!node_modules/sherpa-onnx-*/test",
+      "!node_modules/sherpa-onnx-*/scripts"
+    ],
+    "asarUnpack": [
+      "node_modules/sherpa-onnx-node/**/*",
+      "node_modules/sherpa-onnx-*/**/*.node",
+      "node_modules/sherpa-onnx-*/**/*.dylib",
+      "node_modules/sherpa-onnx-*/**/*.so",
+      "node_modules/sherpa-onnx-*/**/*.dll",
+      "models/**/*"
     ],
     "win": {
       "target": [

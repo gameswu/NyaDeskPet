@@ -57,6 +57,8 @@ declare global {
     settingsManager: SettingsManager;
     i18nManager: I18nManager;
     themeManager: ThemeManager;
+    cameraManager: CameraManager;
+    microphoneManager: MicrophoneManager;
     app: AppDebugInterface;
     PIXI: typeof import('pixi.js');
     lucide?: {
@@ -223,6 +225,9 @@ export interface AppSettings {
   useCustomCharacter: boolean;
   customName: string;
   customPersonality: string;
+  micBackgroundMode: boolean;
+  micVolumeThreshold: number;
+  micAutoSend: boolean;
 }
 
 // 触碰配置类型
@@ -260,6 +265,7 @@ export interface AppState {
   initialized: boolean;
   modelLoaded: boolean;
   connected: boolean;
+  asrReady?: boolean;
 }
 
 export interface AppDebugInterface {
@@ -288,6 +294,40 @@ export interface ThemeManager {
   setTheme(theme: ThemeMode): void;
   getTheme(): ThemeMode;
   getEffectiveTheme(): 'light' | 'dark';
+}
+
+// ============ 安全模块接口 ============
+
+// ============ 摄像头管理器接口 ============
+export interface CameraManager {
+  initialize(): Promise<void>;
+  enumerateDevices(): Promise<MediaDeviceInfo[]>;
+  getDevices(): MediaDeviceInfo[];
+  start(deviceId?: string): Promise<void>;
+  stop(): void;
+  switchDevice(deviceId: string): Promise<void>;
+  getCurrentDeviceId(): string | null;
+  isRunning(): boolean;
+  captureFrame(): Promise<string | null>;
+  destroy(): void;
+}
+
+// ============ 麦克风管理器接口 ============
+export interface MicrophoneManager {
+  initialize(): Promise<void>;
+  enumerateDevices(): Promise<MediaDeviceInfo[]>;
+  getDevices(): MediaDeviceInfo[];
+  startListening(deviceId?: string): Promise<void>;
+  stopListening(): void;
+  setASRCallback(callback: (text: string) => void): void;
+  setVolumeThreshold(threshold: number): void;
+  getVolumeThreshold(): number;
+  setBackgroundMode(enabled: boolean): void;
+  isBackgroundModeEnabled(): boolean;
+  switchDevice(deviceId: string): Promise<void>;
+  getCurrentDeviceId(): string | null;
+  isActive(): boolean;
+  destroy(): void;
 }
 
 // ============ 安全模块接口 ============

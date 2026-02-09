@@ -9,7 +9,7 @@ class SettingsManager implements ISettingsManager {
   private storageKey = 'nya-desk-pet-settings';
   private settings: AppSettings;
   private defaultSettings: AppSettings = {
-    modelPath: '../models/default/model3.json',
+    modelPath: '../models/live2d/mao_pro_zh/runtime/mao_pro.model3.json',
     backendUrl: 'http://localhost:8000',
     wsUrl: 'ws://localhost:8000/ws',
     autoConnect: true,
@@ -21,7 +21,10 @@ class SettingsManager implements ISettingsManager {
     tapConfigs: {},
     useCustomCharacter: false,
     customName: '',
-    customPersonality: ''
+    customPersonality: '',
+    micBackgroundMode: false,
+    micVolumeThreshold: 30,
+    micAutoSend: true
   };
 
   constructor() {

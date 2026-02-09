@@ -148,6 +148,109 @@ private defaultSettings: AppSettings = {
 models/
 └── your-model/
     ├── model3.json          # 模型配置
+    ├── xxx.moc3             # 模型数据
+    └── ...                  # 其他资源
+
+3. 修改设置中的模型路径为 `models/your-model/model3.json`
+
+---
+
+### 语音识别模型配置 (v1.6)
+
+NyaDeskPet 支持使用 **Sherpa-ONNX** 框架进行本地语音识别。
+
+> **📦 模型已内置**：从 v1.6 开始，Sense-Voice-Small 模型已经内置在软件中，**您无需单独下载模型文件**！
+
+#### 安装依赖
+
+1. **安装 FFmpeg**（必需）
+
+   FFmpeg 用于音频格式转换，必须先安装：
+
+   - **macOS**: 
+     ```bash
+     brew install ffmpeg
+     ```
+   
+   - **Ubuntu/Debian**: 
+     ```bash
+     sudo apt install ffmpeg
+     ```
+   
+   - **Windows**: 
+     从 [FFmpeg 官网](https://ffmpeg.org/download.html) 下载并添加到系统环境变量。
+
+2. **验证 FFmpeg 安装**
+   ```bash
+   ffmpeg -version
+   ```
+
+#### 下载语音识别模型（仅开发者需要）
+
+**注意：如果您使用的是已打包的安装包，模型已经内置，可以跳过此步骤！**
+
+如果您从源码构建应用，需要下载 **sense-voice-small** 模型（支持中英日韩粤语）。
+
+**方式1: 从 Hugging Face 下载（推荐）**
+
+访问模型仓库：
+```
+https://huggingface.co/csukuangfj/sherpa-onnx-sense-voice-zh-en-ja-ko-yue-2024-07-17
+```
+
+下载以下文件到 `models/asr/sense-voice-small/` 目录：
+- `model.onnx` - 主模型文件（约 200MB）
+- `tokens.txt` - 词表文件
+
+**方式2: 使用命令行下载**
+
+```bash
+# 安装 Hugging Face CLI
+pip install huggingface-hub
+
+# 下载模型
+huggingface-cli download csukuangfj/sherpa-onnx-sense-voice-zh-en-ja-ko-yue-2024-07-17 \
+  --local-dir models/asr/sense-voice-small
+```
+
+**方式3: 从 GitHub Release 下载**
+
+访问：[Sherpa-ONNX Releases](https://github.com/k2-fsa/sherpa-onnx/releases)
+
+搜索 "sense-voice" 相关的预训练模型包下载。
+
+#### 验证安装
+
+启动应用后，如果看到以下日志说明模型加载成功：
+```
+[ASR] 初始化成功
+ASR 服务初始化成功
+```
+
+如果模型文件缺失，会看到错误提示：
+```
+[ASR] 模型文件不存在
+ASR 服务初始化失败，语音识别功能将不可用
+```
+
+#### 麦克风设置
+
+在设置面板 > 连接 (Connection) 标签页中配置麦克风选项：
+
+- **背景模式**: 启用后，即使未打开对话窗口也可以通过麦克风发送消息
+- **音量阈值**: 设置麦克风录音的音量触发阈值（0-100），低于此值视为静音
+- **自动发送**: 识别完一句话后自动发送，否则填充到输入框等待手动发送
+
+#### 使用语音识别
+
+1. 点击聊天输入框旁的 🎤 按钮开始录音
+2. 对着麦克风说话（确保音量高于设置的阈值）
+3. 说完后等待 1.5 秒静音，系统会自动停止录音并识别
+4. 识别结果会自动发送或填充到输入框（取决于"自动发送"设置）
+
+**提示**: 详细的模型配置和故障排除请参考 `models/asr/README.md`。
+
+---
     ├── *.moc3               # 模型数据
     ├── *.physics3.json      # 物理配置
     ├── motions/             # 动作文件

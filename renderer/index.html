@@ -41,6 +41,20 @@
 
     <!-- 交互区域 -->
     <div id="interaction-area"></div>
+    
+    <!-- 摄像头预览容器 -->
+    <div id="camera-preview-container" class="camera-preview-container hidden">
+      <div class="camera-preview-header">
+        <span data-i18n="camera.preview">摄像头预览</span>
+        <button id="btn-close-camera" class="btn-icon-small">
+          <i data-lucide="x" style="width: 14px; height: 14px;"></i>
+        </button>
+      </div>
+      <video id="camera-preview" autoplay playsinline></video>
+      <select id="camera-select" class="camera-select">
+        <option value="" data-i18n="camera.selectDevice">选择摄像头...</option>
+      </select>
+    </div>
   </div>
 
   <!-- 底栏 -->
@@ -197,6 +211,29 @@
               <input type="range" id="setting-volume" min="0" max="1" step="0.01" value="0.8">
             </div>
           </div>
+          
+          <div class="settings-section">
+            <h3 data-i18n="settings.microphone.title">麦克风</h3>
+            <div class="setting-item">
+              <label>
+                <input type="checkbox" id="setting-mic-background-mode">
+                <span data-i18n="settings.microphone.backgroundMode">允许背景工作</span>
+              </label>
+            </div>
+            <div class="setting-item">
+              <label for="setting-mic-threshold">
+                <span data-i18n="settings.microphone.volumeThreshold">音量阈值</span> 
+                <span id="mic-threshold-value">30</span>
+              </label>
+              <input type="range" id="setting-mic-threshold" min="0" max="100" step="1" value="30">
+            </div>
+            <div class="setting-item">
+              <label>
+                <input type="checkbox" id="setting-mic-auto-send" checked>
+                <span data-i18n="settings.microphone.autoSend">识别后自动发送</span>
+              </label>
+            </div>
+          </div>
         </div>
 
         <!-- 角色设置标签页 -->
@@ -293,6 +330,8 @@
   <script type="module" src="js/backend-client.js"></script>
   <script type="module" src="js/dialogue-manager.js"></script>
   <script type="module" src="js/audio-player.js"></script>
+  <script type="module" src="js/camera-manager.js"></script>
+  <script type="module" src="js/microphone-manager.js"></script>
   <script type="module" src="js/renderer.js"></script>
 
   <!-- 初始化 Lucide Icons -->

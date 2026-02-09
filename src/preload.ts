@@ -36,6 +36,11 @@ export interface ElectronAPI {
   openExternal: (url: string) => Promise<void>;
   getAppVersion: () => Promise<string>;
   
+  // ASR 服务
+  asrInitialize: () => Promise<{ success: boolean }>;
+  asrIsReady: () => Promise<{ ready: boolean }>;
+  asrRecognize: (audioData: string) => Promise<{ success: boolean; text?: string; confidence?: number; error?: string }>;
+  
   // 监听来自主进程的消息
   onBackendMessage: (callback: (data: unknown) => void) => void;
   onVoicePlay: (callback: (data: unknown) => void) => void;
@@ -71,6 +76,11 @@ const electronAPI: ElectronAPI = {
   checkUpdate: (updateSource: string) => ipcRenderer.invoke('check-update', updateSource),
   openExternal: (url: string) => ipcRenderer.invoke('open-external', url),
   getAppVersion: () => ipcRenderer.invoke('get-app-version'),
+  
+  // ASR 服务
+  asrInitialize: () => ipcRenderer.invoke('asr-initialize'),
+  asrIsReady: () => ipcRenderer.invoke('asr-is-ready'),
+  asrRecognize: (audioData: string) => ipcRenderer.invoke('asr-recognize', audioData),
   
   // 监听来自主进程的消息
   onBackendMessage: (callback: (data: unknown) => void) => {

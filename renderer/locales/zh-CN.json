@@ -61,6 +61,12 @@
       "title": "音频",
       "volume": "音量"
     },
+    "microphone": {
+      "title": "麦克风",
+      "backgroundMode": "允许背景工作",
+      "volumeThreshold": "音量阈值",
+      "autoSend": "识别后自动发送"
+    },
     "character": {
       "title": "角色设置",
       "useCustom": "启用自定义角色",
@@ -105,5 +111,9 @@
     "sendFailed": "发送失败，请检查连接",
     "voiceDevInProgress": "语音输入功能开发中...",
     "cameraDevInProgress": "摄像头功能开发中..."
+  },
+  "camera": {
+    "preview": "摄像头预览",
+    "selectDevice": "选择摄像头..."
   }
 }

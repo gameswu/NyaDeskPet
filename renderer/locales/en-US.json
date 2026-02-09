@@ -60,6 +60,12 @@
       "title": "Audio",
       "volume": "Volume"
     },
+    "microphone": {
+      "title": "Microphone",
+      "backgroundMode": "Allow Background Mode",
+      "volumeThreshold": "Volume Threshold",
+      "autoSend": "Auto Send After Recognition"
+    },
     "character": {
       "title": "Character Settings",
       "useCustom": "Enable Custom Character",
@@ -104,5 +110,9 @@
     "sendFailed": "Failed to send message. Please check your connection",
     "voiceDevInProgress": "Voice input feature is under development...",
     "cameraDevInProgress": "Camera feature is under development..."
+  },
+  "camera": {
+    "preview": "Camera Preview",
+    "selectDevice": "Select Camera..."
   }
 }

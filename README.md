@@ -42,6 +42,22 @@
 
 ## 🛠️ 快速运行
 
+### 下载模型文件
+
+由于模型文件较大，未包含在 Git 仓库中，需要单独下载：
+
+1. **Live2D 模型**
+   - 下载地址：https://cubism.live2d.com/sample-data/bin/mao_pro/mao_pro_zh.zip
+   - 解压到 `models/live2d/mao_pro_zh/` 目录
+
+2. **语音识别模型**
+   - 模型：Sherpa-ONNX Sense-Voice-Small (INT8)
+   - 下载地址：https://github.com/k2-fsa/sherpa-onnx/releases/
+   - 解压到 `models/asr/sense-voice-small/` 目录
+   - 需要的文件：`model.int8.onnx`, `tokens.txt`
+
+### 运行应用
+
 ```bash
 # 1. 安装依赖
 npm install

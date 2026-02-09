@@ -96,8 +96,52 @@ async function initializeApp(): Promise<void> {
 
     // 4. 设置音频音量
     window.audioPlayer.setVolume(settings.volume);
+    
+    // 5. 初始化摄像头管理器
+    console.log('初始化摄像头管理器...');
+    await window.cameraManager.initialize();
+    console.log('摄像头管理器初始化成功');
+    
+    // 6. 初始化麦克风管理器
+    console.log('初始化麦克风管理器...');
+    await window.microphoneManager.initialize();
+    console.log('麦克风管理器初始化成功');
+    
+    // 7. 初始化 ASR 服务
+    console.log('初始化 ASR 服务...');
+    try {
+      const asrResult = await (window as any).electronAPI.asrInitialize();
+      if (asrResult.success) {
+        console.log('ASR 服务初始化成功');
+        appState.asrReady = true;
+      } else {
+        console.warn('ASR 服务初始化失败，语音识别功能将不可用');
+        appState.asrReady = false;
+      }
+    } catch (error) {
+      console.error('ASR 服务初始化异常:', error);
+      appState.asrReady = false;
+    }
+    
+    // 设置麦克风 ASR 回调
+    window.microphoneManager.setASRCallback((text: string) => {
+      if (!text.trim()) return;
+      
+      // 如果启用了自动发送，直接发送消息
+      if (settings.micAutoSend) {
+        sendUserMessage(text);
+      } else {
+        // 否则追加到输入框（保留原有内容）
+        const chatInput = document.getElementById('chat-input') as HTMLTextAreaElement;
+        if (chatInput) {
+          const currentValue = chatInput.value.trim();
+          chatInput.value = currentValue ? `${currentValue} ${text}` : text;
+          chatInput.focus();
+        }
+      }
+    });
 
-    // 5. 初始化后端连接
+    // 8. 初始化后端连接
     if (settings.autoConnect) {
       console.log('连接后端服务器...');
       await window.backendClient.initialize();
@@ -172,6 +216,34 @@ function setupEventListeners(): void {
       mouseMoveThrottle = null;
     }, 50);
   });
+  
+  // 摄像头设备选择
+  const cameraSelect = document.getElementById('camera-select') as HTMLSelectElement;
+  if (cameraSelect) {
+    cameraSelect.addEventListener('change', async () => {
+      const deviceId = cameraSelect.value;
+      if (deviceId) {
+        try {
+          await window.cameraManager.switchDevice(deviceId);
+          console.log('已切换到摄像头:', deviceId);
+        } catch (error) {
+          console.error('切换摄像头失败:', error);
+        }
+      }
+    });
+  }
+  
+  // 摄像头预览关闭按钮
+  const btnCloseCamera = document.getElementById('btn-close-camera');
+  if (btnCloseCamera) {
+    btnCloseCamera.addEventListener('click', () => {
+      window.cameraManager.stop();
+      const btnCamera = document.getElementById('btn-camera');
+      if (btnCamera) {
+        btnCamera.classList.remove('active');
+      }
+    });
+  }
 
   // 监听后端消息
   window.backendClient.onMessage((message) => {
@@ -382,13 +454,23 @@ function initializeChatWindow(): void {
   // 语音输入按钮
   const btnVoice = document.getElementById('btn-voice');
   if (btnVoice) {
-    btnVoice.addEventListener('click', () => {
-      btnVoice.classList.toggle('active');
-      // TODO: 实现语音输入功能
-      const isActive = btnVoice.classList.contains('active');
-      console.log('语音输入:', isActive ? '开启' : '关闭');
-      if (isActive) {
-        window.dialogueManager?.showQuick('语音输入功能开发中...', 2000);
+    btnVoice.addEventListener('click', async () => {
+      try {
+        const isActive = window.microphoneManager.isActive();
+        if (isActive) {
+          // 停止监听
+          window.microphoneManager.stopListening();
+          btnVoice.classList.remove('active');
+          console.log('麦克风已停止');
+        } else {
+          // 启动监听
+          await window.microphoneManager.startListening();
+          btnVoice.classList.add('active');
+          console.log('麦克风已启动');
+        }
+      } catch (error) {
+        console.error('麦克风操作失败:', error);
+        window.dialogueManager?.showQuick('麦克风启动失败，请检查权限设置', 2000);
       }
     });
   }
@@ -396,13 +478,37 @@ function initializeChatWindow(): void {
   // 摄像头输入按钮
   const btnCamera = document.getElementById('btn-camera');
   if (btnCamera) {
-    btnCamera.addEventListener('click', () => {
-      btnCamera.classList.toggle('active');
-      // TODO: 实现摄像头功能
-      const isActive = btnCamera.classList.contains('active');
-      console.log('摄像头:', isActive ? '开启' : '关闭');
-      if (isActive) {
-        window.dialogueManager?.showQuick('摄像头功能开发中...', 2000);
+    btnCamera.addEventListener('click', async () => {
+      try {
+        const isActive = window.cameraManager.isRunning();
+        if (isActive) {
+          // 停止摄像头
+          window.cameraManager.stop();
+          btnCamera.classList.remove('active');
+          console.log('摄像头已停止');
+        } else {
+          // 启动摄像头
+          await window.cameraManager.start();
+          btnCamera.classList.add('active');
+          
+          // 填充设备列表
+          const devices = window.cameraManager.getDevices();
+          const cameraSelect = document.getElementById('camera-select') as HTMLSelectElement;
+          if (cameraSelect) {
+            cameraSelect.innerHTML = '<option value="" data-i18n="camera.selectDevice">选择摄像头...</option>';
+            devices.forEach(device => {
+              const option = document.createElement('option');
+              option.value = device.deviceId;
+              option.textContent = device.label || `摄像头 ${device.deviceId.substring(0, 8)}`;
+              cameraSelect.appendChild(option);
+            });
+          }
+          
+          console.log('摄像头已启动');
+        }
+      } catch (error) {
+        console.error('摄像头操作失败:', error);
+        window.dialogueManager?.showQuick('摄像头启动失败，请检查权限设置', 2000);
       }
     });
   }
@@ -488,6 +594,10 @@ function showSettingsPanel(): void {
   (document.getElementById('setting-use-custom-character') as HTMLInputElement).checked = settings.useCustomCharacter;
   (document.getElementById('setting-custom-name') as HTMLInputElement).value = settings.customName;
   (document.getElementById('setting-custom-personality') as HTMLTextAreaElement).value = settings.customPersonality;
+  (document.getElementById('setting-mic-background-mode') as HTMLInputElement).checked = settings.micBackgroundMode || false;
+  (document.getElementById('setting-mic-threshold') as HTMLInputElement).value = String(settings.micVolumeThreshold || 30);
+  (document.getElementById('mic-threshold-value') as HTMLSpanElement).textContent = String(settings.micVolumeThreshold || 30);
+  (document.getElementById('setting-mic-auto-send') as HTMLInputElement).checked = settings.micAutoSend !== false;
 
   // 加载触碰配置
   loadTapConfigUI();
@@ -521,6 +631,9 @@ async function saveSettings(): Promise<void> {
   const useCustomCharacter = (document.getElementById('setting-use-custom-character') as HTMLInputElement).checked;
   const customName = (document.getElementById('setting-custom-name') as HTMLInputElement).value;
   const customPersonality = (document.getElementById('setting-custom-personality') as HTMLTextAreaElement).value;
+  const micBackgroundMode = (document.getElementById('setting-mic-background-mode') as HTMLInputElement).checked;
+  const micVolumeThreshold = parseFloat((document.getElementById('setting-mic-threshold') as HTMLInputElement).value);
+  const micAutoSend = (document.getElementById('setting-mic-auto-send') as HTMLInputElement).checked;
 
   // 保存触碰配置
   saveTapConfigFromUI();
@@ -538,7 +651,10 @@ async function saveSettings(): Promise<void> {
     showSubtitle,
     useCustomCharacter,
     customName,
-    customPersonality
+    customPersonality,
+    micBackgroundMode,
+    micVolumeThreshold,
+    micAutoSend
   });
 
   // 验证设置
@@ -550,6 +666,8 @@ async function saveSettings(): Promise<void> {
 
   // 应用设置
   window.audioPlayer.setVolume(volume);
+  window.microphoneManager.setVolumeThreshold(micVolumeThreshold);
+  window.microphoneManager.setBackgroundMode(micBackgroundMode);
   
   // 保存触碰配置
   saveTapConfigFromUI();
@@ -653,6 +771,18 @@ function initializeSettingsPanel(): void {
       const display = document.getElementById('volume-value');
       if (display) {
         display.textContent = Math.round(parseFloat(value) * 100) + '%';
+      }
+    });
+  }
+  
+  // 麦克风音量阈值滑块实时更新
+  const micThresholdSlider = document.getElementById('setting-mic-threshold') as HTMLInputElement;
+  if (micThresholdSlider) {
+    micThresholdSlider.addEventListener('input', (e: Event) => {
+      const value = (e.target as HTMLInputElement).value;
+      const display = document.getElementById('mic-threshold-value');
+      if (display) {
+        display.textContent = value;
       }
     });
   }
@@ -869,11 +999,26 @@ async function sendUserMessage(text: string): Promise<void> {
   }
 
   try {
-    const result = await window.backendClient.sendMessage({
+    const message: any = {
       type: 'user_input',
       text: text.trim(),
       timestamp: Date.now()
-    });
+    };
+    
+    // 如果摄像头正在运行，附带截图
+    if (window.cameraManager.isRunning()) {
+      const frame = await window.cameraManager.captureFrame();
+      if (frame) {
+        message.attachment = {
+          type: 'image',
+          data: frame,
+          source: 'camera'
+        };
+        console.log('已附加摄像头截图');
+      }
+    }
+    
+    const result = await window.backendClient.sendMessage(message);
 
     console.log('消息发送结果:', result);
   } catch (error) {

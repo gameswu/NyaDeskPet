@@ -1,6 +1,45 @@
 import { app, BrowserWindow, ipcMain, screen, IpcMainInvokeEvent, Tray, Menu, nativeImage, dialog, shell } from 'electron';
 import * as path from 'path';
 import * as https from 'https';
+import * as fs from 'fs';
+import * as os from 'os';
+import asrService from './asr-service';
+
+// 在最开始设置动态库路径，确保 Electron 启动时就能找到 sherpa-onnx 库
+const platform = process.platform;
+const arch = process.arch;
+let sherpaPackageName = '';
+
+if (platform === 'darwin') {
+  sherpaPackageName = arch === 'arm64' ? 'sherpa-onnx-darwin-arm64' : 'sherpa-onnx-darwin-x64';
+} else if (platform === 'linux') {
+  sherpaPackageName = 'sherpa-onnx-linux-x64';
+} else if (platform === 'win32') {
+  sherpaPackageName = arch === 'x64' ? 'sherpa-onnx-win32-x64' : 'sherpa-onnx-win32-ia32';
+}
+
+if (sherpaPackageName) {
+  // 在开发模式下，使用 __dirname 的父目录（项目根目录）
+  const appPath = __dirname.endsWith('dist') ? path.dirname(__dirname) : __dirname;
+  const sherpaLibPath = path.join(appPath, 'node_modules', sherpaPackageName);
+  
+  if (platform === 'darwin') {
+    const currentDyldPath = process.env.DYLD_LIBRARY_PATH || '';
+    process.env.DYLD_LIBRARY_PATH = currentDyldPath 
+      ? `${sherpaLibPath}:${currentDyldPath}` 
+      : sherpaLibPath;
+  } else if (platform === 'linux') {
+    const currentLdPath = process.env.LD_LIBRARY_PATH || '';
+    process.env.LD_LIBRARY_PATH = currentLdPath 
+      ? `${sherpaLibPath}:${currentLdPath}` 
+      : sherpaLibPath;
+  } else if (platform === 'win32') {
+    const currentPath = process.env.PATH || '';
+    process.env.PATH = currentPath 
+      ? `${sherpaLibPath};${currentPath}` 
+      : sherpaLibPath;
+  }
+}
 
 let mainWindow: BrowserWindow | null = null;
 let tray: Tray | null = null;
@@ -417,6 +456,87 @@ ipcMain.handle('open-external', async (_event: IpcMainInvokeEvent, url: string) 
 // 获取应用版本
 ipcMain.handle('get-app-version', () => {
   return app.getVersion();
+});
+
+// ==================== ASR 相关处理器 ====================
+
+/**
+ * 初始化 ASR 服务
+ */
+ipcMain.handle('asr-initialize', async () => {
+  const success = await asrService.initialize();
+  return { success };
+});
+
+/**
+ * 检查 ASR 服务是否就绪
+ */
+ipcMain.handle('asr-is-ready', () => {
+  return { ready: asrService.isReady() };
+});
+
+/**
+ * 识别音频数据
+ * @param audioData 音频数据（Base64 编码的 WebM 格式）
+ */
+ipcMain.handle('asr-recognize', async (_event: IpcMainInvokeEvent, audioData: string) => {
+  try {
+    if (!asrService.isReady()) {
+      return { success: false, error: 'ASR 服务未初始化' };
+    }
+
+    // 将 Base64 解码为 Buffer
+    const audioBuffer = Buffer.from(audioData, 'base64');
+    
+    // 保存临时文件
+    const tempDir = os.tmpdir();
+    const tempWebMPath = path.join(tempDir, `asr_${Date.now()}.webm`);
+    const tempWavPath = path.join(tempDir, `asr_${Date.now()}.wav`);
+    
+    fs.writeFileSync(tempWebMPath, audioBuffer);
+
+    // 使用 ffmpeg 转换为 16kHz 16-bit PCM WAV
+    const { exec } = require('child_process');
+    await new Promise<void>((resolve, reject) => {
+      exec(
+        `ffmpeg -i "${tempWebMPath}" -ar 16000 -ac 1 -sample_fmt s16 "${tempWavPath}"`,
+        (error: any) => {
+          if (error) {
+            console.error('[ASR] FFmpeg 转换失败:', error);
+            reject(error);
+          } else {
+            resolve();
+          }
+        }
+      );
+    });
+
+    // 读取 WAV 文件并识别
+    const wavBuffer = fs.readFileSync(tempWavPath);
+    
+    // 跳过 WAV 头（44 字节）
+    const pcmBuffer = wavBuffer.slice(44);
+    
+    // 识别音频
+    const result = await asrService.recognize(pcmBuffer);
+
+    // 清理临时文件
+    try {
+      fs.unlinkSync(tempWebMPath);
+      fs.unlinkSync(tempWavPath);
+    } catch (e) {
+      console.error('[ASR] 清理临时文件失败:', e);
+    }
+
+    if (result) {
+      return { success: true, text: result.text, confidence: result.confidence };
+    } else {
+      return { success: false, error: '识别失败' };
+    }
+  } catch (error: any) {
+    console.error('[ASR] 识别错误:', error);
+    return { success: false, error: error.message };
+  }
 });
 
 /**
