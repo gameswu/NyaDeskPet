@@ -27,6 +27,8 @@ class Live2DManager implements ILive2DManager {
   private modelStartX: number = 0;
   private modelStartY: number = 0;
   private originalModelBounds: { width: number; height: number } | null = null;
+  private userScale: number = 1.0; // 用户自定义缩放倍数
+  private baseScale: number = 1.0; // 自适应计算的基础缩放
 
   constructor(canvasId: string) {
     const canvas = document.getElementById(canvasId) as HTMLCanvasElement;
@@ -131,6 +133,9 @@ class Live2DManager implements ILive2DManager {
         
         // 设置拖动功能（同时处理点击）
         this.setupDragging(live2dModel);
+        
+        // 设置滚轮缩放功能
+        this.setupWheelZoom();
       }
       
       console.log('模型加载成功');
@@ -167,12 +172,19 @@ class Live2DManager implements ILive2DManager {
   private handleResize(): void {
     if (!this.app || !this.model) return;
 
-    // 使用 CSS 尺寸
-    const newWidth = this.canvas.clientWidth;
-    const newHeight = this.canvas.clientHeight;
+    // 强制获取最新的容器尺寸
+    const container = this.canvas.parentElement;
+    if (!container) return;
+    
+    const newWidth = container.clientWidth;
+    const newHeight = container.clientHeight;
 
     console.log(`调整窗口尺寸: ${newWidth}x${newHeight}`);
 
+    // 更新canvas的CSS尺寸
+    this.canvas.style.width = newWidth + 'px';
+    this.canvas.style.height = newHeight + 'px';
+    
     // 更新PixiJS渲染器尺寸
     this.app.renderer.resize(newWidth, newHeight);
     
@@ -247,11 +259,14 @@ class Live2DManager implements ILive2DManager {
 
     const model = this.model as any;
     
-    // 使用 CSS 尺寸（与鼠标事件坐标系一致）
-    const canvasWidth = this.canvas.clientWidth;
-    const canvasHeight = this.canvas.clientHeight;
+    // 获取容器的实际尺寸
+    const container = this.canvas.parentElement;
+    if (!container) return;
     
-    // 确保渲染器尺寸与 CSS 尺寸一致
+    const canvasWidth = container.clientWidth;
+    const canvasHeight = container.clientHeight;
+    
+    // 确保渲染器尺寸与容器尺寸一致
     this.app.renderer.resize(canvasWidth, canvasHeight);
     
     // 使用原始模型尺寸或当前边界框
@@ -268,16 +283,17 @@ class Live2DManager implements ILive2DManager {
       modelHeight = model.height / currentScale;
     }
     
-    // 计算合适的缩放比例（保持75%的窗口占用，留出边距）
+    // 计算合适的基础缩放比例（保持75%的窗口占用，留出边距）
     const targetWidthRatio = 0.75;
     const targetHeightRatio = 0.75;
     
     const scaleX = (canvasWidth * targetWidthRatio) / modelWidth;
     const scaleY = (canvasHeight * targetHeightRatio) / modelHeight;
-    const scale = Math.min(scaleX, scaleY);
+    this.baseScale = Math.min(scaleX, scaleY);
     
-    // 应用缩放
-    model.scale.set(scale);
+    // 应用基础缩放和用户自定义缩放
+    const finalScale = this.baseScale * this.userScale;
+    model.scale.set(finalScale);
     
     // 居中显示（X轴中心，Y轴居中）
     model.x = canvasWidth / 2;
@@ -285,11 +301,42 @@ class Live2DManager implements ILive2DManager {
     
     console.log('模型位置调整:', {
       originalSize: this.originalModelBounds,
-      scale,
+      baseScale: this.baseScale,
+      userScale: this.userScale,
+      finalScale,
       position: { x: model.x, y: model.y },
       displaySize: { width: model.width, height: model.height },
       canvas: { width: canvasWidth, height: canvasHeight }
     });
+  }
+
+  /**
+   * 设置滚轮缩放功能
+   */
+  private setupWheelZoom(): void {
+    this.canvas.addEventListener('wheel', (event: WheelEvent) => {
+      event.preventDefault();
+      
+      if (!this.model) return;
+      
+      // 计算缩放增量 (向上滚动放大，向下滚动缩小)
+      const delta = -event.deltaY;
+      const zoomSpeed = 0.001; // 缩放速度
+      const zoomDelta = delta * zoomSpeed;
+      
+      // 更新用户缩放倍数，限制在 0.3 到 3.0 之间
+      this.userScale = Math.max(0.3, Math.min(3.0, this.userScale + zoomDelta));
+      
+      // 应用新的缩放
+      const model = this.model as any;
+      const finalScale = this.baseScale * this.userScale;
+      model.scale.set(finalScale);
+      
+      console.log('滚轮缩放:', {
+        userScale: this.userScale.toFixed(2),
+        finalScale: finalScale.toFixed(2)
+      });
+    }, { passive: false });
   }
 
   /**
