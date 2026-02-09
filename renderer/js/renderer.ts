@@ -3,7 +3,7 @@
  * 协调各个模块的工作
  */
 
-import type { AppState, AppDebugInterface } from '../types/global';
+import type { AppState, AppDebugInterface, ThemeMode } from '../types/global';
 
 // 应用状态
 const appState: AppState = {
@@ -11,6 +11,48 @@ const appState: AppState = {
   modelLoaded: false,
   connected: false
 };
+
+// UI显示状态
+let isUIVisible: boolean = true;
+
+/**
+ * 切换UI显示/隐藏
+ */
+function toggleUI(): void {
+  isUIVisible = !isUIVisible;
+  
+  const topBar = document.getElementById('top-bar');
+  const bottomBar = document.getElementById('bottom-bar');
+  const toggleBtn = document.getElementById('btn-toggle-ui');
+  
+  if (isUIVisible) {
+    topBar?.classList.remove('hidden');
+    bottomBar?.classList.remove('hidden');
+    toggleBtn?.classList.remove('ui-hidden');
+    // 更换图标为 eye-off
+    const icon = toggleBtn?.querySelector('i');
+    if (icon) {
+      icon.setAttribute('data-lucide', 'eye-off');
+      if (window.lucide) {
+        window.lucide.createIcons();
+      }
+    }
+    console.log('显示UI');
+  } else {
+    topBar?.classList.add('hidden');
+    bottomBar?.classList.add('hidden');
+    toggleBtn?.classList.add('ui-hidden');
+    // 更换图标为 eye
+    const icon = toggleBtn?.querySelector('i');
+    if (icon) {
+      icon.setAttribute('data-lucide', 'eye');
+      if (window.lucide) {
+        window.lucide.createIcons();
+      }
+    }
+    console.log('隐藏UI');
+  }
+}
 
 /**
  * 初始化应用
@@ -24,12 +66,22 @@ async function initializeApp(): Promise<void> {
     const settings = window.settingsManager.getSettings();
     console.log('当前设置:', settings);
 
-    // 2. 初始化 Live2D
+    // 2. 初始化国际化
+    console.log('初始化国际化...');
+    await window.i18nManager.initialize();
+    console.log('国际化初始化成功');
+
+    // 3. 初始化主题
+    console.log('初始化主题...');
+    window.themeManager.initialize();
+    console.log('主题初始化成功');
+
+    // 4. 初始化 Live2D
     console.log('初始化 Live2D...');
     await window.live2dManager.initialize();
     console.log('Live2D 初始化成功');
     
-    // 3. 加载模型
+    // 5. 加载模型
     try {
       console.log('加载模型:', settings.modelPath);
       await window.live2dManager.loadModel(settings.modelPath);
@@ -82,6 +134,11 @@ function setupEventListeners(): void {
     console.error('交互区域元素未找到');
     return;
   }
+
+  // 双击切换UI显示
+  interactionArea.addEventListener('dblclick', () => {
+    toggleUI();
+  });
 
   interactionArea.addEventListener('click', (e: MouseEvent) => {
     const rect = interactionArea.getBoundingClientRect();
@@ -157,6 +214,151 @@ function setupWindowControls(): void {
       showSettingsPanel();
     });
   }
+
+  // UI切换按钮
+  const btnToggleUI = document.getElementById('btn-toggle-ui');
+  if (btnToggleUI) {
+    btnToggleUI.addEventListener('click', toggleUI);
+  }
+}
+
+/**
+ * 显示对话窗口
+ */
+function showChatWindow(): void {
+  const chatWindow = document.getElementById('chat-window');
+  if (chatWindow) {
+    chatWindow.classList.remove('hidden');
+    const chatInput = document.getElementById('chat-input') as HTMLTextAreaElement;
+    chatInput?.focus();
+  }
+}
+
+/**
+ * 隐藏对话窗口
+ */
+function hideChatWindow(): void {
+  const chatWindow = document.getElementById('chat-window');
+  if (chatWindow) {
+    chatWindow.classList.add('hidden');
+  }
+}
+
+/**
+ * 添加聊天消息到界面
+ */
+function addChatMessage(text: string, isUser: boolean): void {
+  const messagesContainer = document.getElementById('chat-messages');
+  if (!messagesContainer) return;
+
+  const messageDiv = document.createElement('div');
+  messageDiv.className = `chat-message ${isUser ? 'user' : 'assistant'}`;
+  messageDiv.textContent = text;
+  
+  messagesContainer.appendChild(messageDiv);
+  messagesContainer.scrollTop = messagesContainer.scrollHeight;
+}
+
+/**
+ * 发送聊天消息
+ */
+async function sendChatMessage(): Promise<void> {
+  const chatInput = document.getElementById('chat-input') as HTMLTextAreaElement;
+  if (!chatInput) return;
+
+  const text = chatInput.value.trim();
+  if (!text) return;
+
+  // 添加用户消息到界面
+  addChatMessage(text, true);
+  chatInput.value = '';
+  chatInput.style.height = 'auto';
+
+  // 发送到后端
+  try {
+    await sendUserMessage(text);
+  } catch (error) {
+    console.error('发送消息失败:', error);
+    addChatMessage('发送失败，请检查连接', false);
+  }
+}
+
+/**
+ * 初始化对话窗口
+ */
+function initializeChatWindow(): void {
+  // 打开对话按钮
+  const btnOpenChat = document.getElementById('btn-open-chat');
+  if (btnOpenChat) {
+    btnOpenChat.addEventListener('click', showChatWindow);
+  }
+
+  // 关闭对话按钮
+  const btnCloseChat = document.getElementById('btn-close-chat');
+  if (btnCloseChat) {
+    btnCloseChat.addEventListener('click', hideChatWindow);
+  }
+
+  // 发送按钮
+  const btnSend = document.getElementById('btn-send');
+  if (btnSend) {
+    btnSend.addEventListener('click', sendChatMessage);
+  }
+
+  // 输入框回车发送
+  const chatInput = document.getElementById('chat-input') as HTMLTextAreaElement;
+  if (chatInput) {
+    chatInput.addEventListener('keydown', (e: KeyboardEvent) => {
+      if (e.key === 'Enter' && !e.shiftKey) {
+        e.preventDefault();
+        sendChatMessage();
+      }
+    });
+
+    // 自动调整输入框高度
+    chatInput.addEventListener('input', () => {
+      chatInput.style.height = 'auto';
+      chatInput.style.height = chatInput.scrollHeight + 'px';
+    });
+  }
+
+  // 语音输入按钮
+  const btnVoice = document.getElementById('btn-voice');
+  if (btnVoice) {
+    btnVoice.addEventListener('click', () => {
+      btnVoice.classList.toggle('active');
+      // TODO: 实现语音输入功能
+      const isActive = btnVoice.classList.contains('active');
+      console.log('语音输入:', isActive ? '开启' : '关闭');
+      if (isActive) {
+        window.dialogueManager?.showQuick('语音输入功能开发中...', 2000);
+      }
+    });
+  }
+
+  // 摄像头输入按钮
+  const btnCamera = document.getElementById('btn-camera');
+  if (btnCamera) {
+    btnCamera.addEventListener('click', () => {
+      btnCamera.classList.toggle('active');
+      // TODO: 实现摄像头功能
+      const isActive = btnCamera.classList.contains('active');
+      console.log('摄像头:', isActive ? '开启' : '关闭');
+      if (isActive) {
+        window.dialogueManager?.showQuick('摄像头功能开发中...', 2000);
+      }
+    });
+  }
+
+  // 点击背景关闭
+  const chatWindow = document.getElementById('chat-window');
+  if (chatWindow) {
+    chatWindow.addEventListener('click', (e: MouseEvent) => {
+      if (e.target === chatWindow) {
+        hideChatWindow();
+      }
+    });
+  }
 }
 
 /**
@@ -171,10 +373,13 @@ function showSettingsPanel(): void {
   
   (document.getElementById('setting-model-path') as HTMLInputElement).value = settings.modelPath;
   (document.getElementById('setting-backend-url') as HTMLInputElement).value = settings.backendUrl;
-  (document.getElementById('setting-ws-url') as HTMLInputElement).value = settings.wsUrl;
+  (document.getElementById('setting-websocket-url') as HTMLInputElement).value = settings.wsUrl;
   (document.getElementById('setting-auto-connect') as HTMLInputElement).checked = settings.autoConnect;
   (document.getElementById('setting-volume') as HTMLInputElement).value = String(settings.volume);
   (document.getElementById('volume-value') as HTMLSpanElement).textContent = Math.round(settings.volume * 100) + '%';
+  (document.getElementById('setting-update-source') as HTMLInputElement).value = settings.updateSource;
+  (document.getElementById('setting-language') as HTMLSelectElement).value = settings.locale;
+  (document.getElementById('setting-theme') as HTMLSelectElement).value = settings.theme;
 
   panel.classList.add('show');
 }
@@ -195,9 +400,12 @@ function hideSettingsPanel(): void {
 async function saveSettings(): Promise<void> {
   const modelPath = (document.getElementById('setting-model-path') as HTMLInputElement).value;
   const backendUrl = (document.getElementById('setting-backend-url') as HTMLInputElement).value;
-  const wsUrl = (document.getElementById('setting-ws-url') as HTMLInputElement).value;
+  const wsUrl = (document.getElementById('setting-websocket-url') as HTMLInputElement).value;
   const autoConnect = (document.getElementById('setting-auto-connect') as HTMLInputElement).checked;
   const volume = parseFloat((document.getElementById('setting-volume') as HTMLInputElement).value);
+  const updateSource = (document.getElementById('setting-update-source') as HTMLInputElement).value;
+  const locale = (document.getElementById('setting-language') as HTMLSelectElement).value;
+  const theme = (document.getElementById('setting-theme') as HTMLSelectElement).value as ThemeMode;
 
   // 更新设置
   window.settingsManager.updateSettings({
@@ -205,13 +413,16 @@ async function saveSettings(): Promise<void> {
     backendUrl,
     wsUrl,
     autoConnect,
-    volume
+    volume,
+    updateSource,
+    locale,
+    theme
   });
 
   // 验证设置
   const validation = window.settingsManager.validateSettings();
   if (!validation.valid) {
-    alert('设置验证失败:\n' + validation.errors.join('\n'));
+    alert(window.i18nManager.t('messages.settingsValidationFailed') + ':\n' + validation.errors.join('\n'));
     return;
   }
 
@@ -219,7 +430,7 @@ async function saveSettings(): Promise<void> {
   window.audioPlayer.setVolume(volume);
   
   // 提示用户重启应用
-  if (confirm('设置已保存！部分设置需要重新加载才能生效，是否立即重新加载？')) {
+  if (confirm(window.i18nManager.t('messages.reloadConfirm'))) {
     window.location.reload();
   } else {
     hideSettingsPanel();
@@ -230,10 +441,10 @@ async function saveSettings(): Promise<void> {
  * 重置设置
  */
 function resetSettings(): void {
-  if (confirm('确定要恢复默认设置吗？')) {
+  if (confirm(window.i18nManager.t('messages.resetConfirm'))) {
     window.settingsManager.resetToDefaults();
     showSettingsPanel(); // 重新显示以更新表单
-    window.dialogueManager.showDialogue('已恢复默认设置', 2000);
+    window.dialogueManager.showDialogue(window.i18nManager.t('messages.settingsReset'), 2000);
   }
 }
 
@@ -259,6 +470,33 @@ function initializeSettingsPanel(): void {
     btnResetSettings.addEventListener('click', resetSettings);
   }
 
+  // 浏览模型文件按钮
+  const btnBrowseModel = document.getElementById('btn-browse-model');
+  if (btnBrowseModel) {
+    btnBrowseModel.addEventListener('click', async () => {
+      try {
+        const filePath = await window.electronAPI.selectModelFile();
+        if (filePath) {
+          const modelPathInput = document.getElementById('setting-model-path') as HTMLInputElement;
+          if (modelPathInput) {
+            modelPathInput.value = filePath;
+          }
+        }
+      } catch (error) {
+        console.error('选择文件失败:', error);
+      }
+    });
+  }
+
+  // 检查更新按钮
+  const btnCheckUpdate = document.getElementById('btn-check-update');
+  if (btnCheckUpdate) {
+    btnCheckUpdate.addEventListener('click', checkForUpdates);
+  }
+
+  // 获取并显示当前版本
+  loadAppVersion();
+
   // 音量滑块实时更新
   const volumeSlider = document.getElementById('setting-volume') as HTMLInputElement;
   if (volumeSlider) {
@@ -271,6 +509,24 @@ function initializeSettingsPanel(): void {
     });
   }
 
+  // 语言切换
+  const languageSelect = document.getElementById('setting-language') as HTMLSelectElement;
+  if (languageSelect) {
+    languageSelect.addEventListener('change', async (e: Event) => {
+      const newLocale = (e.target as HTMLSelectElement).value;
+      await window.i18nManager.setLocale(newLocale);
+    });
+  }
+
+  // 主题切换
+  const themeSelect = document.getElementById('setting-theme') as HTMLSelectElement;
+  if (themeSelect) {
+    themeSelect.addEventListener('change', (e: Event) => {
+      const newTheme = (e.target as HTMLSelectElement).value as ThemeMode;
+      window.themeManager.setTheme(newTheme);
+    });
+  }
+
   // 点击背景关闭
   const panel = document.getElementById('settings-panel');
   if (panel) {
@@ -279,6 +535,81 @@ function initializeSettingsPanel(): void {
         hideSettingsPanel();
       }
     });
+  }
+}
+
+/**
+ * 加载应用版本
+ */
+async function loadAppVersion(): Promise<void> {
+  try {
+    const version = await window.electronAPI.getAppVersion();
+    const versionEl = document.getElementById('app-version');
+    if (versionEl) {
+      versionEl.textContent = version;
+    }
+  } catch (error) {
+    console.error('获取版本失败:', error);
+  }
+}
+
+/**
+ * 检查更新
+ */
+async function checkForUpdates(): Promise<void> {
+  const statusEl = document.getElementById('update-status');
+  const btnCheckUpdate = document.getElementById('btn-check-update') as HTMLButtonElement;
+  
+  if (!statusEl) return;
+  
+  // 获取更新源设置
+  const settings = window.settingsManager.getSettings();
+  const updateSource = settings.updateSource || 'https://github.com/gameswu/NyaDeskPet';
+  
+  // 显示检查中状态
+  statusEl.className = 'update-status checking';
+  statusEl.innerHTML = '<i data-lucide="loader" style="width: 14px; height: 14px; animation: spin 1s linear infinite;"></i> 正在检查更新...';
+  statusEl.classList.remove('hidden');
+  if (btnCheckUpdate) btnCheckUpdate.disabled = true;
+  
+  // 刷新图标
+  if (window.lucide) {
+    window.lucide.createIcons();
+  }
+  
+  try {
+    const result = await window.electronAPI.checkUpdate(updateSource);
+    
+    if (result.error) {
+      statusEl.className = 'update-status error';
+      statusEl.textContent = `检查更新失败: ${result.error}`;
+    } else if (result.hasUpdate) {
+      statusEl.className = 'update-status has-update';
+      statusEl.innerHTML = `
+        <div><strong>发现新版本 ${result.latestVersion}</strong></div>
+        <div style="margin-top: 4px;">${result.releaseName || ''}</div>
+        <div style="margin-top: 8px;">
+          <a id="link-release" href="#">点击前往下载页面</a>
+        </div>
+      `;
+      
+      // 绑定链接点击事件
+      const linkRelease = document.getElementById('link-release');
+      if (linkRelease && result.releaseUrl) {
+        linkRelease.addEventListener('click', (e) => {
+          e.preventDefault();
+          window.electronAPI.openExternal(result.releaseUrl!);
+        });
+      }
+    } else {
+      statusEl.className = 'update-status no-update';
+      statusEl.textContent = `当前已是最新版本 (${result.currentVersion})`;
+    }
+  } catch (error) {
+    statusEl.className = 'update-status error';
+    statusEl.textContent = '检查更新失败，请稍后再试';
+  } finally {
+    if (btnCheckUpdate) btnCheckUpdate.disabled = false;
   }
 }
 
@@ -319,7 +650,30 @@ function showError(message: string, duration: number = 5000): void {
 window.addEventListener('DOMContentLoaded', () => {
   console.log('DOM 加载完成');
   initializeSettingsPanel();
+  initializeChatWindow();
   initializeApp();
+
+  // 监听来自主进程的设置打开请求
+  window.electronAPI.onOpenSettings(() => {
+    console.log('收到主进程打开设置请求');
+    showSettingsPanel();
+  });
+
+  // 监听来自主进程的打开对话请求
+  if (window.electronAPI.onOpenChat) {
+    window.electronAPI.onOpenChat(() => {
+      console.log('收到主进程打开对话请求');
+      showChatWindow();
+    });
+  }
+
+  // 监听来自主进程的切换UI请求
+  if (window.electronAPI.onToggleUI) {
+    window.electronAPI.onToggleUI(() => {
+      console.log('收到主进程切换UI请求');
+      toggleUI();
+    });
+  }
 });
 
 /**
@@ -348,7 +702,9 @@ const appDebug: AppDebugInterface = {
   playMotion: (group: string, index?: number) => window.live2dManager.playMotion(group, index),
   setExpression: (id: string) => window.live2dManager.setExpression(id),
   getState: () => appState,
-  showSettings: () => showSettingsPanel()
+  showSettings: () => showSettingsPanel(),
+  showChat: () => showChatWindow(),
+  toggleUI: () => toggleUI()
 };
 
 window.app = appDebug;

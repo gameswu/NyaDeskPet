@@ -1,0 +1,83 @@
+{
+  "app": {
+    "name": "小夜桌宠",
+    "version": "版本"
+  },
+  "topBar": {
+    "status": "状态",
+    "connected": "已连接",
+    "disconnected": "未连接",
+    "settings": "设置",
+    "minimize": "最小化",
+    "close": "关闭"
+  },
+  "bottomBar": {
+    "openChat": "打开对话"
+  },
+  "chatWindow": {
+    "title": "与喵呜对话",
+    "placeholder": "输入消息...",
+    "send": "发送",
+    "voice": "语音输入",
+    "camera": "摄像头",
+    "close": "关闭"
+  },
+  "settings": {
+    "title": "设置",
+    "model": {
+      "title": "Live2D 模型",
+      "path": "模型路径",
+      "pathPlaceholder": "../models/default/model3.json",
+      "browse": "浏览",
+      "hint": "点击浏览按钮选择 model3.json 或 model.json 文件"
+    },
+    "backend": {
+      "title": "后端连接",
+      "autoConnect": "启动时自动连接后端",
+      "httpUrl": "HTTP 地址",
+      "httpPlaceholder": "http://localhost:8000",
+      "wsUrl": "WebSocket 地址",
+      "wsPlaceholder": "ws://localhost:8000/ws"
+    },
+    "audio": {
+      "title": "音频",
+      "volume": "音量"
+    },
+    "appearance": {
+      "title": "外观",
+      "language": "语言",
+      "theme": "主题",
+      "themeLight": "明亮",
+      "themeDark": "暗黑",
+      "themeSystem": "跟随系统"
+    },
+    "about": {
+      "title": "关于",
+      "version": "版本",
+      "checkUpdate": "检查更新",
+      "updateSource": "更新源",
+      "updateSourcePlaceholder": "https://github.com/owner/repo",
+      "updateSourceHint": "GitHub 仓库地址，用于检查更新"
+    },
+    "resetButton": "恢复默认",
+    "saveButton": "保存设置",
+    "close": "关闭"
+  },
+  "update": {
+    "checking": "正在检查更新...",
+    "hasUpdate": "发现新版本 {version}！<br><a href=\"#\">点击下载</a>",
+    "noUpdate": "已是最新版本",
+    "error": "检查更新失败: {error}"
+  },
+  "messages": {
+    "settingsSaved": "设置已保存！",
+    "settingsReset": "已恢复默认设置",
+    "settingsValidationFailed": "设置验证失败",
+    "reloadConfirm": "设置已保存！部分设置需要重新加载才能生效，是否立即重新加载？",
+    "resetConfirm": "确定要恢复默认设置吗？",
+    "confirmClose": "确定要关闭桌面宠物吗？",
+    "sendFailed": "发送失败，请检查连接",
+    "voiceDevInProgress": "语音输入功能开发中...",
+    "cameraDevInProgress": "摄像头功能开发中..."
+  }
+}

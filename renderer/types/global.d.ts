@@ -1,6 +1,47 @@
 // 全局类型定义
 import type { Application } from 'pixi.js';
-import type { ElectronAPI } from '../src/preload';
+
+// 更新检查结果类型
+export interface UpdateCheckResult {
+  hasUpdate: boolean;
+  currentVersion: string;
+  latestVersion?: string;
+  releaseUrl?: string;
+  releaseName?: string;
+  releaseNotes?: string;
+  publishedAt?: string;
+  error?: string;
+}
+
+// Electron API 类型
+export interface ElectronAPI {
+  // 窗口控制
+  minimizeWindow: () => Promise<void>;
+  closeWindow: () => Promise<void>;
+  showWindow: () => Promise<void>;
+  hideWindow: () => Promise<void>;
+  toggleWindow: () => Promise<void>;
+  setIgnoreMouseEvents: (ignore: boolean, options?: { forward?: boolean }) => Promise<void>;
+  
+  // 消息通信
+  sendMessage: (message: unknown) => Promise<{ success: boolean; message: string }>;
+  
+  // 文件选择
+  selectModelFile: () => Promise<string | null>;
+  
+  // 更新检查
+  checkUpdate: (updateSource: string) => Promise<UpdateCheckResult>;
+  openExternal: (url: string) => Promise<void>;
+  getAppVersion: () => Promise<string>;
+  
+  // 监听来自主进程的消息
+  onBackendMessage: (callback: (data: unknown) => void) => void;
+  onVoicePlay: (callback: (data: unknown) => void) => void;
+  onLive2dCommand: (callback: (data: unknown) => void) => void;
+  onOpenSettings: (callback: () => void) => void;
+  onOpenChat: (callback: () => void) => void;
+  onToggleUI: (callback: () => void) => void;
+}
 
 // 扩展 Window 接口
 declare global {
@@ -11,8 +52,13 @@ declare global {
     dialogueManager: DialogueManager;
     audioPlayer: AudioPlayer;
     settingsManager: SettingsManager;
+    i18nManager: I18nManager;
+    themeManager: ThemeManager;
     app: AppDebugInterface;
     PIXI: typeof import('pixi.js');
+    lucide?: {
+      createIcons: () => void;
+    };
   }
 }
 
@@ -149,12 +195,17 @@ export interface AudioPlayer {
 }
 
 // 应用配置类型
+export type ThemeMode = 'light' | 'dark' | 'system';
+
 export interface AppSettings {
   modelPath: string;
   backendUrl: string;
   wsUrl: string;
   autoConnect: boolean;
   volume: number;
+  updateSource: string;
+  locale: string;
+  theme: ThemeMode;
 }
 
 export interface AppConfig {
@@ -190,6 +241,25 @@ export interface AppDebugInterface {
   setExpression: (id: string) => void;
   getState: () => AppState;
   showSettings: () => void;
+  showChat: () => void;
+  toggleUI: () => void;
+}
+
+// 国际化管理器接口
+export interface I18nManager {
+  initialize(): Promise<void>;
+  t(key: string, params?: { [key: string]: string }): string;
+  setLocale(locale: string): Promise<void>;
+  getLocale(): string;
+  getAvailableLocales(): Array<{ code: string; name: string }>;
+}
+
+// 主题管理器接口
+export interface ThemeManager {
+  initialize(): void;
+  setTheme(theme: ThemeMode): void;
+  getTheme(): ThemeMode;
+  getEffectiveTheme(): 'light' | 'dark';
 }
 
 // ============ 安全模块接口 ============

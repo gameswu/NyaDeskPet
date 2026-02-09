@@ -1,0 +1,83 @@
+{
+  "app": {
+    "name": "Nya Desk Pet",
+    "version": "Version"
+  },
+  "topBar": {
+    "status": "Status",
+    "connected": "Connected",
+    "disconnected": "Disconnected",
+    "settings": "Settings",
+    "minimize": "Minimize",
+    "close": "Close"
+  },
+  "bottomBar": {
+    "openChat": "Open Chat"
+  },
+  "chatWindow": {
+    "title": "Chat with Nya",
+    "placeholder": "Type a message...",
+    "send": "Send",
+    "voice": "Voice Input",
+    "camera": "Camera",
+    "close": "Close"
+  },
+  "settings": {
+    "title": "Settings",
+    "model": {
+      "title": "Live2D Model",
+      "path": "Model Path",
+      "pathPlaceholder": "../models/default/model3.json",
+      "browse": "Browse",
+      "hint": "Click browse button to select model3.json or model.json file"
+    },
+    "backend": {
+      "title": "Backend Connection",
+      "autoConnect": "Auto-connect on startup",
+      "httpUrl": "HTTP URL",
+      "httpPlaceholder": "http://localhost:8000",
+      "wsUrl": "WebSocket URL",
+      "wsPlaceholder": "ws://localhost:8000/ws"
+    },
+    "audio": {
+      "title": "Audio",
+      "volume": "Volume"
+    },
+    "appearance": {
+      "title": "Appearance",
+      "language": "Language",
+      "theme": "Theme",
+      "themeLight": "Light",
+      "themeDark": "Dark",
+      "themeSystem": "Follow System"
+    },
+    "about": {
+      "title": "About",
+      "version": "Version",
+      "checkUpdate": "Check for Updates",
+      "updateSource": "Update Source",
+      "updateSourcePlaceholder": "https://github.com/owner/repo",
+      "updateSourceHint": "GitHub repository URL for update checks"
+    },
+    "resetButton": "Reset to Defaults",
+    "saveButton": "Save Settings",
+    "close": "Close"
+  },
+  "update": {
+    "checking": "Checking for updates...",
+    "hasUpdate": "New version {version} available!<br><a href=\"#\">Click to download</a>",
+    "noUpdate": "You're up to date",
+    "error": "Update check failed: {error}"
+  },
+  "messages": {
+    "settingsSaved": "Settings saved!",
+    "settingsReset": "Settings reset to defaults",
+    "settingsValidationFailed": "Settings validation failed",
+    "reloadConfirm": "Settings saved! Some settings require a reload. Reload now?",
+    "resetConfirm": "Reset all settings to defaults?",
+    "confirmClose": "Are you sure you want to close the desktop pet?",
+    "sendFailed": "Failed to send message. Please check your connection",
+    "voiceDevInProgress": "Voice input feature is under development...",
+    "cameraDevInProgress": "Camera feature is under development..."
+  }
+}

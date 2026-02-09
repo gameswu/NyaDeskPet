@@ -13,7 +13,10 @@ class SettingsManager implements ISettingsManager {
     backendUrl: 'http://localhost:8000',
     wsUrl: 'ws://localhost:8000/ws',
     autoConnect: true,
-    volume: 0.8
+    volume: 0.8,
+    updateSource: 'https://github.com/gameswu/NyaDeskPet',
+    locale: 'zh-CN',
+    theme: 'system'
   };
 
   constructor() {

@@ -33,6 +33,7 @@
   },
   "dependencies": {
     "axios": "^1.6.0",
+    "lucide": "^0.563.0",
     "pixi-live2d-display": "^0.4.0",
     "pixi.js": "^7.3.2",
     "ws": "^8.16.0"

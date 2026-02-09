@@ -21,6 +21,12 @@ class Live2DManager implements ILive2DManager {
   public currentMotion: string | null;
   public currentExpression: string | null;
   public initialized: boolean;
+  private isDragging: boolean = false;
+  private dragStartX: number = 0;
+  private dragStartY: number = 0;
+  private modelStartX: number = 0;
+  private modelStartY: number = 0;
+  private originalModelBounds: { width: number; height: number } | null = null;
 
   constructor(canvasId: string) {
     const canvas = document.getElementById(canvasId) as HTMLCanvasElement;
@@ -42,16 +48,25 @@ class Live2DManager implements ILive2DManager {
     try {
       // 创建 PixiJS 应用
       const PIXI = window.PIXI;
+      
+      // 使用 CSS 尺寸
+      const width = this.canvas.clientWidth || window.innerWidth;
+      const height = this.canvas.clientHeight || window.innerHeight;
+      const dpr = window.devicePixelRatio || 1;
+      
       this.app = new PIXI.Application({
         view: this.canvas,
-        width: 400,
-        height: 600,
+        width: width,
+        height: height,
         backgroundAlpha: 0,
-        resolution: window.devicePixelRatio || 1,
-        autoDensity: true
+        resolution: dpr,     // 使用设备像素比以获得清晰显示
+        autoDensity: true    // 自动调整 CSS 尺寸
       });
 
-      console.log('Live2D 初始化成功');
+      // 监听窗口大小变化
+      this.setupResizeHandler();
+
+      console.log('Live2D 初始化成功, 尺寸:', width, 'x', height, 'DPR:', dpr);
       this.initialized = true;
       return true;
     } catch (error) {
@@ -81,7 +96,7 @@ class Live2DManager implements ILive2DManager {
       // 使用 pixi-live2d-display 加载模型（通过全局 PIXI.live2d）
       const Live2DModel = (window.PIXI as any).live2d.Live2DModel;
       const live2dModel = await Live2DModel.from(modelPath, {
-        autoInteract: true,  // 启用自动交互
+        autoInteract: false, // 禁用自动交互，我们自己处理
         autoUpdate: true     // 启用自动更新
       });
       
@@ -91,11 +106,31 @@ class Live2DManager implements ILive2DManager {
         // 添加到舞台
         this.app.stage.addChild(live2dModel as any);
         
+        // 设置锚点为中心（pixi-live2d-display 支持）
+        live2dModel.anchor.set(0.5, 0.5);
+        
+        // 保存模型原始尺寸（使用 internalModel 获取真正的原始尺寸）
+        const internalModel = live2dModel.internalModel;
+        if (internalModel) {
+          this.originalModelBounds = {
+            width: internalModel.width,
+            height: internalModel.height
+          };
+        } else {
+          // 回退方案
+          this.originalModelBounds = {
+            width: live2dModel.width,
+            height: live2dModel.height
+          };
+        }
+        
+        console.log('模型原始尺寸:', this.originalModelBounds);
+        
         // 调整模型位置和大小
         this.adjustModelTransform();
         
-        // 设置模型交互
-        this.setupModelInteraction(live2dModel);
+        // 设置拖动功能（同时处理点击）
+        this.setupDragging(live2dModel);
       }
       
       console.log('模型加载成功');
@@ -107,24 +142,101 @@ class Live2DManager implements ILive2DManager {
   }
 
   /**
-   * 设置模型交互
+   * 设置窗口大小变化处理
    */
-  private setupModelInteraction(model: any): void {
-    // 监听点击事件
-    model.on('hit', (hitAreas: string[]) => {
-      console.log('点击了模型区域:', hitAreas);
+  private setupResizeHandler(): void {
+    let resizeTimeout: number | null = null;
+    
+    window.addEventListener('resize', () => {
+      // 防抖处理，避免频繁调整
+      if (resizeTimeout) {
+        window.clearTimeout(resizeTimeout);
+      }
       
-      // 播放相应的动作
-      if (hitAreas.includes('Body') || hitAreas.includes('body')) {
-        this.playMotion('TapBody', 0, 3);
-      } else if (hitAreas.includes('Head') || hitAreas.includes('head')) {
-        this.playMotion('TapHead', 0, 3);
+      resizeTimeout = window.setTimeout(() => {
+        console.log('窗口大小变化，调整模型位置');
+        this.handleResize();
+        resizeTimeout = null;
+      }, 100);
+    });
+  }
+
+  /**
+   * 处理窗口大小变化
+   */
+  private handleResize(): void {
+    if (!this.app || !this.model) return;
+
+    // 使用 CSS 尺寸
+    const newWidth = this.canvas.clientWidth;
+    const newHeight = this.canvas.clientHeight;
+
+    console.log(`调整窗口尺寸: ${newWidth}x${newHeight}`);
+
+    // 更新PixiJS渲染器尺寸
+    this.app.renderer.resize(newWidth, newHeight);
+    
+    // 重新调整模型位置和大小
+    this.adjustModelTransform();
+  }
+
+  /**
+   * 设置模型拖动功能
+   */
+  private setupDragging(model: any): void {
+    const dragThreshold = 3; // 拖动阈值
+    let hasMoved = false;
+    
+    // 启用交互
+    model.interactive = true;
+    model.eventMode = 'static';
+    this.canvas.style.cursor = 'grab';
+
+    // 直接在整个 canvas 上处理拖动，不做碰撞检测
+    this.canvas.addEventListener('mousedown', (event: MouseEvent) => {
+      if (!this.model) return;
+      
+      this.isDragging = true;
+      hasMoved = false;
+      this.dragStartX = event.clientX;
+      this.dragStartY = event.clientY;
+      
+      const m = this.model as any;
+      this.modelStartX = m.x;
+      this.modelStartY = m.y;
+      this.canvas.style.cursor = 'grabbing';
+      event.preventDefault();
+    });
+
+    // 全局监听 mousemove
+    window.addEventListener('mousemove', (event: MouseEvent) => {
+      if (!this.isDragging || !this.model) return;
+      
+      const deltaX = event.clientX - this.dragStartX;
+      const deltaY = event.clientY - this.dragStartY;
+      const distance = Math.sqrt(deltaX * deltaX + deltaY * deltaY);
+      
+      if (distance > dragThreshold) {
+        hasMoved = true;
+        const m = this.model as any;
+        m.x = this.modelStartX + deltaX;
+        m.y = this.modelStartY + deltaY;
       }
     });
-    
-    // 启用交互模式
-    model.interactive = true;
-    model.buttonMode = true;
+
+    // 全局监听 mouseup
+    window.addEventListener('mouseup', () => {
+      if (this.isDragging) {
+        this.isDragging = false;
+        this.canvas.style.cursor = 'grab';
+        
+        // 如果没有移动，触发点击事件
+        if (!hasMoved && this.model) {
+          console.log('模型被点击');
+          // 可以在这里触发点击事件
+        }
+      }
+    });
   }
 
   /**
@@ -135,26 +247,48 @@ class Live2DManager implements ILive2DManager {
 
     const model = this.model as any;
     
-    // 计算合适的缩放比例
-    const scaleX = (this.canvas.width * 0.8) / model.width;
-    const scaleY = (this.canvas.height * 0.8) / model.height;
+    // 使用 CSS 尺寸（与鼠标事件坐标系一致）
+    const canvasWidth = this.canvas.clientWidth;
+    const canvasHeight = this.canvas.clientHeight;
+    
+    // 确保渲染器尺寸与 CSS 尺寸一致
+    this.app.renderer.resize(canvasWidth, canvasHeight);
+    
+    // 使用原始模型尺寸或当前边界框
+    let modelWidth: number;
+    let modelHeight: number;
+    
+    if (this.originalModelBounds) {
+      modelWidth = this.originalModelBounds.width;
+      modelHeight = this.originalModelBounds.height;
+    } else {
+      // 回退方案：获取当前边界框并除以当前缩放比例
+      const currentScale = model.scale.x || 1;
+      modelWidth = model.width / currentScale;
+      modelHeight = model.height / currentScale;
+    }
+    
+    // 计算合适的缩放比例（保持75%的窗口占用，留出边距）
+    const targetWidthRatio = 0.75;
+    const targetHeightRatio = 0.75;
+    
+    const scaleX = (canvasWidth * targetWidthRatio) / modelWidth;
+    const scaleY = (canvasHeight * targetHeightRatio) / modelHeight;
     const scale = Math.min(scaleX, scaleY);
     
+    // 应用缩放
     model.scale.set(scale);
     
-    // 居中显示
-    model.x = this.canvas.width / 2;
-    model.y = this.canvas.height / 2 + 50;
-    
-    // 设置锚点为中心
-    model.anchor?.set(0.5, 0.5);
+    // 居中显示（X轴中心，Y轴居中）
+    model.x = canvasWidth / 2;
+    model.y = canvasHeight / 2;
     
     console.log('模型位置调整:', {
+      originalSize: this.originalModelBounds,
       scale,
-      x: model.x,
-      y: model.y,
-      width: model.width,
-      height: model.height
+      position: { x: model.x, y: model.y },
+      displaySize: { width: model.width, height: model.height },
+      canvas: { width: canvasWidth, height: canvasHeight }
     });
   }
 

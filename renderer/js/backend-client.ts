@@ -227,7 +227,23 @@ class BackendClient implements IBackendClient {
    */
   public updateStatus(status: 'connected' | 'disconnected' | 'connecting'): void {
     if (this.statusIndicator) {
-      this.statusIndicator.className = status;
+      this.statusIndicator.className = `status-dot ${status}`;
+    }
+    
+    // 更新状态文本
+    const statusText = document.getElementById('status-text');
+    if (statusText) {
+      switch (status) {
+        case 'connected':
+          statusText.textContent = '已连接';
+          break;
+        case 'connecting':
+          statusText.textContent = '连接中...';
+          break;
+        case 'disconnected':
+          statusText.textContent = '未连接';
+          break;
+      }
     }
   }
 
