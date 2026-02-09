@@ -17,6 +17,75 @@
 }
 ```
 
+**模型信息（模型加载后自动发送）**：
+```json
+{
+  "type": "model_info",
+  "data": {
+    "available": true,
+    "modelPath": "models/nya/nya.model3.json",
+    "dimensions": {
+      "width": 2048,
+      "height": 2048
+    },
+    "motions": {
+      "TapBody": {
+        "count": 8,
+        "files": ["mtn_01.motion3.json", "mtn_02.motion3.json", ...]
+      },
+      "TapHead": {
+        "count": 3,
+        "files": [...]
+      }
+    },
+    "expressions": ["happy", "angry", "sad", "surprised"],
+    "hitAreas": ["Head", "Body", "Mouth"],
+    "parameters": {
+      "canScale": true,
+      "currentScale": 1.5,
+      "userScale": 1.0,
+      "baseScale": 1.5
+    }
+  }
+}
+```
+
+**触碰事件**：
+```json
+{
+  "type": "tap_event",
+  "data": {
+    "hitArea": "Head",
+    "position": { "x": 100, "y": 150 },
+    "timestamp": 1234567890
+  }
+}
+```
+
+**说明**：
+- `hitArea`: 触碰的部位名称（如 "Head", "Body", "Mouth" 等），未命中时为 "unknown"
+- `position`: 触碰的像素坐标
+- 前端仅发送触碰信息，**具体的反应（动作、表情、消息）由后端Agent决定并通过 `sync_command` 返回**
+- 前端可通过设置面板的可视化配置控制哪些部位启用触摸反应，配置自动按模型持久化存储
+
+**角色信息（连接时自动发送）**：
+```json
+{
+  "type": "character_info",
+  "data": {
+    "useCustom": true,
+    "name": "小喵",
+    "personality": "活泼开朗，喜欢卖萌，说话带有“喵~”的口癖..."
+  }
+}
+```
+
+**说明**：
+- 用户在设置中启用自定义角色后，前端会在 WebSocket 连接成功后自动发送此消息
+- `useCustom`: 是否启用自定义，为 `false` 时使用后端默认配置
+- `name`: 桌宠名称
+- `personality`: 人设描述，后端可根据此调整 AI 对话风格
+
 **交互事件**：
 ```json
 {
@@ -34,7 +103,12 @@
   "type": "dialogue",
   "data": {
     "text": "宠物回复的文本",
-    "duration": 5000
+    "duration": 5000,
+    "attachment": {
+      "type": "image",
+      "url": "图片的URL或base64",
+      "name": "图片名称.png"
+    }
   }
 }
 ```
@@ -73,6 +147,52 @@
   }
 }
 ```
+
+**同步组合指令（支持文字、音频、动作、表情同步）**：
+```json
+{
+  "type": "sync_command",
+  "data": {
+    "actions": [
+      {
+        "type": "expression",
+        "expressionId": "happy",
+        "waitComplete": false
+      },
+      {
+        "type": "motion",
+        "group": "TapHead",
+        "index": 0,
+        "priority": 3,
+        "waitComplete": false
+      },
+      {
+        "type": "dialogue",
+        "text": "好开心呀~",
+        "duration": 3000,
+        "waitComplete": false
+      },
+      {
+        "type": "audio",
+        "url": "https://example.com/voice.mp3",
+        "waitComplete": true,
+        "duration": 3000
+      }
+    ]
+  }
+}
+```
+
+**同步指令说明**：
+- `actions`: 动作数组，按顺序执行
+- `type`: 动作类型 - `motion`（动作）、`expression`（表情）、`dialogue`（对话文字）、`audio`（音频）
+- `waitComplete`: 是否等待当前动作完成后再执行下一个
+- `duration`: 动作持续时间（毫秒）
+
+**使用场景示例**：
+1. **同时播放语音和动作**：设置 `waitComplete: false`，让动作、表情、对话同时开始
+2. **顺序播放**：设置 `waitComplete: true`，等待上一个动作完成（如等音频播放完）再执行下一个
+3. **精确同步**：通过 `duration` 控制每个动作的持续时间，确保时序一致
 
 ---
 

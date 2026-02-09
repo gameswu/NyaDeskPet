@@ -16,7 +16,12 @@ class SettingsManager implements ISettingsManager {
     volume: 0.8,
     updateSource: 'https://github.com/gameswu/NyaDeskPet',
     locale: 'zh-CN',
-    theme: 'system'
+    theme: 'system',
+    showSubtitle: true,
+    tapConfigs: {},
+    useCustomCharacter: false,
+    customName: '',
+    customPersonality: ''
   };
 
   constructor() {
@@ -173,6 +178,55 @@ class SettingsManager implements ISettingsManager {
       console.error('导入设置失败:', error);
       return false;
     }
+  }
+
+  /**
+   * 获取指定模型的触碰配置
+   */
+  public getTapConfig(modelPath: string): any {
+    if (!this.settings.tapConfigs) {
+      this.settings.tapConfigs = {};
+    }
+    
+    // 如果该模型没有配置，返回默认配置
+    if (!this.settings.tapConfigs[modelPath]) {
+      return this.getDefaultTapConfig();
+    }
+    
+    return this.settings.tapConfigs[modelPath];
+  }
+
+  /**
+   * 更新指定模型的触碰配置
+   */
+  public updateTapConfig(modelPath: string, config: any): void {
+    if (!this.settings.tapConfigs) {
+      this.settings.tapConfigs = {};
+    }
+    
+    this.settings.tapConfigs[modelPath] = config;
+    this.saveSettings();
+    console.log('触碰配置已保存:', modelPath);
+  }
+
+  /**
+   * 获取当前模型的触碰配置
+   */
+  public getCurrentTapConfig(): any {
+    return this.getTapConfig(this.settings.modelPath);
+  }
+
+  /**
+   * 获取默认触碰配置
+   */
+  private getDefaultTapConfig(): any {
+    return {
+      'Head': { enabled: true, description: '头部触摸' },
+      'Body': { enabled: true, description: '身体触摸' },
+      'Mouth': { enabled: true, description: '嘴部触摸' },
+      'Face': { enabled: true, description: '脸部触摸' },
+      'default': { enabled: true, description: '默认触摸' }
+    };
   }
 }
 

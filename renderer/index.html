@@ -55,18 +55,33 @@
     <i data-lucide="eye-off"></i>
   </button>
 
-  <!-- 对话窗口 -->
-  <div id="chat-window" class="chat-window hidden">
-    <div class="chat-header">
+  <!-- 对话窗口 (侧栏) -->
+  <div id="chat-window" class="chat-sidebar hidden">
+    <div class="chat-sidebar-header">
       <h3>
-        <i data-lucide="message-square" style="width: 18px; height: 18px; display: inline-block; vertical-align: middle; margin-right: 8px;"></i>
+        <i data-lucide="message-square" style="width: 18px; height: 18px;"></i>
         <span data-i18n="chatWindow.title">对话</span>
       </h3>
       <button id="btn-close-chat" class="btn-icon" data-i18n-title="chatWindow.close">
         <i data-lucide="x"></i>
       </button>
     </div>
-    <div class="chat-body">
+    
+    <!-- 对话历史列表 -->
+    <div class="chat-history">
+      <div class="chat-history-header">
+        <span data-i18n="chatWindow.conversations">对话记录</span>
+        <button id="btn-new-chat" class="btn-icon-small" data-i18n-title="chatWindow.newChat">
+          <i data-lucide="plus" style="width: 16px; height: 16px;"></i>
+        </button>
+      </div>
+      <div id="conversation-list" class="conversation-list">
+        <!-- 对话列表由后端管理，动态加载 -->
+      </div>
+    </div>
+    
+    <!-- 当前对话区域 -->
+    <div class="chat-content">
       <div id="chat-messages" class="chat-messages">
         <!-- 消息将动态添加到这里 -->
       </div>
@@ -80,6 +95,11 @@
             <i data-lucide="video"></i>
             <span class="btn-label" data-i18n="chatWindow.camera">摄像头</span>
           </button>
+          <button id="btn-attach" class="input-btn" data-i18n-title="chatWindow.attach">
+            <i data-lucide="paperclip"></i>
+            <span class="btn-label" data-i18n="chatWindow.attach">发送文件</span>
+          </button>
+          <input type="file" id="file-input" style="display: none;" multiple>
         </div>
         <div class="input-wrapper">
           <textarea id="chat-input" data-i18n-placeholder="chatWindow.placeholder" placeholder="输入消息..." rows="1"></textarea>
@@ -102,101 +122,151 @@
         </button>
       </div>
       
+      <!-- 设置标签页 -->
+      <div class="settings-tabs">
+        <button class="settings-tab active" data-tab="model">
+          <i data-lucide="smile" style="width: 16px; height: 16px;"></i>
+          <span data-i18n="settings.tabs.model">模型</span>
+        </button>
+        <button class="settings-tab" data-tab="connection">
+          <i data-lucide="globe" style="width: 16px; height: 16px;"></i>
+          <span data-i18n="settings.tabs.connection">连接</span>
+        </button>
+        <button class="settings-tab" data-tab="character">
+          <i data-lucide="user" style="width: 16px; height: 16px;"></i>
+          <span data-i18n="settings.tabs.character">角色</span>
+        </button>
+        <button class="settings-tab" data-tab="display">
+          <i data-lucide="palette" style="width: 16px; height: 16px;"></i>
+          <span data-i18n="settings.tabs.display">显示</span>
+        </button>
+        <button class="settings-tab" data-tab="about">
+          <i data-lucide="info" style="width: 16px; height: 16px;"></i>
+          <span data-i18n="settings.tabs.about">关于</span>
+        </button>
+      </div>
+      
       <div class="settings-body">
-        <!-- 模型设置 -->
-        <div class="settings-section">
-          <h3>
-            <i data-lucide="smile" style="width: 16px; height: 16px; display: inline-block; vertical-align: middle; margin-right: 6px;"></i>
-            <span data-i18n="settings.model.title">Live2D 模型</span>
-          </h3>
-          <div class="setting-item">
-            <label for="setting-model-path" data-i18n="settings.model.path">模型路径</label>
-            <div class="input-with-button">
-              <input type="text" id="setting-model-path" data-i18n-placeholder="settings.model.pathPlaceholder" placeholder="../models/default/model3.json" readonly>
-              <button id="btn-browse-model" class="btn-browse" data-i18n-title="settings.model.browse">
-                <i data-lucide="folder-open"></i>
+        <!-- 模型设置标签页 -->
+        <div class="settings-tab-content active" data-tab-content="model">
+          <div class="settings-section">
+            <h3 data-i18n="settings.model.title">Live2D 模型</h3>
+            <div class="setting-item">
+              <label for="setting-model-path" data-i18n="settings.model.path">模型路径</label>
+              <div class="input-with-button">
+                <input type="text" id="setting-model-path" data-i18n-placeholder="settings.model.pathPlaceholder" placeholder="../models/default/model3.json" readonly>
+                <button id="btn-browse-model" class="btn-browse" data-i18n-title="settings.model.browse">
+                  <i data-lucide="folder-open"></i>
+                </button>
+              </div>
+            </div>
+          </div>
+
+          <div class="settings-section">
+            <h3 data-i18n="settings.tap.title">触碰反应配置</h3>
+            <div id="tap-config-container" class="tap-config-container">
+              <!-- 触碰配置项将动态生成 -->
+            </div>
+          </div>
+        </div>
+
+        <!-- 连接设置标签页 -->
+        <div class="settings-tab-content" data-tab-content="connection">
+          <div class="settings-section">
+            <h3 data-i18n="settings.backend.title">后端连接</h3>
+            <div class="setting-item">
+              <label>
+                <input type="checkbox" id="setting-auto-connect">
+                <span data-i18n="settings.backend.autoConnect">启动时自动连接后端</span>
+              </label>
+            </div>
+            <div class="setting-item">
+              <label for="setting-backend-url" data-i18n="settings.backend.httpUrl">HTTP 地址</label>
+              <input type="text" id="setting-backend-url" data-i18n-placeholder="settings.backend.httpPlaceholder" placeholder="http://localhost:8000">
+            </div>
+            <div class="setting-item">
+              <label for="setting-websocket-url" data-i18n="settings.backend.wsUrl">WebSocket 地址</label>
+              <input type="text" id="setting-websocket-url" data-i18n-placeholder="settings.backend.wsPlaceholder" placeholder="ws://localhost:8000/ws">
+            </div>
+          </div>
+          
+          <div class="settings-section">
+            <h3 data-i18n="settings.audio.title">音频</h3>
+            <div class="setting-item">
+              <label for="setting-volume"><span data-i18n="settings.audio.volume">音量</span> <span id="volume-value">80%</span></label>
+              <input type="range" id="setting-volume" min="0" max="1" step="0.01" value="0.8">
+            </div>
+          </div>
+        </div>
+
+        <!-- 角色设置标签页 -->
+        <div class="settings-tab-content" data-tab-content="character">
+          <div class="settings-section">
+            <h3 data-i18n="settings.character.title">角色设置</h3>
+            <div class="setting-item">
+              <label>
+                <input type="checkbox" id="setting-use-custom-character">
+                <span data-i18n="settings.character.useCustom">启用自定义角色</span>
+              </label>
+            </div>
+            
+            <div class="setting-item">
+              <label for="setting-custom-name" data-i18n="settings.character.name">桌宠名称</label>
+              <input type="text" id="setting-custom-name" data-i18n-placeholder="settings.character.namePlaceholder" placeholder="例如：小喵">
+            </div>
+            
+            <div class="setting-item">
+              <label for="setting-custom-personality" data-i18n="settings.character.personality">人设描述</label>
+              <textarea id="setting-custom-personality" rows="8" data-i18n-placeholder="settings.character.personalityPlaceholder" placeholder="描述桌宠的性格、特点、说话风格等..."></textarea>
+            </div>
+          </div>
+        </div>
+
+        <!-- 显示设置标签页 -->
+        <div class="settings-tab-content" data-tab-content="display">
+          <div class="settings-section">
+            <h3 data-i18n="settings.appearance.title">外观</h3>
+            <div class="setting-item">
+              <label for="setting-language" data-i18n="settings.appearance.language">语言</label>
+              <select id="setting-language">
+                <option value="zh-CN">简体中文</option>
+                <option value="en-US">English</option>
+              </select>
+            </div>
+            <div class="setting-item">
+              <label for="setting-theme" data-i18n="settings.appearance.theme">主题</label>
+              <select id="setting-theme">
+                <option value="light">明亮</option>
+                <option value="dark">暗黑</option>
+                <option value="system">跟随系统</option>
+              </select>
+            </div>
+            <div class="setting-item">
+              <label>
+                <input type="checkbox" id="setting-show-subtitle" checked>
+                <span data-i18n="settings.appearance.showSubtitle">显示对话字幕</span>
+              </label>
+            </div>
+          </div>
+        </div>
+
+        <!-- 关于标签页 -->
+        <div class="settings-tab-content" data-tab-content="about">
+          <div class="settings-section">
+            <h3 data-i18n="settings.about.title">关于</h3>
+            <div class="setting-item about-info">
+              <span><span data-i18n="settings.about.version">版本</span>: <span id="app-version">1.0.0</span></span>
+              <button id="btn-check-update" class="btn-small">
+                <i data-lucide="refresh-cw" style="width: 14px; height: 14px;"></i>
+                <span data-i18n="settings.about.checkUpdate">检查更新</span>
               </button>
             </div>
-            <small data-i18n="settings.model.hint">点击浏览按钮选择 model3.json 或 model.json 文件</small>
+            <div class="setting-item">
+              <label for="setting-update-source" data-i18n="settings.about.updateSource">更新源</label>
+              <input type="text" id="setting-update-source" data-i18n-placeholder="settings.about.updateSourcePlaceholder" placeholder="https://github.com/owner/repo">
+            </div>
+            <div id="update-status" class="update-status hidden"></div>
           </div>
-        </div>
-
-        <!-- 后端连接设置 -->
-        <div class="settings-section">
-          <h3>
-            <i data-lucide="globe" style="width: 16px; height: 16px; display: inline-block; vertical-align: middle; margin-right: 6px;"></i>
-            <span data-i18n="settings.backend.title">后端连接</span>
-          </h3>
-          <div class="setting-item">
-            <label>
-              <input type="checkbox" id="setting-auto-connect">
-              <span data-i18n="settings.backend.autoConnect">启动时自动连接后端</span>
-            </label>
-          </div>
-          <div class="setting-item">
-            <label for="setting-backend-url" data-i18n="settings.backend.httpUrl">HTTP 地址</label>
-            <input type="text" id="setting-backend-url" data-i18n-placeholder="settings.backend.httpPlaceholder" placeholder="http://localhost:8000">
-          </div>
-          <div class="setting-item">
-            <label for="setting-websocket-url" data-i18n="settings.backend.wsUrl">WebSocket 地址</label>
-            <input type="text" id="setting-websocket-url" data-i18n-placeholder="settings.backend.wsPlaceholder" placeholder="ws://localhost:8000/ws">
-          </div>
-        </div>
-
-        <!-- 音频设置 -->
-        <div class="settings-section">
-          <h3>
-            <i data-lucide="volume-2" style="width: 16px; height: 16px; display: inline-block; vertical-align: middle; margin-right: 6px;"></i>
-            <span data-i18n="settings.audio.title">音频</span>
-          </h3>
-          <div class="setting-item">
-            <label for="setting-volume"><span data-i18n="settings.audio.volume">音量</span> <span id="volume-value">80%</span></label>
-            <input type="range" id="setting-volume" min="0" max="1" step="0.01" value="0.8">
-          </div>
-        </div>
-
-        <!-- 外观设置 -->
-        <div class="settings-section">
-          <h3>
-            <i data-lucide="palette" style="width: 16px; height: 16px; display: inline-block; vertical-align: middle; margin-right: 6px;"></i>
-            <span data-i18n="settings.appearance.title">外观</span>
-          </h3>
-          <div class="setting-item">
-            <label for="setting-language" data-i18n="settings.appearance.language">语言</label>
-            <select id="setting-language">
-              <option value="zh-CN">简体中文</option>
-              <option value="en-US">English</option>
-            </select>
-          </div>
-          <div class="setting-item">
-            <label for="setting-theme" data-i18n="settings.appearance.theme">主题</label>
-            <select id="setting-theme">
-              <option value="light">明亮</option>
-              <option value="dark">暗黑</option>
-              <option value="system">跟随系统</option>
-            </select>
-          </div>
-        </div>
-
-        <!-- 关于 & 更新 -->
-        <div class="settings-section">
-          <h3>
-            <i data-lucide="info" style="width: 16px; height: 16px; display: inline-block; vertical-align: middle; margin-right: 6px;"></i>
-            <span data-i18n="settings.about.title">关于</span>
-          </h3>
-          <div class="setting-item about-info">
-            <span><span data-i18n="settings.about.version">版本</span>: <span id="app-version">1.0.0</span></span>
-            <button id="btn-check-update" class="btn-small">
-              <i data-lucide="refresh-cw" style="width: 14px; height: 14px;"></i>
-              <span data-i18n="settings.about.checkUpdate">检查更新</span>
-            </button>
-          </div>
-          <div class="setting-item">
-            <label for="setting-update-source" data-i18n="settings.about.updateSource">更新源</label>
-            <input type="text" id="setting-update-source" data-i18n-placeholder="settings.about.updateSourcePlaceholder" placeholder="https://github.com/owner/repo">
-            <small data-i18n="settings.about.updateSourceHint">GitHub 仓库地址，用于检查更新</small>
-          </div>
-          <div id="update-status" class="update-status hidden"></div>
         </div>
       </div>
 

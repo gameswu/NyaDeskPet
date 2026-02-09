@@ -1,7 +1,8 @@
 {
   "app": {
     "name": "小夜桌宠",
-    "version": "版本"
+    "version": "版本",
+    "toggleUI": "隐藏/显示UI"
   },
   "topBar": {
     "status": "状态",
@@ -15,21 +16,38 @@
     "openChat": "打开对话"
   },
   "chatWindow": {
-    "title": "与喵呜对话",
+    "title": "与桌宠对话",
     "placeholder": "输入消息...",
     "send": "发送",
     "voice": "语音输入",
     "camera": "摄像头",
-    "close": "关闭"
+    "attach": "发送文件",
+    "close": "关闭",
+    "conversations": "对话记录",
+    "newChat": "新对话"
   },
   "settings": {
     "title": "设置",
+    "tabs": {
+      "model": "模型",
+      "connection": "连接",
+      "character": "角色",
+      "display": "显示",
+      "about": "关于"
+    },
     "model": {
       "title": "Live2D 模型",
       "path": "模型路径",
       "pathPlaceholder": "../models/default/model3.json",
-      "browse": "浏览",
-      "hint": "点击浏览按钮选择 model3.json 或 model.json 文件"
+      "browse": "浏览"
+    },
+    "tap": {
+      "title": "触碸反应配置",
+
+      "addArea": "添加触碸区域",
+      "areaName": "区域名称",
+      "areaDescription": "描述",
+      "delete": "删除"
     },
     "backend": {
       "title": "后端连接",
@@ -43,21 +61,29 @@
       "title": "音频",
       "volume": "音量"
     },
+    "character": {
+      "title": "角色设置",
+      "useCustom": "启用自定义角色",
+      "name": "桌宠名称",
+      "namePlaceholder": "例如：小喵",
+      "personality": "人设描述",
+      "personalityPlaceholder": "描述桌宠的性格、特点、说话风格等..."
+    },
     "appearance": {
       "title": "外观",
       "language": "语言",
       "theme": "主题",
       "themeLight": "明亮",
       "themeDark": "暗黑",
-      "themeSystem": "跟随系统"
+      "themeSystem": "跟随系统",
+      "showSubtitle": "显示对话字幕"
     },
     "about": {
       "title": "关于",
       "version": "版本",
       "checkUpdate": "检查更新",
       "updateSource": "更新源",
-      "updateSourcePlaceholder": "https://github.com/owner/repo",
-      "updateSourceHint": "GitHub 仓库地址，用于检查更新"
+      "updateSourcePlaceholder": "https://github.com/owner/repo"
     },
     "resetButton": "恢复默认",
     "saveButton": "保存设置",

@@ -13,7 +13,8 @@
     "compile": "tsc -p . && tsc -p renderer",
     "compile:dev": "tsc -p . --sourceMap && tsc -p renderer --sourceMap",
     "watch": "tsc -p . --watch",
-    "watch:renderer": "tsc -p renderer --watch"
+    "watch:renderer": "tsc -p renderer --watch",
+    "check-i18n": "node scripts/check-i18n.js"
   },
   "keywords": [
     "electron",

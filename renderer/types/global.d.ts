@@ -41,6 +41,9 @@ export interface ElectronAPI {
   onOpenSettings: (callback: () => void) => void;
   onOpenChat: (callback: () => void) => void;
   onToggleUI: (callback: () => void) => void;
+  
+  // 状态同步
+  updateUIState: (state: { uiVisible?: boolean; chatOpen?: boolean }) => void;
 }
 
 // 扩展 Window 接口
@@ -96,7 +99,11 @@ export interface Live2DManager {
   lookAt(x: number, y: number): void;
   tap(x: number, y: number): void;
   destroy(): void;
-}
+  extractModelInfo(): ModelInfo | null;
+  isTapEnabled(hitAreaName: string): boolean;
+  loadTapConfig(): void;
+  executeSyncCommand(data: SyncCommandData): Promise<void>;  setLipSync(value: number): void;
+  stopLipSync(): void;}
 
 // 后端通信相关类型
 export interface BackendConfig {
@@ -105,7 +112,7 @@ export interface BackendConfig {
 }
 
 export interface BackendMessage {
-  type: 'dialogue' | 'voice' | 'live2d' | 'system' | 'user_input' | 'interaction';
+  type: 'dialogue' | 'voice' | 'live2d' | 'system' | 'user_input' | 'interaction' | 'model_info' | 'tap_event' | 'sync_command' | 'character_info';
   data?: unknown;
   text?: string;
   timestamp?: number;
@@ -116,6 +123,11 @@ export interface BackendMessage {
 export interface DialogueData {
   text: string;
   duration?: number;
+  attachment?: {
+    type: 'image' | 'file';
+    url: string;
+    name?: string;
+  };
 }
 
 export interface VoiceData {
@@ -206,6 +218,19 @@ export interface AppSettings {
   updateSource: string;
   locale: string;
   theme: ThemeMode;
+  showSubtitle: boolean;
+  tapConfigs: { [modelPath: string]: TapConfig };
+  useCustomCharacter: boolean;
+  customName: string;
+  customPersonality: string;
+}
+
+// 触碰配置类型
+export interface TapConfig {
+  [hitArea: string]: {
+    enabled: boolean;
+    description?: string;
+  };
 }
 
 export interface AppConfig {
@@ -226,6 +251,9 @@ export interface SettingsManager {
   validateSettings(): { valid: boolean; errors: string[] };
   exportSettings(): string;
   importSettings(json: string): boolean;
+  getTapConfig(modelPath: string): TapConfig;
+  updateTapConfig(modelPath: string, config: TapConfig): void;
+  getCurrentTapConfig(): TapConfig;
 }
 
 export interface AppState {

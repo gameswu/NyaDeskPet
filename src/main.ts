@@ -7,6 +7,10 @@ let tray: Tray | null = null;
 let isQuitting: boolean = false;
 const isDev: boolean = process.argv.includes('--dev');
 
+// UI状态追踪
+let isUIVisible: boolean = true;
+let isChatOpen: boolean = false;
+
 function createWindow(): void {
   const { width, height } = screen.getPrimaryDisplay().workAreaSize;
   
@@ -48,6 +52,102 @@ function createWindow(): void {
 }
 
 /**
+ * 更新托盘菜单（根据当前状态动态显示）
+ */
+function updateTrayMenu(): void {
+  if (!tray) return;
+  
+  const isWindowVisible = mainWindow?.isVisible() || false;
+  
+  const contextMenu = Menu.buildFromTemplate([
+    {
+      label: isWindowVisible ? '隐藏宠物' : '显示宠物',
+      click: () => {
+        if (mainWindow) {
+          if (mainWindow.isVisible()) {
+            mainWindow.hide();
+          } else {
+            mainWindow.show();
+            mainWindow.focus();
+          }
+          // 切换后更新菜单
+          setTimeout(() => updateTrayMenu(), 100);
+        } else {
+          createWindow();
+        }
+      }
+    },
+    { type: 'separator' },
+    {
+      label: '置顶显示',
+      type: 'checkbox',
+      checked: mainWindow?.isAlwaysOnTop() || true,
+      click: (menuItem) => {
+        mainWindow?.setAlwaysOnTop(menuItem.checked);
+      }
+    },
+    { type: 'separator' },
+    {
+      label: isUIVisible ? '隐藏UI' : '显示UI',
+      click: () => {
+        if (mainWindow) {
+          mainWindow.show();
+          mainWindow.webContents.send('toggle-ui');
+          isUIVisible = !isUIVisible;
+          // 切换后更新菜单
+          setTimeout(() => updateTrayMenu(), 100);
+        }
+      }
+    },
+    {
+      label: isChatOpen ? '关闭对话' : '打开对话',
+      click: () => {
+        if (mainWindow) {
+          mainWindow.show();
+          mainWindow.focus();
+          if (isChatOpen) {
+            mainWindow.webContents.send('close-chat');
+          } else {
+            mainWindow.webContents.send('open-chat');
+          }
+          isChatOpen = !isChatOpen;
+          // 切换后更新菜单
+          setTimeout(() => updateTrayMenu(), 100);
+        } else {
+          createWindow();
+        }
+      }
+    },
+    {
+      label: '设置',
+      click: () => {
+        if (mainWindow) {
+          mainWindow.show();
+          mainWindow.webContents.send('open-settings');
+        }
+      }
+    },
+    {
+      label: '开发者工具',
+      visible: isDev,
+      click: () => {
+        mainWindow?.webContents.openDevTools({ mode: 'detach' });
+      }
+    },
+    { type: 'separator' },
+    {
+      label: '退出',
+      click: () => {
+        isQuitting = true;
+        app.quit();
+      }
+    }
+  ]);
+
+  tray.setContextMenu(contextMenu);
+}
+
+/**
  * 创建系统托盘
  */
 function createTray(): void {
@@ -84,85 +184,10 @@ function createTray(): void {
   tray = new Tray(trayIcon);
   tray.setToolTip('NyaDeskPet - 桌面宠物');
 
-  // 创建托盘菜单
-  const contextMenu = Menu.buildFromTemplate([
-    {
-      label: '显示宠物',
-      click: () => {
-        if (mainWindow) {
-          mainWindow.show();
-          mainWindow.focus();
-        } else {
-          createWindow();
-        }
-      }
-    },
-    {
-      label: '隐藏宠物',
-      click: () => {
-        mainWindow?.hide();
-      }
-    },
-    { type: 'separator' },
-    {
-      label: '置顶显示',
-      type: 'checkbox',
-      checked: true,
-      click: (menuItem) => {
-        mainWindow?.setAlwaysOnTop(menuItem.checked);
-      }
-    },
-    { type: 'separator' },
-    {
-      label: '显示/隐藏UI',
-      click: () => {
-        if (mainWindow) {
-          mainWindow.show();
-          mainWindow.webContents.send('toggle-ui');
-        }
-      }
-    },
-    {
-      label: '打开对话',
-      click: () => {
-        if (mainWindow) {
-          mainWindow.show();
-          mainWindow.focus();
-          mainWindow.webContents.send('open-chat');
-        } else {
-          createWindow();
-        }
-      }
-    },
-    {
-      label: '设置',
-      click: () => {
-        if (mainWindow) {
-          mainWindow.show();
-          mainWindow.webContents.send('open-settings');
-        }
-      }
-    },
-    {
-      label: '开发者工具',
-      visible: isDev,
-      click: () => {
-        mainWindow?.webContents.openDevTools({ mode: 'detach' });
-      }
-    },
-    { type: 'separator' },
-    {
-      label: '退出',
-      click: () => {
-        isQuitting = true;
-        app.quit();
-      }
-    }
-  ]);
+  // 更新托盘菜单
+  updateTrayMenu();
 
-  tray.setContextMenu(contextMenu);
-
-  // 双击托盘图标显示窗口
+  // 双击托盘图标切换窗口显示/隐藏
   tray.on('double-click', () => {
     if (mainWindow) {
       if (mainWindow.isVisible()) {
@@ -244,6 +269,17 @@ ipcMain.handle('toggle-window', () => {
 
 ipcMain.handle('set-ignore-mouse-events', (_event: IpcMainInvokeEvent, ignore: boolean, options?: { forward?: boolean }) => {
   mainWindow?.setIgnoreMouseEvents(ignore, options);
+});
+
+// 更新UI状态（用于同步托盘菜单）
+ipcMain.on('ui-state-changed', (_event, state: { uiVisible?: boolean; chatOpen?: boolean }) => {
+  if (state.uiVisible !== undefined) {
+    isUIVisible = state.uiVisible;
+  }
+  if (state.chatOpen !== undefined) {
+    isChatOpen = state.chatOpen;
+  }
+  updateTrayMenu();
 });
 
 // 从渲染进程接收消息并转发到后端

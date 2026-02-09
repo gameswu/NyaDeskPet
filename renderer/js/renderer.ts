@@ -1,4 +1,4 @@
-9/**
+/**
  * 渲染进程主脚本
  * 协调各个模块的工作
  */
@@ -52,6 +52,8 @@ function toggleUI(): void {
     }
     console.log('隐藏UI');
   }
+  // 通知主进程 UI 状态变化
+  window.electronAPI.updateUIState({ uiVisible: isUIVisible });
 }
 
 /**
@@ -174,6 +176,10 @@ function setupEventListeners(): void {
   // 监听后端消息
   window.backendClient.onMessage((message) => {
     console.log('收到后端消息:', message);
+    if (message.type === 'dialogue') {
+      const data = message.data as any;
+      addChatMessage(data.text, false, data.attachment);
+    }
   });
 }
 
@@ -231,6 +237,8 @@ function showChatWindow(): void {
     chatWindow.classList.remove('hidden');
     const chatInput = document.getElementById('chat-input') as HTMLTextAreaElement;
     chatInput?.focus();
+    // 通知主进程对话窗口已打开
+    window.electronAPI.updateUIState({ chatOpen: true });
   }
 }
 
@@ -241,20 +249,69 @@ function hideChatWindow(): void {
   const chatWindow = document.getElementById('chat-window');
   if (chatWindow) {
     chatWindow.classList.add('hidden');
+    // 通知主进程对话窗口已关闭
+    window.electronAPI.updateUIState({ chatOpen: false });
   }
 }
 
 /**
  * 添加聊天消息到界面
  */
-function addChatMessage(text: string, isUser: boolean): void {
+function addChatMessage(text: string, isUser: boolean, attachment?: { type: 'image' | 'file', url: string, name?: string }): void {
   const messagesContainer = document.getElementById('chat-messages');
   if (!messagesContainer) return;
 
   const messageDiv = document.createElement('div');
   messageDiv.className = `chat-message ${isUser ? 'user' : 'assistant'}`;
-  messageDiv.textContent = text;
   
+  if (text) {
+    const textNode = document.createElement('div');
+    textNode.textContent = text;
+    messageDiv.appendChild(textNode);
+  }
+
+  if (attachment) {
+    const attachmentDiv = document.createElement('div');
+    attachmentDiv.className = 'message-attachment';
+
+    if (attachment.type === 'image') {
+      const img = document.createElement('img');
+      img.src = attachment.url;
+      img.className = 'message-image';
+      img.onclick = () => window.open(attachment.url);
+      attachmentDiv.appendChild(img);
+    } else {
+      const fileLink = document.createElement('a');
+      fileLink.href = attachment.url;
+      fileLink.className = 'message-file';
+      fileLink.target = '_blank';
+      fileLink.download = attachment.name || 'file';
+      
+      const icon = document.createElement('i');
+      icon.setAttribute('data-lucide', 'file');
+      fileLink.appendChild(icon);
+      
+      const nameSpan = document.createElement('span');
+      nameSpan.textContent = attachment.name || 'file';
+      fileLink.appendChild(nameSpan);
+      
+      attachmentDiv.appendChild(fileLink);
+    }
+    
+    messageDiv.appendChild(attachmentDiv);
+    
+    // 重新创建图标
+    if (attachment.type === 'file') {
+      // @ts-ignore
+      if (typeof window.lucide !== 'undefined') {
+        // @ts-ignore
+        window.lucide.createIcons({
+          nameAttr: 'data-lucide'
+        });
+      }
+    }
+  }
+
   messagesContainer.appendChild(messageDiv);
   messagesContainer.scrollTop = messagesContainer.scrollHeight;
 }
@@ -350,6 +407,53 @@ function initializeChatWindow(): void {
     });
   }
 
+  // 附件按钮
+  const btnAttach = document.getElementById('btn-attach');
+  const fileInput = document.getElementById('file-input') as HTMLInputElement;
+  if (btnAttach && fileInput) {
+    btnAttach.addEventListener('click', () => {
+      fileInput.click();
+    });
+
+    fileInput.addEventListener('change', async () => {
+      const files = fileInput.files;
+      if (!files || files.length === 0) return;
+
+      for (let i = 0; i < files.length; i++) {
+        const file = files[i];
+        const reader = new FileReader();
+        
+        reader.onload = (e) => {
+          const url = e.target?.result as string;
+          const isImage = file.type.startsWith('image/');
+          
+          addChatMessage('', true, {
+            type: isImage ? 'image' : 'file',
+            url: url,
+            name: file.name
+          });
+          
+          // TODO: 发送文件数据到后端
+          console.log('发送文件:', file.name, '类型:', file.type);
+        };
+
+        if (file.type.startsWith('image/') || file.type.startsWith('text/') || file.size < 1024 * 1024 * 5) {
+          reader.readAsDataURL(file);
+        } else {
+          // 对大文件仅显示名称
+          addChatMessage('', true, {
+            type: 'file',
+            url: '#',
+            name: file.name + ' (文件过大，预览暂存本地)'
+          });
+        }
+      }
+      
+      // 清空 input 允许重复选择同一文件
+      fileInput.value = '';
+    });
+  }
+
   // 点击背景关闭
   const chatWindow = document.getElementById('chat-window');
   if (chatWindow) {
@@ -380,6 +484,13 @@ function showSettingsPanel(): void {
   (document.getElementById('setting-update-source') as HTMLInputElement).value = settings.updateSource;
   (document.getElementById('setting-language') as HTMLSelectElement).value = settings.locale;
   (document.getElementById('setting-theme') as HTMLSelectElement).value = settings.theme;
+  (document.getElementById('setting-show-subtitle') as HTMLInputElement).checked = settings.showSubtitle;
+  (document.getElementById('setting-use-custom-character') as HTMLInputElement).checked = settings.useCustomCharacter;
+  (document.getElementById('setting-custom-name') as HTMLInputElement).value = settings.customName;
+  (document.getElementById('setting-custom-personality') as HTMLTextAreaElement).value = settings.customPersonality;
+
+  // 加载触碰配置
+  loadTapConfigUI();
 
   panel.classList.add('show');
 }
@@ -406,6 +517,13 @@ async function saveSettings(): Promise<void> {
   const updateSource = (document.getElementById('setting-update-source') as HTMLInputElement).value;
   const locale = (document.getElementById('setting-language') as HTMLSelectElement).value;
   const theme = (document.getElementById('setting-theme') as HTMLSelectElement).value as ThemeMode;
+  const showSubtitle = (document.getElementById('setting-show-subtitle') as HTMLInputElement).checked;
+  const useCustomCharacter = (document.getElementById('setting-use-custom-character') as HTMLInputElement).checked;
+  const customName = (document.getElementById('setting-custom-name') as HTMLInputElement).value;
+  const customPersonality = (document.getElementById('setting-custom-personality') as HTMLTextAreaElement).value;
+
+  // 保存触碰配置
+  saveTapConfigFromUI();
 
   // 更新设置
   window.settingsManager.updateSettings({
@@ -416,7 +534,11 @@ async function saveSettings(): Promise<void> {
     volume,
     updateSource,
     locale,
-    theme
+    theme,
+    showSubtitle,
+    useCustomCharacter,
+    customName,
+    customPersonality
   });
 
   // 验证设置
@@ -428,6 +550,9 @@ async function saveSettings(): Promise<void> {
 
   // 应用设置
   window.audioPlayer.setVolume(volume);
+  
+  // 保存触碰配置
+  saveTapConfigFromUI();
   
   // 提示用户重启应用
   if (confirm(window.i18nManager.t('messages.reloadConfirm'))) {
@@ -469,6 +594,29 @@ function initializeSettingsPanel(): void {
   if (btnResetSettings) {
     btnResetSettings.addEventListener('click', resetSettings);
   }
+
+  // 标签页切换
+  const tabs = document.querySelectorAll('.settings-tab');
+  tabs.forEach(tab => {
+    tab.addEventListener('click', (e: Event) => {
+      const target = e.currentTarget as HTMLElement;
+      const tabName = target.getAttribute('data-tab');
+      if (!tabName) return;
+
+      // 移除所有激活状态
+      tabs.forEach(t => t.classList.remove('active'));
+      document.querySelectorAll('.settings-tab-content').forEach(content => {
+        content.classList.remove('active');
+      });
+
+      // 激活当前标签
+      target.classList.add('active');
+      const content = document.querySelector(`[data-tab-content="${tabName}"]`);
+      if (content) {
+        content.classList.add('active');
+      }
+    });
+  });
 
   // 浏览模型文件按钮
   const btnBrowseModel = document.getElementById('btn-browse-model');
@@ -536,6 +684,104 @@ function initializeSettingsPanel(): void {
       }
     });
   }
+
+}
+
+/**
+ * 加载触碰配置UI
+ */
+function loadTapConfigUI(): void {
+  const container = document.getElementById('tap-config-container');
+  if (!container) return;
+
+  // 清空容器
+  container.innerHTML = '';
+
+  // 获取当前模型的触碰配置
+  const tapConfig = window.settingsManager.getCurrentTapConfig();
+  
+  // 获取模型的hitAreas信息
+  const modelInfo = window.live2dManager?.extractModelInfo();
+  const modelHitAreas = modelInfo?.hitAreas || [];
+  
+  // 只渲染模型中实际存在的触碰区域（排除 default）
+  for (const hitArea of modelHitAreas) {
+    if (hitArea === 'default') continue; // 隐藏 default
+    
+    const config = tapConfig[hitArea] || { enabled: true, description: '' };
+    addTapConfigItem(container, hitArea, config.enabled, config.description || '');
+  }
+}
+
+/**
+ * 添加触碰配置项
+ */
+function addTapConfigItem(container: HTMLElement, areaName: string, enabled: boolean, description: string): void {
+  const item = document.createElement('div');
+  item.className = 'tap-config-item';
+  item.dataset.areaName = areaName;
+
+  const checkbox = document.createElement('input');
+  checkbox.type = 'checkbox';
+  checkbox.checked = enabled;
+  checkbox.dataset.areaName = areaName;
+
+  const nameSpan = document.createElement('span');
+  nameSpan.className = 'tap-area-name';
+  nameSpan.textContent = areaName;
+
+  const descInput = document.createElement('input');
+  descInput.type = 'text';
+  descInput.className = 'tap-area-description';
+  descInput.value = description;
+  descInput.placeholder = window.i18nManager.t('settings.tap.areaDescription');
+
+  item.appendChild(checkbox);
+  item.appendChild(nameSpan);
+  item.appendChild(descInput);
+
+  container.appendChild(item);
+}
+
+/**
+ * 保存触碰配置
+ */
+function saveTapConfigFromUI(): void {
+  const container = document.getElementById('tap-config-container');
+  if (!container) return;
+
+  // 获取模型的hitAreas信息，只保存模型中实际存在的区域
+  const modelInfo = window.live2dManager?.extractModelInfo();
+  const modelHitAreas = modelInfo?.hitAreas || [];
+
+  const tapConfig: any = {
+    // 始终保留 default 配置
+    'default': { enabled: true, description: '默认触摸' }
+  };
+  const items = container.querySelectorAll('.tap-config-item');
+
+  items.forEach((item: Element) => {
+    const areaName = (item as HTMLElement).dataset.areaName;
+    if (!areaName) return;
+
+    // 只保存模型中存在的区域
+    if (!modelHitAreas.includes(areaName)) {
+      console.warn(`跳过不存在于模型中的区域: ${areaName}`);
+      return;
+    }
+
+    const checkbox = item.querySelector('input[type="checkbox"]') as HTMLInputElement;
+    const descInput = item.querySelector('.tap-area-description') as HTMLInputElement;
+
+    tapConfig[areaName] = {
+      enabled: checkbox.checked,
+      description: descInput.value || ''
+    };
+  });
+
+  // 保存当前模型的触碰配置
+  const currentModelPath = window.settingsManager.getSetting('modelPath');
+  window.settingsManager.updateTapConfig(currentModelPath, tapConfig);
 }
 
 /**

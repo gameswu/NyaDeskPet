@@ -1,7 +1,8 @@
 {
   "app": {
     "name": "Nya Desk Pet",
-    "version": "Version"
+    "version": "Version",
+    "toggleUI": "Toggle UI"
   },
   "topBar": {
     "status": "Status",
@@ -15,21 +16,37 @@
     "openChat": "Open Chat"
   },
   "chatWindow": {
-    "title": "Chat with Nya",
+    "title": "Chat with Desk Pet",
     "placeholder": "Type a message...",
     "send": "Send",
     "voice": "Voice Input",
     "camera": "Camera",
-    "close": "Close"
+    "attach": "Attach File",
+    "close": "Close",
+    "conversations": "Conversations",
+    "newChat": "New Chat"
   },
   "settings": {
     "title": "Settings",
+    "tabs": {
+      "model": "Model",
+      "connection": "Connection",
+      "character": "Character",
+      "display": "Display",
+      "about": "About"
+    },
     "model": {
       "title": "Live2D Model",
       "path": "Model Path",
       "pathPlaceholder": "../models/default/model3.json",
-      "browse": "Browse",
-      "hint": "Click browse button to select model3.json or model.json file"
+      "browse": "Browse"
+    },
+    "tap": {
+      "title": "Tap Reaction Config",
+      "addArea": "Add Tap Area",
+      "areaName": "Area Name",
+      "areaDescription": "Description",
+      "delete": "Delete"
     },
     "backend": {
       "title": "Backend Connection",
@@ -43,21 +60,29 @@
       "title": "Audio",
       "volume": "Volume"
     },
+    "character": {
+      "title": "Character Settings",
+      "useCustom": "Enable Custom Character",
+      "name": "Pet Name",
+      "namePlaceholder": "e.g.: Mimi",
+      "personality": "Personality Description",
+      "personalityPlaceholder": "Describe the pet's personality, traits, speaking style, etc..."
+    },
     "appearance": {
       "title": "Appearance",
       "language": "Language",
       "theme": "Theme",
       "themeLight": "Light",
       "themeDark": "Dark",
-      "themeSystem": "Follow System"
+      "themeSystem": "Follow System",
+      "showSubtitle": "Show Dialogue Subtitles"
     },
     "about": {
       "title": "About",
       "version": "Version",
       "checkUpdate": "Check for Updates",
       "updateSource": "Update Source",
-      "updateSourcePlaceholder": "https://github.com/owner/repo",
-      "updateSourceHint": "GitHub repository URL for update checks"
+      "updateSourcePlaceholder": "https://github.com/owner/repo"
     },
     "resetButton": "Reset to Defaults",
     "saveButton": "Save Settings",

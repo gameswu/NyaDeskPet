@@ -225,7 +225,152 @@ body {
   transform: scale(0.95);
 }
 
-/* 对话窗口 */
+/* 对话侧栏 */
+.chat-sidebar {
+  position: fixed;
+  top: 0;
+  right: -400px;
+  width: 400px;
+  height: 100%;
+  background: white;
+  box-shadow: -4px 0 16px rgba(0, 0, 0, 0.2);
+  display: flex;
+  flex-direction: column;
+  z-index: 9998;
+  -webkit-app-region: no-drag;
+  transition: right 0.3s ease, visibility 0s 0.3s;
+  visibility: hidden;
+  pointer-events: none;
+}
+
+.chat-sidebar.hidden {
+  right: -400px;
+  visibility: hidden;
+  pointer-events: none;
+  transition: right 0.3s ease, visibility 0s 0.3s;
+}
+
+.chat-sidebar:not(.hidden) {
+  right: 0;
+  visibility: visible;
+  pointer-events: auto;
+  transition: right 0.3s ease, visibility 0s 0s;
+}
+
+.chat-sidebar-header {
+  padding: 15px 20px;
+  background: linear-gradient(135deg, #4CAF50, #45a049);
+  color: white;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-shrink: 0;
+}
+
+.chat-sidebar-header h3 {
+  margin: 0;
+  font-size: 16px;
+  font-weight: 500;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+/* 对话历史列表区域 */
+.chat-history {
+  flex-shrink: 0;
+  border-bottom: 1px solid #e0e0e0;
+  max-height: 30%;
+  display: flex;
+  flex-direction: column;
+  background: #f8f9fa;
+}
+
+.chat-history-header {
+  padding: 12px 20px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 14px;
+  font-weight: 500;
+  color: #666;
+  background: white;
+  border-bottom: 1px solid #e0e0e0;
+}
+
+.btn-icon-small {
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: 4px;
+  border-radius: 4px;
+  color: #666;
+  transition: all 0.2s;
+}
+
+.btn-icon-small:hover {
+  background: rgba(0, 0, 0, 0.05);
+  color: #333;
+}
+
+.conversation-list {
+  flex: 1;
+  overflow-y: auto;
+  padding: 8px;
+}
+
+.conversation-item {
+  padding: 12px 16px;
+  margin-bottom: 4px;
+  background: white;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: all 0.2s;
+  border: 2px solid transparent;
+}
+
+.conversation-item:hover {
+  background: #f0f0f0;
+}
+
+.conversation-item.active {
+  background: #e8f5e9;
+  border-color: #4CAF50;
+}
+
+.conversation-item-title {
+  font-size: 14px;
+  font-weight: 500;
+  margin-bottom: 4px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.conversation-item-preview {
+  font-size: 12px;
+  color: #666;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.conversation-item-time {
+  font-size: 11px;
+  color: #999;
+  margin-top: 4px;
+}
+
+/* 当前对话内容区域 */
+.chat-content {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  background: white;
+}
+
+/* 旧的chat-window样式保持兼容 */
 .chat-window {
   position: fixed;
   top: 50%;
@@ -318,6 +463,66 @@ body {
   background: #f0f0f0;
   color: #333;
   border-bottom-left-radius: 4px;
+}
+
+/* 消息附件样式 */
+.message-attachment {
+  margin-top: 8px;
+  max-width: 100%;
+}
+
+.message-image {
+  max-width: 100%;
+  max-height: 250px;
+  border-radius: 8px;
+  cursor: zoom-in;
+  display: block;
+  object-fit: contain;
+  background-color: rgba(0, 0, 0, 0.05);
+  transition: transform 0.2s;
+}
+
+.message-image:hover {
+  transform: scale(1.02);
+}
+
+.dark-theme .message-image {
+  background-color: rgba(255, 255, 255, 0.05);
+}
+
+.message-file {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  background: rgba(0, 0, 0, 0.05);
+  border-radius: 6px;
+  text-decoration: none;
+  color: inherit;
+  font-size: 13px;
+  transition: background 0.2s;
+}
+
+.dark-theme .message-file {
+  background: rgba(255, 255, 255, 0.05);
+}
+
+.message-file i {
+  width: 16px;
+  height: 16px;
+  color: #666;
+}
+
+.dark-theme .message-file i {
+  color: #999;
+}
+
+.message-file:hover {
+  background: rgba(0, 0, 0, 0.1);
+}
+
+.dark-theme .message-file:hover {
+  background: rgba(255, 255, 255, 0.1);
 }
 
 .chat-input-area {
@@ -586,10 +791,72 @@ body {
   color: #333;
 }
 
+/* 设置标签页 */
+.settings-tabs {
+  display: flex;
+  border-bottom: 2px solid #e0e0e0;
+  background: #f8f9fa;
+  padding: 0 20px;
+  flex-shrink: 0;
+  overflow-x: auto;
+  overflow-y: hidden;
+  scrollbar-width: thin;
+}
+
+.settings-tabs::-webkit-scrollbar {
+  height: 4px;
+}
+
+.settings-tabs::-webkit-scrollbar-thumb {
+  background: #ccc;
+  border-radius: 2px;
+}
+
+.settings-tab {
+  flex: 0 0 auto;
+  padding: 12px 16px;
+  background: none;
+  border: none;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  font-size: 14px;
+  color: #666;
+  border-bottom: 2px solid transparent;
+  margin-bottom: -2px;
+  transition: all 0.2s;
+  white-space: nowrap;
+}
+
+.settings-tab:hover {
+  color: #333;
+  background: rgba(0, 0, 0, 0.03);
+}
+
+.settings-tab.active {
+  color: #4CAF50;
+  border-bottom-color: #4CAF50;
+  background: white;
+}
+
+.settings-tab i {
+  display: inline-block;
+}
+
 .settings-body {
   flex: 1;
   overflow-y: auto;
   padding: 20px;
+}
+
+.settings-tab-content {
+  display: none;
+}
+
+.settings-tab-content.active {
+  display: block;
 }
 
 .settings-section {
@@ -623,6 +890,14 @@ body {
   font-weight: 500;
 }
 
+/* 包含 checkbox 的 label 需要 flex 布局 */
+.setting-item label:has(input[type="checkbox"]) {
+  display: flex;
+  align-items: center;
+  margin-bottom: 0;
+  cursor: pointer;
+}
+
 .setting-item input[type="text"] {
   width: 100%;
   padding: 10px;
@@ -638,10 +913,16 @@ body {
 }
 
 .setting-item input[type="checkbox"] {
-  margin-right: 8px;
-  width: 18px;
-  height: 18px;
+  margin: 0 8px 0 0;
+  width: 16px;
+  height: 16px;
   cursor: pointer;
+  flex-shrink: 0;
+}
+
+.setting-item input[type="checkbox"] + span {
+  user-select: none;
+  line-height: 1.4;
 }
 
 .setting-item select {
@@ -658,6 +939,97 @@ body {
 .setting-item select:focus {
   outline: none;
   border-color: #4CAF50;
+}
+
+.setting-item textarea {
+  width: 100%;
+  padding: 12px;
+  border: 1px solid #ddd;
+  border-radius: 6px;
+  font-size: 13px;
+  font-family: 'Monaco', 'Menlo', 'Consolas', 'Courier New', monospace;
+  line-height: 1.6;
+  resize: vertical;
+  min-height: 150px;
+  background-color: #f8f9fa;
+  transition: border-color 0.2s, background-color 0.2s;
+}
+
+.setting-item textarea:focus {
+  outline: none;
+  border-color: #4CAF50;
+  background-color: #ffffff;
+}
+
+/* 触碰配置样式 */
+.tap-config-container {
+  margin-top: 15px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.tap-config-item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px;
+  background: #f9f9f9;
+  border-radius: 8px;
+  border: 1px solid #eee;
+}
+
+.tap-config-item input[type="checkbox"] {
+  width: 20px;
+  height: 20px;
+  cursor: pointer;
+  margin: 0;
+}
+
+.tap-config-item .tap-area-name {
+  flex: 1;
+  font-size: 14px;
+  font-weight: 500;
+  color: #333;
+}
+
+.tap-config-item .tap-area-description {
+  flex: 2;
+  font-size: 13px;
+  color: #666;
+}
+
+.tap-config-item .btn-delete-tap {
+  padding: 6px 10px;
+  background: #f44336;
+  color: white;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 12px;
+  transition: background 0.2s;
+}
+
+.tap-config-item .btn-delete-tap:hover {
+  background: #d32f2f;
+}
+
+/* 触摸配置添加按钮已移除，不再需要单独样式 */
+
+.dark-theme .tap-config-item {
+  background: rgba(255, 255, 255, 0.05);
+  border-color: rgba(255, 255, 255, 0.1);
+}
+
+.dark-theme .tap-config-item .tap-area-name {
+  color: #e0e0e0;
+}
+
+.dark-theme .tap-config-item .tap-area-description {
+  color: #999;
 }
 
 .setting-item input[type="range"] {
@@ -875,9 +1247,70 @@ body.dark-theme {
   border-color: rgba(255, 255, 255, 0.3);
 }
 
-/* 对话窗口 - 暗黑主题 */
+/* 对话侧栏 - 暗黑主题 */
+.dark-theme .chat-sidebar {
+  background: #2a2a2a;
+  box-shadow: -4px 0 16px rgba(0, 0, 0, 0.5);
+}
+
+.dark-theme .chat-sidebar-header {
+  background: linear-gradient(135deg, #388e3c, #2e7d32);
+  border-bottom-color: rgba(255, 255, 255, 0.1);
+}
+
+.dark-theme .chat-history {
+  background: #222;
+  border-bottom-color: rgba(255, 255, 255, 0.1);
+}
+
+.dark-theme .chat-history-header {
+  background: #2a2a2a;
+  border-bottom-color: rgba(255, 255, 255, 0.1);
+  color: #b0b0b0;
+}
+
+.dark-theme .conversation-list {
+  background: #222;
+}
+
+.dark-theme .conversation-item {
+  background: #2a2a2a;
+  color: #e0e0e0;
+}
+
+.dark-theme .conversation-item:hover {
+  background: #333;
+}
+
+.dark-theme .conversation-item.active {
+  background: #1b5e20;
+  border-color: #4CAF50;
+}
+
+.dark-theme .conversation-item-preview {
+  color: #999;
+}
+
+.dark-theme .conversation-item-time {
+  color: #666;
+}
+
+.dark-theme .chat-content {
+  background: #2a2a2a;
+}
+
+.dark-theme .btn-icon-small {
+  color: #999;
+}
+
+.dark-theme .btn-icon-small:hover {
+  background: rgba(255, 255, 255, 0.1);
+  color: #e0e0e0;
+}
+
+/* 旧对话窗口 - 暗黑主题 */
 .dark-theme .chat-window {
-  background: rgba(30, 30, 30, 0.95);
+  background: #2a2a2a;
 }
 
 .dark-theme .chat-header {
@@ -886,7 +1319,7 @@ body.dark-theme {
 }
 
 .dark-theme .chat-body {
-  background: rgba(20, 20, 20, 0.95);
+  background: #2a2a2a;
 }
 
 .dark-theme .chat-message.user {
@@ -894,8 +1327,13 @@ body.dark-theme {
 }
 
 .dark-theme .chat-message.assistant {
-  background: rgba(60, 60, 60, 0.9);
+  background: #383838;
   color: #e0e0e0;
+}
+
+.dark-theme .chat-input-area {
+  background: #333;
+  border-top-color: rgba(255, 255, 255, 0.1);
 }
 
 .dark-theme .chat-input-container {
@@ -936,8 +1374,28 @@ body.dark-theme {
   color: #e0e0e0;
 }
 
+.dark-theme .settings-tabs {
+  background: #222;
+  border-bottom-color: rgba(255, 255, 255, 0.1);
+}
+
+.dark-theme .settings-tab {
+  color: #999;
+}
+
+.dark-theme .settings-tab:hover {
+  color: #e0e0e0;
+  background: rgba(255, 255, 255, 0.05);
+}
+
+.dark-theme .settings-tab.active {
+  color: #66bb6a;
+  border-bottom-color: #66bb6a;
+  background: #2a2a2a;
+}
+
 .dark-theme .settings-body {
-  background: rgba(35, 35, 35, 0.95);
+  background: #2a2a2a;
 }
 
 .dark-theme .settings-section {
@@ -950,6 +1408,17 @@ body.dark-theme {
 
 .dark-theme .setting-item label {
   color: #e0e0e0;
+}
+
+.dark-theme .setting-item textarea {
+  background-color: #1e1e1e;
+  border-color: #444;
+  color: #d4d4d4;
+}
+
+.dark-theme .setting-item textarea:focus {
+  background-color: #252525;
+  border-color: #4CAF50;
 }
 
 .dark-theme .setting-item input[type="text"],
@@ -1041,4 +1510,103 @@ body.dark-theme {
 .dark-theme .update-status.error {
   background: rgba(244, 67, 54, 0.2);
   color: #e57373;
+}
+
+/* 自定义对话框 */
+.custom-dialog {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background: rgba(0, 0, 0, 0.5);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 10000;
+}
+
+.dialog-content {
+  background: white;
+  padding: 24px;
+  border-radius: 12px;
+  min-width: 400px;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+}
+
+.dark-theme .dialog-content {
+  background: #2d2d2d;
+}
+
+.dialog-content h3 {
+  margin: 0 0 16px 0;
+  font-size: 18px;
+  color: #333;
+}
+
+.dark-theme .dialog-content h3 {
+  color: #e0e0e0;
+}
+
+.dialog-content input {
+  width: 100%;
+  padding: 10px 12px;
+  border: 1px solid #ddd;
+  border-radius: 8px;
+  font-size: 14px;
+  margin-bottom: 20px;
+  box-sizing: border-box;
+}
+
+.dark-theme .dialog-content input {
+  background: #3d3d3d;
+  border-color: #555;
+  color: #e0e0e0;
+}
+
+.dialog-content input:focus {
+  outline: none;
+  border-color: #1976d2;
+}
+
+.dialog-buttons {
+  display: flex;
+  gap: 12px;
+  justify-content: flex-end;
+}
+
+.dialog-buttons button {
+  padding: 8px 20px;
+  border: none;
+  border-radius: 8px;
+  cursor: pointer;
+  font-size: 14px;
+  transition: all 0.2s;
+}
+
+.btn-cancel {
+  background: #f5f5f5;
+  color: #666;
+}
+
+.btn-cancel:hover {
+  background: #e0e0e0;
+}
+
+.dark-theme .btn-cancel {
+  background: #3d3d3d;
+  color: #999;
+}
+
+.dark-theme .btn-cancel:hover {
+  background: #4d4d4d;
+}
+
+.btn-confirm {
+  background: #1976d2;
+  color: white;
+}
+
+.btn-confirm:hover {
+  background: #1565c0;
 }

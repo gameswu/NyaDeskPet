@@ -14,6 +14,7 @@ if (typeof window !== 'undefined') {
   (window as any).PIXI = window.PIXI;
 }
 
+// @ts-ignore - Live2DManager 被导出为全局实例
 class Live2DManager implements ILive2DManager {
   public canvas: HTMLCanvasElement;
   public app: Application | null;
@@ -28,6 +29,11 @@ class Live2DManager implements ILive2DManager {
   private modelStartY: number = 0;
   private originalModelBounds: { width: number; height: number } | null = null;
   private userScale: number = 1.0; // 用户自定义缩放倍数
+  
+  // 口型同步相关
+  private lipSyncValue: number = 0;
+  private lipSyncTarget: number = 0;
+  private lipSyncEnabled: boolean = false;
   private baseScale: number = 1.0; // 自适应计算的基础缩放
 
   constructor(canvasId: string) {
@@ -97,12 +103,17 @@ class Live2DManager implements ILive2DManager {
       
       // 使用 pixi-live2d-display 加载模型（通过全局 PIXI.live2d）
       const Live2DModel = (window.PIXI as any).live2d.Live2DModel;
+      const MotionPreloadStrategy = (window.PIXI as any).live2d.MotionPreloadStrategy;
       const live2dModel = await Live2DModel.from(modelPath, {
-        autoInteract: false, // 禁用自动交互，我们自己处理
-        autoUpdate: true     // 启用自动更新
+        autoInteract: false,                          // 禁用自动交互，我们自己处理
+        autoUpdate: true,                             // 启用自动更新
+        motionPreload: MotionPreloadStrategy.IDLE     // 预加载 Idle 动画
       });
       
       this.model = live2dModel as any;
+      
+      // 初始化口型同步
+      this.initLipSync();
       
       if (this.app) {
         // 添加到舞台
@@ -137,6 +148,10 @@ class Live2DManager implements ILive2DManager {
         // 设置滚轮缩放功能
         this.setupWheelZoom();
       }
+      
+      // 提取并发送模型信息
+      const modelInfo = this.extractModelInfo();
+      this.sendModelInfoToBackend(modelInfo);
       
       console.log('模型加载成功');
       return true;
@@ -438,13 +453,216 @@ class Live2DManager implements ILive2DManager {
     if (model.internalModel) {
       const hitAreaNames = model.internalModel.hitTest(x, y);
       if (hitAreaNames && hitAreaNames.length > 0) {
-        console.log('命中区域:', hitAreaNames);
-        // 播放点击反应动作
-        this.playMotion('TapBody', 0, 3);
+        const hitAreaName = hitAreaNames[0];
+        console.log('命中区域:', hitAreaName);
+        
+        // 检查该部位是否启用触摸反应
+        if (this.isTapEnabled(hitAreaName)) {
+          // 仅发送触碰事件到后端，由后端决定如何响应
+          this.sendTapEventToBackend(hitAreaName, x, y);
+        } else {
+          console.log('该部位触摸反应未启用:', hitAreaName);
+        }
+      } else {
+        // 未命中任何区域
+        if (this.isTapEnabled('default')) {
+          this.sendTapEventToBackend('unknown', x, y);
+        }
       }
     } else {
-      // 如果没有命中测试，播放默认动作
-      this.playMotion('TapBody', 0, 3);
+      // 如果没有命中测试，发送默认事件
+      if (this.isTapEnabled('default')) {
+        this.sendTapEventToBackend('unknown', x, y);
+      }
+    }
+  }
+
+  /**
+   * 提取模型信息
+   */
+  public extractModelInfo(): any {
+    if (!this.model) return null;
+    
+    const model = this.model as any;
+    const internalModel = model.internalModel;
+    
+    if (!internalModel) {
+      return { available: false };
+    }
+
+    // 提取动作组信息
+    const motions: any = {};
+    if (internalModel.motionManager?.definitions) {
+      const definitions = internalModel.motionManager.definitions;
+      for (const groupName in definitions) {
+        if (definitions.hasOwnProperty(groupName)) {
+          const group = definitions[groupName];
+          motions[groupName] = {
+            count: Array.isArray(group) ? group.length : 1,
+            files: Array.isArray(group) ? group.map((m: any) => m.File || m.file) : [group.File || group.file]
+          };
+        }
+      }
+    }
+
+    // 提取表情信息
+    const expressions: string[] = [];
+    if (internalModel.motionManager?.expressionManager?.definitions) {
+      const expDefs = internalModel.motionManager.expressionManager.definitions;
+      for (const expName in expDefs) {
+        if (expDefs.hasOwnProperty(expName)) {
+          expressions.push(expName);
+        }
+      }
+    }
+
+    // 提取命中区域信息
+    const hitAreas: string[] = [];
+    if (internalModel.hitAreas) {
+      if (Array.isArray(internalModel.hitAreas)) {
+        hitAreas.push(...internalModel.hitAreas.map((area: any) => area.name || area.Name || area.id || area.Id));
+      } else if (typeof internalModel.hitAreas === 'object') {
+        // hitAreas 可能是对象而非数组
+        for (const key in internalModel.hitAreas) {
+          if (internalModel.hitAreas.hasOwnProperty(key)) {
+            hitAreas.push(key);
+          }
+        }
+      }
+    }
+
+    return {
+      available: true,
+      modelPath: window.settingsManager?.getSettings().modelPath || 'unknown',
+      dimensions: this.originalModelBounds,
+      motions,
+      expressions,
+      hitAreas,
+      parameters: {
+        canScale: true,
+        currentScale: this.userScale * this.baseScale,
+        userScale: this.userScale,
+        baseScale: this.baseScale
+      }
+    };
+  }
+
+  /**
+   * 发送模型信息到后端
+   */
+  private sendModelInfoToBackend(modelInfo: any): void {
+    if (!modelInfo || !modelInfo.available) {
+      console.warn('模型信息不可用，跳过发送');
+      return;
+    }
+
+    console.log('发送模型信息到后端:', modelInfo);
+    
+    // 通过 backend-client 发送
+    if (window.backendClient) {
+      window.backendClient.sendMessage({
+        type: 'model_info',
+        data: modelInfo
+      }).catch(err => {
+        console.error('发送模型信息失败:', err);
+      });
+    }
+  }
+
+  /**
+   * 检查触摸是否启用
+   */
+  public isTapEnabled(hitAreaName: string): boolean {
+    const config = this.loadTapConfig();
+    if (config[hitAreaName] !== undefined) {
+      return config[hitAreaName].enabled === true;
+    }
+    // 默认启用
+    return config['default']?.enabled !== false;
+  }
+
+  /**
+   * 加载触碰配置
+   */
+  public loadTapConfig(): any {
+    // 从设置管理器中读取当前模型的触碰配置
+    if (window.settingsManager) {
+      return window.settingsManager.getCurrentTapConfig();
+    }
+    
+    // 默认配置（兜底）
+    return {
+      'Head': { enabled: true, description: '头部触摸' },
+      'Body': { enabled: true, description: '身体触摸' },
+      'Mouth': { enabled: true, description: '嘴部触摸' },
+      'Face': { enabled: true, description: '脸部触摸' },
+      'default': { enabled: true, description: '默认触摸' }
+    };
+  }
+
+  /**
+   * 发送触碰事件到后端
+   */
+  private sendTapEventToBackend(hitAreaName: string, x: number, y: number): void {
+    if (!window.backendClient) return;
+
+    window.backendClient.sendMessage({
+      type: 'tap_event',
+      data: {
+        hitArea: hitAreaName,
+        position: { x, y },
+        timestamp: Date.now()
+      }
+    }).catch(err => {
+      console.error('发送触碰事件失败:', err);
+    });
+  }
+
+  /**
+   * 执行同步指令（支持文字、音频、动作、表情的组合）
+   */
+  public async executeSyncCommand(command: any): Promise<void> {
+    console.log('执行同步指令:', command);
+
+    if (!command || !command.actions) {
+      console.warn('同步指令格式错误');
+      return;
+    }
+
+    // 按时序执行
+    for (const action of command.actions) {
+      await this.executeAction(action);
+      
+      // 如果需要等待完成
+      if (action.waitComplete && action.duration) {
+        await new Promise(resolve => setTimeout(resolve, action.duration));
+      }
+    }
+  }
+
+  /**
+   * 执行单个动作
+   */
+  private async executeAction(action: any): Promise<void> {
+    switch (action.type) {
+      case 'motion':
+        this.playMotion(action.group, action.index || 0, action.priority || 2);
+        break;
+      case 'expression':
+        this.setExpression(action.expressionId);
+        break;
+      case 'dialogue':
+        if (window.dialogueManager) {
+          window.dialogueManager.showDialogue(action.text, action.duration || 5000);
+        }
+        break;
+      case 'audio':
+        if (window.audioPlayer) {
+          await window.audioPlayer.playAudio(action.url || action.base64);
+        }
+        break;
+      default:
+        console.warn('未知动作类型:', action.type);
     }
   }
 
@@ -457,7 +675,59 @@ class Live2DManager implements ILive2DManager {
       this.app = null;
     }
     this.model = null;
+    this.lipSyncEnabled = false;
     this.initialized = false;
+  }
+
+  /**
+   * 初始化口型同步
+   */
+  private initLipSync(): void {
+    if (!this.model) return;
+    
+    // 启动口型同步更新循环
+    this.lipSyncEnabled = true;
+    this.updateLipSync();
+  }
+
+  /**
+   * 更新口型同步（平滑插值）
+   */
+  private updateLipSync(): void {
+    if (!this.lipSyncEnabled || !this.model) return;
+    
+    // 平滑插值到目标值
+    const smoothing = 0.3;
+    this.lipSyncValue += (this.lipSyncTarget - this.lipSyncValue) * smoothing;
+    
+    // 设置嘴部参数
+    const internalModel = (this.model as any).internalModel;
+    if (internalModel && internalModel.coreModel) {
+      try {
+        // Live2D 标准的嘴部张开参数
+        internalModel.coreModel.setParameterValueById('ParamMouthOpenY', this.lipSyncValue);
+      } catch (error) {
+        // 忽略参数不存在的错误
+      }
+    }
+    
+    // 持续更新
+    requestAnimationFrame(() => this.updateLipSync());
+  }
+
+  /**
+   * 设置口型同步目标值（由音频播放器调用）
+   * @param value 0-1 的值，表示嘴部张开程度
+   */
+  public setLipSync(value: number): void {
+    this.lipSyncTarget = Math.max(0, Math.min(1, value));
+  }
+
+  /**
+   * 停止口型同步
+   */
+  public stopLipSync(): void {
+    this.lipSyncTarget = 0;
   }
 }
 

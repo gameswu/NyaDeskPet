@@ -69,6 +69,10 @@ class BackendClient implements IBackendClient {
           this.isConnecting = false;
           this.updateStatus('connected');
           this.clearReconnectTimer();
+          
+          // 连接成功后发送角色信息
+          this.sendCharacterInfo();
+          
           resolve(true);
         };
 
@@ -120,6 +124,9 @@ class BackendClient implements IBackendClient {
         case 'live2d':
           this.handleLive2DCommand(message.data as Live2DCommandData);
           break;
+        case 'sync_command':
+          this.handleSyncCommand(message.data);
+          break;
         case 'system':
           this.handleSystemMessage(message.data);
           break;
@@ -136,7 +143,12 @@ class BackendClient implements IBackendClient {
    */
   public handleDialogue(data: DialogueData): void {
     if (window.dialogueManager) {
-      window.dialogueManager.showDialogue(data.text, data.duration);
+      let displayText = data.text;
+      // 如果消息没有文本但有附件，显示占位符
+      if (!displayText && data.attachment) {
+        displayText = `[${data.attachment.type === 'image' ? '图片' : '文件'}]`;
+      }
+      window.dialogueManager.showDialogue(displayText, data.duration);
     }
   }
 
@@ -168,6 +180,17 @@ class BackendClient implements IBackendClient {
         break;
       default:
         console.warn('未知 Live2D 指令:', data.command);
+    }
+  }
+
+  /**
+   * 处理同步指令
+   */
+  public handleSyncCommand(data: unknown): void {
+    if (window.live2dManager && typeof (window.live2dManager as any).executeSyncCommand === 'function') {
+      (window.live2dManager as any).executeSyncCommand(data);
+    } else {
+      console.warn('Live2D管理器不支持同步指令');
     }
   }
 
@@ -266,6 +289,36 @@ class BackendClient implements IBackendClient {
       clearTimeout(this.reconnectTimer);
       this.reconnectTimer = null;
     }
+  }
+
+  /**
+   * 发送角色信息到后端
+   */
+  private sendCharacterInfo(): void {
+    const settings = window.settingsManager.getSettings();
+    
+    // 构建角色信息消息
+    const characterInfo: any = {
+      useCustom: settings.useCustomCharacter
+    };
+    
+    // 只有在启用自定义且有值时才发送
+    if (settings.useCustomCharacter) {
+      if (settings.customName) {
+        characterInfo.name = settings.customName;
+      }
+      if (settings.customPersonality) {
+        characterInfo.personality = settings.customPersonality;
+      }
+    }
+    
+    // 发送到后端
+    this.sendMessage({
+      type: 'character_info',
+      data: characterInfo
+    }).catch(err => {
+      console.error('发送角色信息失败:', err);
+    });
   }
 
   /**

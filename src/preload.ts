@@ -25,6 +25,9 @@ export interface ElectronAPI {
   // 消息通信
   sendMessage: (message: unknown) => Promise<{ success: boolean; message: string }>;
   
+  // UI状态更新
+  updateUIState: (state: { uiVisible?: boolean; chatOpen?: boolean }) => void;
+  
   // 文件选择
   selectModelFile: () => Promise<string | null>;
   
@@ -55,6 +58,11 @@ const electronAPI: ElectronAPI = {
   
   // 消息通信
   sendMessage: (message: unknown) => ipcRenderer.invoke('send-message', message),
+  
+  // UI状态更新
+  updateUIState: (state: { uiVisible?: boolean; chatOpen?: boolean }) => {
+    ipcRenderer.send('ui-state-changed', state);
+  },
   
   // 文件选择
   selectModelFile: () => ipcRenderer.invoke('select-model-file'),
