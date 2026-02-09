@@ -1,0 +1,71 @@
+{
+  "name": "nya-desk-pet",
+  "version": "1.0.0",
+  "description": "跨平台 Live2D 桌面宠物应用",
+  "main": "dist/main.js",
+  "scripts": {
+    "start": "npm run compile && electron .",
+    "dev": "npm run compile:dev && electron . --dev",
+    "build": "npm run compile && electron-builder",
+    "build:win": "npm run compile && electron-builder --win",
+    "build:mac": "npm run compile && electron-builder --mac",
+    "build:linux": "npm run compile && electron-builder --linux",
+    "compile": "tsc -p . && tsc -p renderer",
+    "compile:dev": "tsc -p . --sourceMap && tsc -p renderer --sourceMap",
+    "watch": "tsc -p . --watch",
+    "watch:renderer": "tsc -p renderer --watch"
+  },
+  "keywords": [
+    "electron",
+    "live2d",
+    "desktop-pet",
+    "ai",
+    "typescript"
+  ],
+  "author": "",
+  "license": "MIT",
+  "devDependencies": {
+    "@types/node": "^20.10.0",
+    "@types/ws": "^8.5.10",
+    "electron": "^28.0.0",
+    "electron-builder": "^24.9.1",
+    "typescript": "^5.3.3"
+  },
+  "dependencies": {
+    "axios": "^1.6.0",
+    "pixi-live2d-display": "^0.4.0",
+    "pixi.js": "^7.3.2",
+    "ws": "^8.16.0"
+  },
+  "build": {
+    "appdist/**/*": "NyaDeskPet",
+    "directories": {
+      "output": "dist"
+    },
+    "files": [
+      "main.js",
+      "preload.js",
+      "renderer/**/*",
+      "models/**/*",
+      "assets/**/*"
+    ],
+    "win": {
+      "target": [
+        "nsis"
+      ],
+      "icon": "assets/icon.ico"
+    },
+    "mac": {
+      "target": [
+        "dmg"
+      ],
+      "icon": "assets/icon.icns"
+    },
+    "linux": {
+      "target": [
+        "AppImage"
+      ],
+      "icon": "assets/icon.png"
+    }
+  }
+}

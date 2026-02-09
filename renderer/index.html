@@ -1,0 +1,103 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>NyaDeskPet</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <!-- 控制栏 -->
+  <div id="control-bar">
+    <button id="btn-settings" title="设置">⚙️</button>
+    <button id="btn-minimize" title="最小化">-</button>
+    <button id="btn-close" title="关闭">×</button>
+  </div>
+
+  <!-- Live2D 画布容器 -->
+  <div id="live2d-container">
+    <canvas id="live2d-canvas"></canvas>
+  </div>
+
+  <!-- 对话框 -->
+  <div id="dialogue-box" class="hidden">
+    <div id="dialogue-text"></div>
+    <div id="dialogue-progress"></div>
+  </div>
+
+  <!-- 交互区域 -->
+  <div id="interaction-area"></div>
+
+  <!-- 状态指示器 -->
+  <div id="status-indicator" class="disconnected"></div>
+
+  <!-- 设置面板 -->
+  <div id="settings-panel" class="settings-panel">
+    <div class="settings-content">
+      <div class="settings-header">
+        <h2>⚙️ 设置</h2>
+        <button id="btn-close-settings" class="btn-icon">×</button>
+      </div>
+      
+      <div class="settings-body">
+        <!-- 模型设置 -->
+        <div class="settings-section">
+          <h3>🎭 Live2D 模型</h3>
+          <div class="setting-item">
+            <label for="setting-model-path">模型路径</label>
+            <input type="text" id="setting-model-path" placeholder="../models/default/model3.json">
+            <small>相对于 renderer 目录的路径（使用 ../ 访问上级目录）</small>
+          </div>
+        </div>
+
+        <!-- 后端连接设置 -->
+        <div class="settings-section">
+          <h3>🌐 后端连接</h3>
+          <div class="setting-item">
+            <label>
+              <input type="checkbox" id="setting-auto-connect">
+              启动时自动连接后端
+            </label>
+          </div>
+          <div class="setting-item">
+            <label for="setting-backend-url">HTTP 地址</label>
+            <input type="text" id="setting-backend-url" placeholder="http://localhost:8000">
+          </div>
+          <div class="setting-item">
+            <label for="setting-ws-url">WebSocket 地址</label>
+            <input type="text" id="setting-ws-url" placeholder="ws://localhost:8000/ws">
+          </div>
+        </div>
+
+        <!-- 音频设置 -->
+        <div class="settings-section">
+          <h3>🔊 音频</h3>
+          <div class="setting-item">
+            <label for="setting-volume">音量 <span id="volume-value">80%</span></label>
+            <input type="range" id="setting-volume" min="0" max="1" step="0.01" value="0.8">
+          </div>
+        </div>
+      </div>
+
+      <div class="settings-footer">
+        <button id="btn-reset-settings" class="btn-secondary">恢复默认</button>
+        <button id="btn-save-settings" class="btn-primary">保存设置</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- 脚本引入 -->
+  <script src="lib/pixi.min.js"></script>
+  <!-- Cubism 4 Core 运行时（必须在 pixi-live2d-display 之前加载） -->
+  <script src="lib/live2dcubismcore.min.js"></script>
+  <!-- pixi-live2d-display Cubism 4 支持 -->
+  <script src="lib/pixi-live2d-cubism4.min.js"></script>
+  <!-- TypeScript 编译后的 JavaScript 文件 -->
+  <script type="module" src="js/settings-manager.js"></script>
+  <script type="module" src="js/live2d-manager.js"></script>
+  <script type="module" src="js/backend-client.js"></script>
+  <script type="module" src="js/dialogue-manager.js"></script>
+  <script type="module" src="js/audio-player.js"></script>
+  <script type="module" src="js/renderer.js"></script>
+</body>
+</html>
