@@ -5,7 +5,10 @@
   "main": "dist/main.js",
   "scripts": {
     "start": "npm run compile && electron .",
-    "dev": "npm run compile:dev && DYLD_LIBRARY_PATH=\"$PWD/node_modules/sherpa-onnx-darwin-arm64:$DYLD_LIBRARY_PATH\" LD_LIBRARY_PATH=\"$PWD/node_modules/sherpa-onnx-linux-x64:$LD_LIBRARY_PATH\" electron . --dev",
+    "dev": "npm run compile:dev && electron . --dev",
+    "dev:mac": "npm run compile:dev && DYLD_LIBRARY_PATH=\"$PWD/node_modules/sherpa-onnx-darwin-arm64:$PWD/node_modules/sherpa-onnx-darwin-x64:$DYLD_LIBRARY_PATH\" electron . --dev",
+    "dev:linux": "npm run compile:dev && LD_LIBRARY_PATH=\"$PWD/node_modules/sherpa-onnx-linux-x64:$LD_LIBRARY_PATH\" electron . --dev",
+    "dev:win": "npm run compile:dev && set \"PATH=%CD%\\node_modules\\sherpa-onnx-win32-x64;%CD%\\node_modules\\sherpa-onnx-win32-ia32;%PATH%\" && electron . --dev",
     "build": "npm run compile && electron-builder",
     "build:win": "npm run compile && electron-builder --win",
     "build:mac": "npm run compile && electron-builder --mac",

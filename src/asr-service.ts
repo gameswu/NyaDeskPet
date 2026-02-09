@@ -60,19 +60,13 @@ class ASRService {
         return false;
       }
 
-      // 获取 sherpa-onnx 模块路径
-      const appPath = app.getAppPath();
-      
-      // 通过 sherpa-onnx-node 包加载
-      const sherpaNodeModule = path.join(appPath, 'node_modules', 'sherpa-onnx-node');
-      
+      // 直接加载 sherpa-onnx-node 包（让 Node.js 自动从 node_modules 解析）
       let sherpa;
       try {
-        // 加载 sherpa-onnx-node 包
-        sherpa = require(sherpaNodeModule);
+        sherpa = require('sherpa-onnx-node');
       } catch (loadError) {
         console.error('[ASR] 加载 sherpa-onnx-node 模块失败:', loadError);
-        console.error('[ASR] 请确保动态库路径已正确设置（DYLD_LIBRARY_PATH/LD_LIBRARY_PATH/PATH）');
+        console.error('[ASR] 请确保 sherpa-onnx-node 已正确安装');
         return false;
       }
       

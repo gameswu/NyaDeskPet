@@ -65,7 +65,18 @@ npm install
 # 2. 编译代码
 npm run compile
 
-# 3. 启动应用
+# 3. 启动应用（根据操作系统选择对应命令）
+
+# macOS:
+npm run dev:mac
+
+# Linux:
+npm run dev:linux
+
+# Windows:
+npm run dev:win
+
+# 或使用通用命令（可能在某些环境下需要手动设置环境变量）:
 npm run dev
 ```
 

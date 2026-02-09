@@ -21,10 +21,6 @@ renderer/js/*.js
 renderer/js/*.js.map
 !renderer/lib/
 
-# 私有模型文件（nya 为私有模型，不提交和打包）
-models/live2d/nya/
-
-# 模型文件（太大无法提交到 GitHub）
 # 用户需要根据文档说明自行下载
-models/live2d/mao_pro_zh/
-models/asr/
+models/live2d/*/
+models/asr/*/
