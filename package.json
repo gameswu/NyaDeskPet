@@ -1,6 +1,6 @@
 {
   "name": "nya-desk-pet",
-  "version": "1.0.0",
+  "version": "1.0.0-beta-2602101632",
   "description": "跨平台 Live2D 桌面宠物应用",
   "main": "dist/main.js",
   "scripts": {
@@ -17,7 +17,8 @@
     "compile:dev": "tsc -p . --sourceMap && tsc -p renderer --sourceMap",
     "watch": "tsc -p . --watch",
     "watch:renderer": "tsc -p renderer --watch",
-    "check-i18n": "node scripts/check-i18n.js"
+    "check-i18n": "node scripts/check-i18n.js",
+    "version": "node scripts/update-version.js"
   },
   "keywords": [
     "electron",

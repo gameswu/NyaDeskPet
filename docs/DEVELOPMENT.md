@@ -2,6 +2,74 @@
 
 本文档介绍 NyaDeskPet 的架构设计、核心模块实现和开发相关的技术细节。
 
+## 版本控制规范
+
+### 版本号格式
+
+**正式版**：`v1.0.0`
+- 三位语义化版本号
+- 格式：`v主版本.次版本.补丁版本`
+- 示例：`v1.0.0`, `v2.1.3`
+
+**开发版**：`v1.0.0-beta-YYMMDDHHMM`
+- 带有 beta 标识和时间戳
+- 时间戳格式：年(2位).月.日.时.分
+- 示例：`v1.0.0-beta-2602101530`
+
+**热修复版**：`v1.0.0-hotfix-YYMMDDHHMM`
+- 带有 hotfix 标识和时间戳
+- 用于紧急修复 bug
+- 示例：`v1.0.0-hotfix-2602101545`
+
+### 版本更新脚本
+
+使用 `npm run version` 命令管理版本：
+
+```bash
+# 指定完整版本号
+npm run version release 1.0.0        # 正式版 -> v1.0.0
+npm run version beta 1.0.0           # 开发版 -> v1.0.0-beta-2602101530
+npm run version hotfix 1.0.0         # 热修复 -> v1.0.0-hotfix-2602101530
+
+# 自动递增版本号
+npm run version patch                # 补丁版本号+1（如 1.0.0 -> 1.0.1）
+npm run version minor                # 次版本号+1（如 1.0.0 -> 1.1.0）
+npm run version major                # 主版本号+1（如 1.0.0 -> 2.0.0）
+```
+
+脚本会自动更新：
+- `package.json` 中的版本号
+- `README.md` 中的版本徽章（如果存在）
+- 创建 `version.json` 版本信息文件
+
+### 版本发布流程
+
+1. **开发阶段**：使用 beta 版本
+   ```bash
+   npm run version beta 1.1.0
+   git add .
+   git commit -m "chore: beta v1.1.0-beta-2602101530"
+   git push
+   ```
+
+2. **发布正式版**：
+   ```bash
+   npm run version release 1.1.0
+   git add .
+   git commit -m "chore: release v1.1.0"
+   git tag v1.1.0
+   git push && git push --tags
+   ```
+
+3. **紧急修复**：
+   ```bash
+   npm run version hotfix 1.1.0
+   # 修复 bug
+   git add .
+   git commit -m "fix: 修复XXX问题 (v1.1.0-hotfix-2602101545)"
+   git push
+   ```
+
 ## 架构设计
 
 ### 核心架构图

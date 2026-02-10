@@ -197,9 +197,32 @@ function createTray(): void {
     // 根据平台选择合适的图标
     if (process.platform === 'darwin') {
       // macOS 使用模板图标
+      // 尝试加载带 @2x 后缀的 Retina 版本，Electron 会自动处理多分辨率
       const iconPath = path.join(__dirname, '../assets/tray-icon-mac.png');
-      trayIcon = nativeImage.createFromPath(iconPath);
-      if (trayIcon.isEmpty()) {
+      
+      // 先尝试使用 32x32 作为 @2x（Retina）版本
+      const icon2xPath = path.join(__dirname, '../assets/tray-icon-mac@2x.png');
+      const normalIconPath = iconPath;
+      
+      // 检查是否存在 @2x 版本
+      if (fs.existsSync(icon2xPath)) {
+        // 如果有 @2x 版本，让 Electron 自动处理多分辨率
+        trayIcon = nativeImage.createFromPath(normalIconPath);
+      } else if (fs.existsSync(normalIconPath)) {
+        // 如果只有一个文件，需要调整尺寸
+        const originalIcon = nativeImage.createFromPath(normalIconPath);
+        if (!originalIcon.isEmpty()) {
+          const size = originalIcon.getSize();
+          // 如果图标是 32x32，将其缩小到 16x16 以适配菜单栏
+          if (size.width > 20 || size.height > 20) {
+            trayIcon = originalIcon.resize({ width: 16, height: 16 });
+          } else {
+            trayIcon = originalIcon;
+          }
+        } else {
+          trayIcon = nativeImage.createEmpty();
+        }
+      } else {
         console.warn('托盘图标未找到，使用默认图标');
         // 创建一个简单的16x16图标
         trayIcon = nativeImage.createFromDataURL('data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAYAAAAf8/9hAAAABHNCSVQICAgIfAhkiAAAAAlwSFlzAAAAdgAAAHYBTnsmCAAAABl0RVh0U29mdHdhcmUAd3d3Lmlua3NjYXBlLm9yZ5vuPBoAAAEPSURBVDiNpdMxSgNBFAbgb3azye4uCaQQFEEQxEIQFKysbGzsLLyBN/AGXsAzWNhYWVnZ2FhYWAgWgqAQBEVBSLJZdnfGYneDhIjgwDDMzPv+eW+Gf6SUUkop/dcYM8YMY8wYY8YYM8YYM8b8i4gQESEiQkSEiAgRESIiRESIiPiXiIiIiIiIiIiIiIiIiIiIiPhXRERERERERERERERERERExL9ERERERERERERERERERMRfRURERERERERERERERET8q4iIiIiIiIiIiIiIiIiIiH+JiIiIiIiIiIiIiIiIiIiI+FeIiIiIiIiIiIiIiIiIiIh/hYiIiIiIiIiIiIiIiIiI+FdYa621dsv2AIkRHvLqZH0AAAAASUVORK5CYII=');
@@ -207,12 +230,34 @@ function createTray(): void {
       trayIcon.setTemplateImage(true);
     } else {
       // Windows 和 Linux
-      const iconPath = path.join(__dirname, '../assets/tray-icon.png');
+      // Windows 优先使用 ICO 格式，Linux 使用 PNG
+      const iconPath = process.platform === 'win32' 
+        ? path.join(__dirname, '../assets/tray-icon.ico')
+        : path.join(__dirname, '../assets/tray-icon.png');
+      
       trayIcon = nativeImage.createFromPath(iconPath);
       if (trayIcon.isEmpty()) {
-        console.warn('托盘图标未找到，使用默认图标');
-        // 使用一个简单的占位图标
-        trayIcon = nativeImage.createFromDataURL('data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAYAAAAf8/9hAAAABHNCSVQICAgIfAhkiAAAAAlwSFlzAAAAdgAAAHYBTnsmCAAAABl0RVh0U29mdHdhcmUAd3d3Lmlua3NjYXBlLm9yZ5vuPBoAAAEPSURBVDiNpdMxSgNBFAbgb3azye4uCaQQFEEQxEIQFKysbGzsLLyBN/AGXsAzWNhYWVnZ2FhYWAgWgqAQBEVBSLJZdnfGYneDhIjgwDDMzPv+eW+Gf6SUUkop/dcYM8YMY8wYY8YYM8YYM8b8i4gQESEiQkSEiAgRESIiRESIiPiXiIiIiIiIiIiIiIiIiIiIiPhXRERERERERERERERERERExL9ERERERERERERERERERMRfRURERERERERERERERET8q4iIiIiIiIiIiIiIiIiIiH+JiIiIiIiIiIiIiIiIiIiI+FeIiIiIiIiIiIiIiIiIiIh/hYiIiIiIiIiIiIiIiIiI+FdYa621dsv2AIkRHvLqZH0AAAAASUVORK5CYII=');
+        console.warn('托盘图标未找到，尝试使用备用图标');
+        // 尝试使用应用图标作为备用
+        const fallbackPath = process.platform === 'win32'
+          ? path.join(__dirname, '../assets/icon.ico')
+          : path.join(__dirname, '../assets/icon.png');
+        trayIcon = nativeImage.createFromPath(fallbackPath);
+        
+        if (trayIcon.isEmpty()) {
+          console.warn('备用图标也未找到，使用默认图标');
+          // 使用一个简单的占位图标
+          trayIcon = nativeImage.createFromDataURL('data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAYAAAAf8/9hAAAABHNCSVQICAgIfAhkiAAAAAlwSFlzAAAAdgAAAHYBTnsmCAAAABl0RVh0U29mdHdhcmUAd3d3Lmlua3NjYXBlLm9yZ5vuPBoAAAEPSURBVDiNpdMxSgNBFAbgb3azye4uCaQQFEEQxEIQFKysbGzsLLyBN/AGXsAzWNhYWVnZ2FhYWAgWgqAQBEVBSLJZdnfGYneDhIjgwDDMzPv+eW+Gf6SUUkop/dcYM8YMY8wYY8YYM8YYM8b8i4gQESEiQkSEiAgRESIiRESIiPiXiIiIiIiIiIiIiIiIiIiIiPhXRERERERERERERERERERExL9ERERERERERERERERERMRfRURERERERERERERERET8q4iIiIiIiIiIiIiIiIiIiH+JiIiIiIiIiIiIiIiIiIiI+FeIiIiIiIiIiIiIiIiIiIh/hYiIiIiIiIiIiIiIiIiI+FdYa621dsv2AIkRHvLqZH0AAAAASUVORK5CYII=');
+        }
+      }
+      
+      // Windows 托盘图标可能需要调整尺寸
+      if (process.platform === 'win32' && !trayIcon.isEmpty()) {
+        const size = trayIcon.getSize();
+        // Windows 托盘图标标准尺寸是 16x16
+        if (size.width > 16 || size.height > 16) {
+          trayIcon = trayIcon.resize({ width: 16, height: 16 });
+        }
       }
     }
   } catch (error) {
