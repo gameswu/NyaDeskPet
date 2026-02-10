@@ -25,7 +25,10 @@ class SettingsManager implements ISettingsManager {
     micBackgroundMode: false,
     micVolumeThreshold: 30,
     micAutoSend: true,
-    enableEyeTracking: true
+    enableEyeTracking: true,
+    logEnabled: false,
+    logLevels: ['warn', 'error', 'critical'],
+    logRetentionDays: 7
   };
 
   constructor() {

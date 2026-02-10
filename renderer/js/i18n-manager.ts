@@ -120,7 +120,7 @@ class I18nManager implements II18nManager {
   /**
    * 应用翻译到页面
    */
-  private applyTranslations(): void {
+  public applyTranslations(): void {
     // 翻译所有带 data-i18n 属性的元素
     const elements = document.querySelectorAll('[data-i18n]');
     elements.forEach(el => {

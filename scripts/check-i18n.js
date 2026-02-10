@@ -103,6 +103,12 @@ function extractI18nKeysFromCode(filePath) {
     keys.add(match[1]);
   }
   
+  // 匹配字符串模板中的 data-i18n="key"（用于动态生成的HTML）
+  const stringTemplateI18nRegex = /data-i18n=["']([^"']+)["']/g;
+  while ((match = stringTemplateI18nRegex.exec(content)) !== null) {
+    keys.add(match[1]);
+  }
+  
   // 匹配 getAttribute('data-i18n')
   const getAttributeRegex = /getAttribute\s*\(\s*['"]data-i18n['"]\s*\)/g;
   // 这种情况比较复杂，先跳过动态键

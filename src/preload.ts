@@ -43,17 +43,50 @@ export interface ElectronAPI {
   asrIsReady: () => Promise<{ ready: boolean }>;
   asrRecognize: (audioData: string) => Promise<{ success: boolean; text?: string; confidence?: number; error?: string }>;
   
+  // 日志系统
+  loggerUpdateConfig: (config: any) => Promise<{ success: boolean }>;
+  loggerGetConfig: () => Promise<any>;
+  loggerGetFiles: () => Promise<Array<{ name: string; path: string; size: number; mtime: Date; isCurrent: boolean }>>;
+  loggerDeleteFile: (fileName: string) => Promise<{ success: boolean }>;
+  loggerDeleteAll: () => Promise<{ success: true; count: number }>;
+  loggerOpenDirectory: () => Promise<{ success: boolean }>;
+  loggerLog: (level: string, message: string, data?: any) => void;
+  
+  // 终端插件
+  terminalExecute: (options: any) => Promise<any>;
+  terminalGetSessions: () => Promise<any[]>;
+  terminalCloseSession: (sessionId: string) => Promise<{ success: boolean }>;
+  terminalSendInput: (sessionId: string, input: string) => Promise<{ success: boolean }>;
+  terminalResize: (sessionId: string, cols: number, rows: number) => Promise<{ success: boolean }>;
+  terminalGetCwd: (sessionId: string) => Promise<{ cwd: string | null }>;
+  
+  // UI自动化插件
+  uiCaptureScreen: (options?: any) => Promise<any>;
+  uiMouseClick: (options: any) => Promise<{ success: boolean; error?: string }>;
+  uiMouseMove: (options: any) => Promise<{ success: boolean; error?: string }>;
+  uiMouseDrag: (options: any) => Promise<{ success: boolean; error?: string }>;
+  uiGetMousePosition: () => Promise<{ x: number; y: number }>;
+  uiKeyboardType: (options: any) => Promise<{ success: boolean; error?: string }>;
+  uiKeyboardPress: (options: any) => Promise<{ success: boolean; error?: string }>;
+  uiMouseScroll: (deltaX: number, deltaY: number) => Promise<{ success: boolean; error?: string }>;
+  uiGetScreenSize: () => Promise<{ width: number; height: number }>;
+  uiSetMouseSpeed: (speed: number) => Promise<{ success: boolean }>;
+  
   // 监听来自主进程的消息
   onBackendMessage: (callback: (data: unknown) => void) => void;
   onVoicePlay: (callback: (data: unknown) => void) => void;
   onLive2dCommand: (callback: (data: unknown) => void) => void;
   onOpenSettings: (callback: () => void) => void;
+  onOpenPlugins: (callback: () => void) => void;
   onOpenChat: (callback: () => void) => void;
   onToggleUI: (callback: () => void) => void;
+  
+  // 插件管理
+  invoke: (channel: string, ...args: any[]) => Promise<any>;
 }
 
 // 暴露安全的 API 给渲染进程
-const electronAPI: ElectronAPI = {
+const electronAPI = {
   // 窗口控制
   minimizeWindow: () => ipcRenderer.invoke('minimize-window'),
   closeWindow: () => ipcRenderer.invoke('close-window'),
@@ -86,6 +119,17 @@ const electronAPI: ElectronAPI = {
   asrIsReady: () => ipcRenderer.invoke('asr-is-ready'),
   asrRecognize: (audioData: string) => ipcRenderer.invoke('asr-recognize', audioData),
   
+  // 日志系统
+  loggerUpdateConfig: (config: any) => ipcRenderer.invoke('logger-update-config', config),
+  loggerGetConfig: () => ipcRenderer.invoke('logger-get-config'),
+  loggerGetFiles: () => ipcRenderer.invoke('logger-get-files'),
+  loggerDeleteFile: (fileName: string) => ipcRenderer.invoke('logger-delete-file', fileName),
+  loggerDeleteAll: () => ipcRenderer.invoke('logger-delete-all'),
+  loggerOpenDirectory: () => ipcRenderer.invoke('logger-open-directory'),
+  loggerLog: (level: string, message: string, data?: any) => {
+    ipcRenderer.send('logger-log', level, message, data);
+  },
+  
   // 监听来自主进程的消息
   onBackendMessage: (callback: (data: unknown) => void) => {
     ipcRenderer.on('backend-message', (_event: IpcRendererEvent, data: unknown) => callback(data));
@@ -103,12 +147,21 @@ const electronAPI: ElectronAPI = {
     ipcRenderer.on('open-settings', () => callback());
   },
 
+  onOpenPlugins: (callback: () => void) => {
+    ipcRenderer.on('open-plugins', () => callback());
+  },
+
   onOpenChat: (callback: () => void) => {
     ipcRenderer.on('open-chat', () => callback());
   },
 
   onToggleUI: (callback: () => void) => {
     ipcRenderer.on('toggle-ui', () => callback());
+  },
+  
+  // 通用 IPC 调用（用于插件管理等扩展功能）
+  invoke: (channel: string, ...args: any[]) => {
+    return ipcRenderer.invoke(channel, ...args);
   }
 };
 

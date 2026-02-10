@@ -36,13 +36,31 @@ export interface ElectronAPI {
   openExternal: (url: string) => Promise<void>;
   getAppVersion: () => Promise<string>;
   
+  // ASR 服务
+  asrInitialize: () => Promise<{ success: boolean }>;
+  asrIsReady: () => Promise<{ ready: boolean }>;
+  asrRecognize: (audioData: string) => Promise<{ success: boolean; text?: string; confidence?: number; error?: string }>;
+  
+  // 日志系统
+  loggerUpdateConfig: (config: any) => Promise<{ success: boolean }>;
+  loggerGetConfig: () => Promise<any>;
+  loggerGetFiles: () => Promise<Array<{ name: string; path: string; size: number; mtime: Date; isCurrent: boolean }>>;
+  loggerDeleteFile: (fileName: string) => Promise<{ success: boolean }>;
+  loggerDeleteAll: () => Promise<{ success: true; count: number }>;
+  loggerOpenDirectory: () => Promise<{ success: boolean }>;
+  loggerLog: (level: string, message: string, data?: any) => void;
+  
   // 监听来自主进程的消息
   onBackendMessage: (callback: (data: unknown) => void) => void;
   onVoicePlay: (callback: (data: unknown) => void) => void;
   onLive2dCommand: (callback: (data: unknown) => void) => void;
   onOpenSettings: (callback: () => void) => void;
+  onOpenPlugins: (callback: () => void) => void;
   onOpenChat: (callback: () => void) => void;
   onToggleUI: (callback: () => void) => void;
+  
+  // 通用 IPC 调用（用于插件管理等扩展功能）
+  invoke: (channel: string, ...args: any[]) => Promise<any>;
   
   // 状态同步
   updateUIState: (state: { uiVisible?: boolean; chatOpen?: boolean }) => void;
@@ -59,8 +77,11 @@ declare global {
     settingsManager: SettingsManager;
     i18nManager: I18nManager;
     themeManager: ThemeManager;
+    pluginConnector: PluginConnector;
+    pluginUI: PluginUI;
     cameraManager: CameraManager;
     microphoneManager: MicrophoneManager;
+    logger: any;
     app: AppDebugInterface;
     PIXI: typeof import('pixi.js');
     lucide?: {
@@ -233,6 +254,70 @@ export interface Live2DManager {
 }
 
 // 后端通信相关类型
+// 插件清单类型
+export interface PluginManifest {
+  id: string;
+  name: string;
+  version: string;
+  author: string;
+  type: string;
+  url: string;
+  autoStart: boolean;
+  permissions: string[];
+  capabilities: string[];
+  i18n: {
+    [locale: string]: {
+      displayName: string;
+      description: string;
+      category: string;
+    };
+  };
+  icon: string;
+  iconFile?: string | null;
+  preCommands?: {
+    win32?: (string | string[])[];
+    darwin?: (string | string[])[];
+    linux?: (string | string[])[];
+  };
+  command: {
+    win32: string | string[];
+    darwin: string | string[];
+    linux: string | string[];
+  };
+  workingDirectory?: string;
+}
+
+// 插件信息类型
+export interface PluginInfo {
+  manifest: PluginManifest;
+  ws: WebSocket | null;
+  status: 'stopped' | 'starting' | 'running' | 'connected' | 'error';
+  processId: number | null;
+  locale: string;
+  reconnectTimer: number | null;
+  reconnectAttempts: number;
+}
+
+// 插件连接器接口
+export interface PluginConnector {
+  startPlugin(name: string): Promise<boolean>;
+  stopPlugin(name: string): Promise<boolean>;
+  connectPlugin(name: string): Promise<boolean>;
+  disconnectPlugin(name: string): void;
+  callPlugin(name: string, action: string, params: any): Promise<any>;
+  setPluginLocale(name: string, locale: string): Promise<void>;
+  getPlugins(): PluginInfo[];
+  getPlugin(name: string): PluginInfo | undefined;
+  getPluginI18n(name: string): { displayName: string; description: string; category: string } | null;
+  connectAll(): Promise<void>;
+  disconnectAll(): void;
+}
+
+// 插件UI接口
+export interface PluginUI {
+  renderPlugins(): void;
+}
+
 export interface BackendConfig {
   httpUrl?: string;
   wsUrl?: string;
@@ -377,8 +462,9 @@ export interface AppSettings {
   micBackgroundMode: boolean;
   micVolumeThreshold: number;
   micAutoSend: boolean;
-  enableEyeTracking: boolean;
-}
+  enableEyeTracking: boolean;  logEnabled: boolean;
+  logLevels: string[];
+  logRetentionDays: number;}
 
 // 触碰配置类型
 export interface TapConfig {
@@ -436,6 +522,7 @@ export interface I18nManager {
   setLocale(locale: string): Promise<void>;
   getLocale(): string;
   getAvailableLocales(): Array<{ code: string; name: string }>;
+  applyTranslations(): void;
 }
 
 // 主题管理器接口

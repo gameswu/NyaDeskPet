@@ -4,6 +4,7 @@
   },
   "topBar": {
     "disconnected": "未连接",
+    "plugins": "插件管理",
     "settings": "设置",
     "minimize": "最小化",
     "close": "关闭"
@@ -29,6 +30,7 @@
       "connection": "连接",
       "character": "角色",
       "display": "显示",
+      "logs": "日志",
       "about": "关于"
     },
     "model": {
@@ -84,6 +86,29 @@
       "updateSource": "更新源",
       "updateSourcePlaceholder": "https://github.com/owner/repo"
     },
+    "logs": {
+      "title": "日志管理",
+      "description": "管理应用日志记录和查看历史日志文件",
+      "enableLogging": "启用日志记录",
+      "logLevels": "日志级别",
+      "levelDebug": "调试",
+      "levelInfo": "信息",
+      "levelWarn": "警告",
+      "levelError": "错误",
+      "levelCritical": "严重",
+      "retentionDays": "日志保留天数",
+      "logFiles": "日志文件",
+      "refresh": "刷新",
+      "openDirectory": "打开目录",
+      "deleteAll": "全部删除",
+      "noLogFiles": "暂无日志文件",
+      "deleteConfirm": "确定要删除此日志文件吗？",
+      "deleteAllConfirm": "确定要删除所有日志文件（当前会话除外）吗？",
+      "deleteSuccess": "删除成功",
+      "deleteFailed": "删除失败",
+      "currentSession": "当前会话",
+      "delete": "删除"
+    },
     "resetButton": "恢复默认",
     "saveButton": "保存设置",
     "close": "关闭"
@@ -105,5 +130,22 @@
   "camera": {
     "preview": "摄像头预览",
     "selectDevice": "选择摄像头..."
+  },
+  "plugins": {
+    "title": "插件管理",
+    "description": "管理应用插件，控制插件权限和状态",
+    "close": "关闭",
+    "noPlugins": "暂无已安装的插件",
+    "permission": {
+      "title": "权限请求",
+      "plugin": "插件",
+      "requesting": "请求权限",
+      "description": "说明",
+      "action": "操作",
+      "warning": "⚠️ 此权限可能影响系统安全，请谨慎授权",
+      "approve": "允许",
+      "deny": "拒绝"
+    }
   }
 }
+

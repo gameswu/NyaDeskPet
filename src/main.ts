@@ -3,7 +3,9 @@ import * as path from 'path';
 import * as https from 'https';
 import * as fs from 'fs';
 import * as os from 'os';
+import { spawn, ChildProcess } from 'child_process';
 import asrService from './asr-service';
+import { logger } from './logger';
 
 // 在最开始设置动态库路径，确保 Electron 启动时就能找到 sherpa-onnx 库
 const platform = process.platform;
@@ -45,6 +47,9 @@ let mainWindow: BrowserWindow | null = null;
 let tray: Tray | null = null;
 let isQuitting: boolean = false;
 const isDev: boolean = process.argv.includes('--dev');
+
+// 插件进程管理
+const pluginProcesses: Map<string, ChildProcess> = new Map();
 
 // UI状态追踪
 let isUIVisible: boolean = true;
@@ -167,10 +172,12 @@ function updateTrayMenu(): void {
       }
     },
     {
-      label: '开发者工具',
-      visible: isDev,
+      label: '插件管理',
       click: () => {
-        mainWindow?.webContents.openDevTools({ mode: 'detach' });
+        if (mainWindow) {
+          mainWindow.show();
+          mainWindow.webContents.send('open-plugins');
+        }
       }
     },
     { type: 'separator' },
@@ -287,6 +294,10 @@ function createTray(): void {
 }
 
 app.whenReady().then(() => {
+  // 初始化日志系统（从本地存储加载配置将在渲染进程中处理）
+  logger.initialize();
+  logger.info('应用启动');
+  
   createWindow();
   createTray();
 
@@ -313,6 +324,10 @@ app.on('will-quit', () => {
     tray.destroy();
     tray = null;
   }
+  
+  // 关闭日志系统
+  logger.info('应用退出');
+  logger.close();
 });
 
 // IPC 通信处理
@@ -611,3 +626,266 @@ function compareVersions(v1: string, v2: string): number {
   }
   return 0;
 }
+
+// ==================== 日志系统 IPC 处理器 ====================
+
+/**
+ * 更新日志配置
+ */
+ipcMain.handle('logger-update-config', (_event: IpcMainInvokeEvent, config: any) => {
+  logger.updateConfig(config);
+  return { success: true };
+});
+
+/**
+ * 获取日志配置
+ */
+ipcMain.handle('logger-get-config', () => {
+  return logger.getConfig();
+});
+
+/**
+ * 获取日志文件列表
+ */
+ipcMain.handle('logger-get-files', () => {
+  return logger.getLogFiles();
+});
+
+/**
+ * 删除指定日志文件
+ */
+ipcMain.handle('logger-delete-file', (_event: IpcMainInvokeEvent, fileName: string) => {
+  const success = logger.deleteLogFile(fileName);
+  return { success };
+});
+
+/**
+ * 删除所有日志文件
+ */
+ipcMain.handle('logger-delete-all', () => {
+  const count = logger.deleteAllLogs();
+  return { success: true, count };
+});
+
+/**
+ * 打开日志目录
+ */
+ipcMain.handle('logger-open-directory', () => {
+  logger.openLogDirectory();
+  return { success: true };
+});
+
+/**
+ * 记录日志（从渲染进程）
+ */
+ipcMain.on('logger-log', (_event, level: string, message: string, data?: any) => {
+  switch (level) {
+    case 'debug':
+      logger.debug(message, data);
+      break;
+    case 'info':
+      logger.info(message, data);
+      break;
+    case 'warn':
+      logger.warn(message, data);
+      break;
+    case 'error':
+      logger.error(message, data);
+      break;
+    case 'critical':
+      logger.critical(message, data);
+      break;
+  }
+});
+
+/**
+ * 插件管理 - 读取插件清单
+ */
+ipcMain.handle('plugin:read-manifest', async (_event: IpcMainInvokeEvent, pluginName: string) => {
+  try {
+    const appPath = app.isPackaged ? process.resourcesPath : app.getAppPath();
+    const manifestPath = path.join(appPath, 'plugins', pluginName, 'metadata.json');
+    
+    if (!fs.existsSync(manifestPath)) {
+      throw new Error(`清单文件不存在: ${manifestPath}`);
+    }
+    
+    const content = fs.readFileSync(manifestPath, 'utf-8');
+    const manifest = JSON.parse(content);
+    
+    logger.debug(`读取插件清单: ${pluginName}`);
+    return { success: true, manifest };
+  } catch (error) {
+    logger.error(`读取插件清单失败 (${pluginName}):`, error);
+    return { success: false, error: (error as Error).message };
+  }
+});
+
+/**
+ * 插件管理 - 扫描插件目录
+ */
+ipcMain.handle('plugin:scan-directory', async () => {
+  try {
+    const appPath = app.isPackaged ? process.resourcesPath : app.getAppPath();
+    const pluginsPath = path.join(appPath, 'plugins');
+    
+    if (!fs.existsSync(pluginsPath)) {
+      logger.warn('插件目录不存在');
+      return { success: true, plugins: [] };
+    }
+    
+    const entries = fs.readdirSync(pluginsPath, { withFileTypes: true });
+    const pluginDirs = entries
+      .filter(entry => entry.isDirectory())
+      .map(entry => entry.name);
+    
+    logger.info(`扫描到 ${pluginDirs.length} 个插件目录:`, pluginDirs);
+    return { success: true, plugins: pluginDirs };
+  } catch (error) {
+    logger.error('扫描插件目录失败:', error);
+    return { success: false, error: (error as Error).message, plugins: [] };
+  }
+});
+
+/**
+ * 插件管理 - 启动插件
+ */
+ipcMain.handle('plugin:start', async (_event: IpcMainInvokeEvent, args: { name: string; command: any; workingDirectory?: string }) => {
+  const { name, command } = args;
+  
+  try {
+    // 检查是否已经在运行
+    if (pluginProcesses.has(name)) {
+      const existingProcess = pluginProcesses.get(name);
+      if (existingProcess && !existingProcess.killed) {
+        logger.info(`插件 ${name} 已在运行`);
+        return { success: true, pid: existingProcess.pid };
+      }
+    }
+
+    // 获取平台对应的命令
+    const platform = process.platform as 'win32' | 'darwin' | 'linux';
+    const cmdConfig = command[platform];
+    
+    if (!cmdConfig) {
+      throw new Error(`不支持的平台: ${platform}`);
+    }
+
+    // 获取工作目录路径
+    const appPath = app.isPackaged ? process.resourcesPath : app.getAppPath();
+    const workingDir = args.workingDirectory || 'plugins';
+    const pluginPath = path.join(appPath, workingDir);
+    
+    // 构建命令和参数
+    let execCommand: string;
+    let execArgs: string[];
+    
+    if (Array.isArray(cmdConfig)) {
+      // 数组格式: ["venv/bin/python3", "main.py"]
+      execCommand = cmdConfig[0];
+      execArgs = cmdConfig.slice(1);
+    } else {
+      // 字符串格式: "python main.py"
+      const parts = cmdConfig.split(' ');
+      execCommand = parts[0];
+      execArgs = parts.slice(1);
+    }
+    
+    logger.info(`启动插件: ${name}`, { 
+      command: execCommand, 
+      args: execArgs, 
+      cwd: pluginPath 
+    });
+    console.log(`[Plugin] 启动 ${name}: ${execCommand} ${execArgs.join(' ')}`);
+    console.log(`[Plugin] 工作目录: ${pluginPath}`);
+    
+    // 直接执行命令，不使用shell
+    const childProcess = spawn(execCommand, execArgs, {
+      cwd: pluginPath,
+      stdio: ['ignore', 'pipe', 'pipe'],
+      detached: false,
+      shell: false  // 直接执行，不通过shell
+    });
+
+    if (!childProcess.pid) {
+      throw new Error('无法获取进程 PID');
+    }
+
+    // 保存进程引用
+    pluginProcesses.set(name, childProcess);
+
+    // 监听输出
+    childProcess.stdout?.on('data', (data) => {
+      const output = data.toString().trim();
+      logger.info(`[Plugin:${name}] ${output}`);
+      console.log(`[Plugin:${name}] ${output}`);
+    });
+
+    childProcess.stderr?.on('data', (data) => {
+      const output = data.toString().trim();
+      logger.warn(`[Plugin:${name}] ${output}`);
+      console.error(`[Plugin:${name}] ${output}`);
+    });
+
+    // 监听进程退出
+    childProcess.on('exit', (code, signal) => {
+      logger.info(`插件 ${name} 已退出`, { code, signal });
+      pluginProcesses.delete(name);
+    });
+
+    childProcess.on('error', (error) => {
+      logger.error(`插件 ${name} 错误:`, error);
+      pluginProcesses.delete(name);
+    });
+
+    logger.info(`插件 ${name} 启动成功 (PID: ${childProcess.pid})`);
+    return { success: true, pid: childProcess.pid };
+    
+  } catch (error) {
+    logger.error(`启动插件 ${name} 失败:`, error);
+    return { success: false, error: (error as Error).message };
+  }
+});
+
+/**
+ * 插件管理 - 停止插件
+ */
+ipcMain.handle('plugin:stop', async (_event: IpcMainInvokeEvent, args: { name: string; pid?: number }) => {
+  const { name } = args;
+  
+  try {
+    const childProcess = pluginProcesses.get(name);
+    
+    if (!childProcess) {
+      logger.warn(`插件 ${name} 未在运行`);
+      return { success: true };
+    }
+
+    // 发送终止信号
+    const killed = childProcess.kill('SIGTERM');
+    
+    if (killed) {
+      pluginProcesses.delete(name);
+      logger.info(`插件 ${name} 已停止`);
+      return { success: true };
+    } else {
+      throw new Error('无法终止进程');
+    }
+    
+  } catch (error) {
+    logger.error(`停止插件 ${name} 失败:`, error);
+    return { success: false, error: (error as Error).message };
+  }
+});
+
+// 应用退出时清理所有插件进程
+app.on('before-quit', () => {
+  logger.info('应用退出，清理插件进程');
+  pluginProcesses.forEach((process, name) => {
+    if (process && !process.killed) {
+      logger.info(`停止插件: ${name}`);
+      process.kill('SIGTERM');
+    }
+  });
+  pluginProcesses.clear();
+});

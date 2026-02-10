@@ -1,0 +1,41 @@
+{
+  "id": "terminal",
+  "name": "terminal",
+  "version": "1.0.0",
+  "author": "NyaDeskPet",
+  "type": "system",
+  "url": "ws://localhost:8765",
+  "autoStart": false,
+  "permissions": [
+    "terminal.execute",
+    "terminal.session",
+    "terminal.read",
+    "terminal.write"
+  ],
+  "capabilities": [
+    "execute",
+    "createSession",
+    "getSessions",
+    "killSession"
+  ],
+  "i18n": {
+    "zh-CN": {
+      "displayName": "终端控制",
+      "description": "执行系统命令、管理Shell会话，支持多窗口终端操作",
+      "category": "系统工具"
+    },
+    "en-US": {
+      "displayName": "Terminal Control",
+      "description": "Execute system commands and manage shell sessions with multi-window support",
+      "category": "System Tools"
+    }
+  },
+  "icon": "terminal",
+  "iconFile": null,
+  "command": {
+    "win32": [".venv\\Scripts\\python.exe", "main.py"],
+    "darwin": [".venv/bin/python3", "main.py"],
+    "linux": [".venv/bin/python3", "main.py"]
+  },
+  "workingDirectory": "plugins/terminal-plugin"
+}

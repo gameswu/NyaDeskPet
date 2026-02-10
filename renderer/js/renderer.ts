@@ -68,7 +68,18 @@ async function initializeApp(): Promise<void> {
     const settings = window.settingsManager.getSettings();
     console.log('当前设置:', settings);
 
-    // 2. 初始化国际化
+    // 2. 初始化日志系统
+    console.log('初始化日志系统...');
+    await window.logger.initialize();
+    // 更新主进程日志配置
+    await window.electronAPI.loggerUpdateConfig({
+      enabled: settings.logEnabled,
+      levels: settings.logLevels,
+      retentionDays: settings.logRetentionDays
+    });
+    console.log('日志系统初始化成功');
+
+    // 3. 初始化国际化
     console.log('初始化国际化...');
     await window.i18nManager.initialize();
     console.log('国际化初始化成功');
@@ -116,13 +127,16 @@ async function initializeApp(): Promise<void> {
       const asrResult = await (window as any).electronAPI.asrInitialize();
       if (asrResult.success) {
         console.log('ASR 服务初始化成功');
+        window.logger.info('ASR语音识别服务初始化成功');
         appState.asrReady = true;
       } else {
         console.warn('ASR 服务初始化失败，语音识别功能将不可用');
+        window.logger.warn('ASR语音识别服务初始化失败');
         appState.asrReady = false;
       }
     } catch (error) {
       console.error('ASR 服务初始化异常:', error);
+      window.logger.error('ASR语音识别服务初始化异常', { error });
       appState.asrReady = false;
     }
     
@@ -150,10 +164,13 @@ async function initializeApp(): Promise<void> {
       await window.backendClient.initialize();
     }
 
-    // 4. 设置事件监听
+    // 9. 插件系统已初始化（插件需要手动启动）
+    console.log('插件系统已就绪，等待用户操作');
+
+    // 10. 设置事件监听
     setupEventListeners();
 
-    // 5. 设置窗口控制
+    // 11. 设置窗口控制
     setupWindowControls();
 
     appState.initialized = true;
@@ -296,10 +313,49 @@ function setupWindowControls(): void {
     });
   }
 
+  // 插件管理按钮
+  const btnPlugins = document.getElementById('btn-plugins');
+  if (btnPlugins) {
+    btnPlugins.addEventListener('click', () => {
+      showPluginsPanel();
+    });
+  }
+
   // UI切换按钮
   const btnToggleUI = document.getElementById('btn-toggle-ui');
   if (btnToggleUI) {
     btnToggleUI.addEventListener('click', toggleUI);
+  }
+}
+
+/**
+ * 显示插件管理面板
+ */
+function showPluginsPanel(): void {
+  const pluginsPanel = document.getElementById('plugins-panel');
+  if (pluginsPanel) {
+    pluginsPanel.classList.add('show');
+    // 设置关闭按钮事件
+    const btnClose = document.getElementById('btn-close-plugins');
+    if (btnClose) {
+      btnClose.onclick = hidePluginsPanel;
+    }
+    // 点击背景关闭
+    pluginsPanel.onclick = (e) => {
+      if (e.target === pluginsPanel) {
+        hidePluginsPanel();
+      }
+    };
+  }
+}
+
+/**
+ * 隐藏插件管理面板
+ */
+function hidePluginsPanel(): void {
+  const pluginsPanel = document.getElementById('plugins-panel');
+  if (pluginsPanel) {
+    pluginsPanel.classList.remove('show');
   }
 }
 
@@ -603,6 +659,18 @@ function showSettingsPanel(): void {
   (document.getElementById('mic-threshold-value') as HTMLSpanElement).textContent = String(settings.micVolumeThreshold || 30);
   (document.getElementById('setting-mic-auto-send') as HTMLInputElement).checked = settings.micAutoSend !== false;
 
+  // 加载日志配置
+  (document.getElementById('setting-log-enabled') as HTMLInputElement).checked = settings.logEnabled || false;
+  (document.getElementById('setting-log-retention-days') as HTMLInputElement).value = String(settings.logRetentionDays || 7);
+  
+  // 加载日志级别
+  const logLevels = settings.logLevels || ['warn', 'error', 'critical'];
+  (document.getElementById('log-level-debug') as HTMLInputElement).checked = logLevels.includes('debug');
+  (document.getElementById('log-level-info') as HTMLInputElement).checked = logLevels.includes('info');
+  (document.getElementById('log-level-warn') as HTMLInputElement).checked = logLevels.includes('warn');
+  (document.getElementById('log-level-error') as HTMLInputElement).checked = logLevels.includes('error');
+  (document.getElementById('log-level-critical') as HTMLInputElement).checked = logLevels.includes('critical');
+
   // 加载触碰配置
   loadTapConfigUI();
 
@@ -640,6 +708,16 @@ async function saveSettings(): Promise<void> {
   const micVolumeThreshold = parseFloat((document.getElementById('setting-mic-threshold') as HTMLInputElement).value);
   const micAutoSend = (document.getElementById('setting-mic-auto-send') as HTMLInputElement).checked;
 
+  // 获取日志配置
+  const logEnabled = (document.getElementById('setting-log-enabled') as HTMLInputElement).checked;
+  const logRetentionDays = parseInt((document.getElementById('setting-log-retention-days') as HTMLInputElement).value);
+  const logLevels: string[] = [];
+  if ((document.getElementById('log-level-debug') as HTMLInputElement).checked) logLevels.push('debug');
+  if ((document.getElementById('log-level-info') as HTMLInputElement).checked) logLevels.push('info');
+  if ((document.getElementById('log-level-warn') as HTMLInputElement).checked) logLevels.push('warn');
+  if ((document.getElementById('log-level-error') as HTMLInputElement).checked) logLevels.push('error');
+  if ((document.getElementById('log-level-critical') as HTMLInputElement).checked) logLevels.push('critical');
+
   // 保存触碰配置
   saveTapConfigFromUI();
 
@@ -651,6 +729,9 @@ async function saveSettings(): Promise<void> {
     autoConnect,
     volume,
     updateSource,
+    logEnabled,
+    logLevels,
+    logRetentionDays,
     locale,
     theme,
     showSubtitle,
@@ -666,15 +747,34 @@ async function saveSettings(): Promise<void> {
   // 验证设置
   const validation = window.settingsManager.validateSettings();
   if (!validation.valid) {
+    window.logger.warn('设置验证失败', { errors: validation.errors });
     alert(window.i18nManager.t('messages.settingsValidationFailed') + ':\n' + validation.errors.join('\n'));
     return;
   }
+
+  window.logger.info('用户设置已保存', {
+    modelPath,
+    backendUrl,
+    wsUrl,
+    autoConnect,
+    locale,
+    theme,
+    logEnabled,
+    logLevels
+  });
 
   // 应用设置
   window.audioPlayer.setVolume(volume);
   window.microphoneManager.setVolumeThreshold(micVolumeThreshold);
   window.microphoneManager.setBackgroundMode(micBackgroundMode);
   window.live2dManager.enableEyeTracking(enableEyeTracking);
+  
+  // 更新日志配置
+  await window.logger.updateConfig({
+    enabled: logEnabled,
+    levels: logLevels,
+    retentionDays: logRetentionDays
+  });
   
   // 保存触碰配置
   saveTapConfigFromUI();
@@ -739,6 +839,16 @@ function initializeSettingsPanel(): void {
       const content = document.querySelector(`[data-tab-content="${tabName}"]`);
       if (content) {
         content.classList.add('active');
+      }
+
+      // 如果是插件标签，渲染插件列表
+      if (tabName === 'plugins' && window.pluginUI) {
+        window.pluginUI.renderPlugins();
+      }
+      
+      // 如果是日志标签，加载日志文件列表
+      if (tabName === 'logs') {
+        loadLogFiles();
       }
     });
   });
@@ -822,6 +932,158 @@ function initializeSettingsPanel(): void {
     });
   }
 
+  // 日志管理事件监听
+  const btnRefreshLogs = document.getElementById('btn-refresh-logs');
+  if (btnRefreshLogs) {
+    btnRefreshLogs.addEventListener('click', loadLogFiles);
+  }
+
+  const btnOpenLogDirectory = document.getElementById('btn-open-log-directory');
+  if (btnOpenLogDirectory) {
+    btnOpenLogDirectory.addEventListener('click', openLogDirectory);
+  }
+
+  const btnDeleteAllLogs = document.getElementById('btn-delete-all-logs');
+  if (btnDeleteAllLogs) {
+    btnDeleteAllLogs.addEventListener('click', deleteAllLogs);
+  }
+}
+
+/**
+ * 加载日志文件列表
+ */
+async function loadLogFiles(): Promise<void> {
+  const logFilesList = document.getElementById('log-files-list');
+  if (!logFilesList) return;
+
+  try {
+    const files = await window.electronAPI.loggerGetFiles();
+    
+    if (files.length === 0) {
+      logFilesList.innerHTML = `
+        <div class="log-files-empty" data-i18n="settings.logs.noLogFiles">
+          暂无日志文件
+        </div>
+      `;
+      return;
+    }
+
+    logFilesList.innerHTML = files.map(file => {
+      const size = formatFileSize(file.size);
+      const date = new Date(file.mtime).toLocaleString();
+      const currentBadge = file.isCurrent ? '<span class="log-file-current-badge" data-i18n="settings.logs.currentSession">当前会话</span>' : '';
+      
+      return `
+        <div class="log-file-item ${file.isCurrent ? 'current-session' : ''}">
+          <div class="log-file-info">
+            <div class="log-file-details">
+              <div class="log-file-name">
+                <i data-lucide="file-text" style="width: 14px; height: 14px;"></i>
+                ${file.name}
+                ${currentBadge}
+              </div>
+              <div class="log-file-meta">
+                <span><i data-lucide="hard-drive" style="width: 11px; height: 11px;"></i> ${size}</span>
+                <span><i data-lucide="clock" style="width: 11px; height: 11px;"></i> ${date}</span>
+              </div>
+            </div>
+          </div>
+          <button class="btn-delete-log" data-filename="${file.name}" ${file.isCurrent ? 'disabled' : ''}>
+            <i data-lucide="trash-2" style="width: 12px; height: 12px;"></i>
+            <span data-i18n="settings.logs.delete">删除</span>
+          </button>
+        </div>
+      `;
+    }).join('');
+
+    // 刷新图标
+    if (window.lucide) {
+      window.lucide.createIcons();
+    }
+
+    // 应用国际化翻译
+    window.i18nManager.applyTranslations();
+
+    // 绑定删除按钮事件
+    const deleteButtons = logFilesList.querySelectorAll('.btn-delete-log');
+    deleteButtons.forEach(button => {
+      button.addEventListener('click', async (e) => {
+        const target = e.currentTarget as HTMLElement;
+        const filename = target.dataset.filename;
+        if (filename) {
+          await deleteLogFile(filename);
+        }
+      });
+    });
+  } catch (error) {
+    console.error('加载日志文件列表失败:', error);
+  }
+}
+
+/**
+ * 删除单个日志文件
+ */
+async function deleteLogFile(fileName: string): Promise<void> {
+  if (!confirm(window.i18nManager.t('settings.logs.deleteConfirm'))) {
+    return;
+  }
+
+  try {
+    window.logger.info(`尝试删除日志文件: ${fileName}`);
+    const result = await window.electronAPI.loggerDeleteFile(fileName);
+    if (result.success) {
+      window.logger.info(`日志文件已删除: ${fileName}`);
+      window.dialogueManager.showDialogue(window.i18nManager.t('settings.logs.deleteSuccess'), 2000);
+      loadLogFiles(); // 刷新列表
+    } else {
+      window.logger.warn(`日志文件删除失败: ${fileName}`);
+      window.dialogueManager.showDialogue(window.i18nManager.t('settings.logs.deleteFailed'), 2000);
+    }
+  } catch (error) {
+    console.error('删除日志文件失败:', error);
+    window.logger.error(`删除日志文件失败: ${fileName}`, { error });
+    window.dialogueManager.showDialogue(window.i18nManager.t('settings.logs.deleteFailed'), 2000);
+  }
+}
+
+/**
+ * 删除所有日志文件
+ */
+async function deleteAllLogs(): Promise<void> {
+  if (!confirm(window.i18nManager.t('settings.logs.deleteAllConfirm'))) {
+    return;
+  }
+
+  try {
+    const result = await window.electronAPI.loggerDeleteAll();
+    window.dialogueManager.showDialogue(`${window.i18nManager.t('settings.logs.deleteSuccess')} (${result.count})`, 2000);
+    loadLogFiles(); // 刷新列表
+  } catch (error) {
+    console.error('删除所有日志失败:', error);
+    window.dialogueManager.showDialogue(window.i18nManager.t('settings.logs.deleteFailed'), 2000);
+  }
+}
+
+/**
+ * 打开日志目录
+ */
+async function openLogDirectory(): Promise<void> {
+  try {
+    await window.electronAPI.loggerOpenDirectory();
+  } catch (error) {
+    console.error('打开日志目录失败:', error);
+  }
+}
+
+/**
+ * 格式化文件大小
+ */
+function formatFileSize(bytes: number): string {
+  if (bytes === 0) return '0 B';
+  const k = 1024;
+  const sizes = ['B', 'KB', 'MB', 'GB'];
+  const i = Math.floor(Math.log(bytes) / Math.log(k));
+  return Math.round(bytes / Math.pow(k, i) * 100) / 100 + ' ' + sizes[i];
 }
 
 /**
@@ -1052,6 +1314,14 @@ window.addEventListener('DOMContentLoaded', () => {
     console.log('收到主进程打开设置请求');
     showSettingsPanel();
   });
+
+  // 监听来自主进程的插件管理打开请求
+  if (window.electronAPI.onOpenPlugins) {
+    window.electronAPI.onOpenPlugins(() => {
+      console.log('收到主进程打开插件管理请求');
+      showPluginsPanel();
+    });
+  }
 
   // 监听来自主进程的打开对话请求
   if (window.electronAPI.onOpenChat) {

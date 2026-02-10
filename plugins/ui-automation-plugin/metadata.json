@@ -1,0 +1,42 @@
+{
+  "id": "ui-automation",
+  "name": "ui-automation",
+  "version": "1.0.0",
+  "author": "NyaDeskPet",
+  "type": "automation",
+  "url": "ws://localhost:8766",
+  "autoStart": false,
+  "permissions": [
+    "ui.click",
+    "ui.type",
+    "ui.screenshot",
+    "ui.window"
+  ],
+  "capabilities": [
+    "click",
+    "type",
+    "screenshot",
+    "getWindowList",
+    "activateWindow"
+  ],
+  "i18n": {
+    "zh-CN": {
+      "displayName": "UI自动化",
+      "description": "控制鼠标键盘、截图、窗口管理等桌面自动化操作",
+      "category": "自动化工具"
+    },
+    "en-US": {
+      "displayName": "UI Automation",
+      "description": "Control mouse, keyboard, screenshots, and window management for desktop automation",
+      "category": "Automation Tools"
+    }
+  },
+  "icon": "mouse-pointer-2",
+  "iconFile": null,
+  "command": {
+    "win32": [".venv\\Scripts\\python.exe", "main.py"],
+    "darwin": [".venv/bin/python3", "main.py"],
+    "linux": [".venv/bin/python3", "main.py"]
+  },
+  "workingDirectory": "plugins/ui-automation-plugin"
+}

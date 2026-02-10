@@ -356,6 +356,111 @@ ws://backend-url/ws
 
 前端收到 `model_update` 消息后，应清除对应模型缓存并重新下载。
 
+## 外置插件协议
+
+NyaDeskPet 支持通过 WebSocket 连接外置插件（如终端控制、UI自动化等）。
+
+### 插件连接
+
+**地址**: 插件独立运行，前端主动连接
+- 终端插件: `ws://localhost:8765`
+- UI自动化插件: `ws://localhost:8766`
+
+### 连接握手
+
+前端连接后，应主动发送 `getMetadata` 请求获取插件信息。
+
+**前端 → 插件**:
+```json
+{
+  "action": "getMetadata",
+  "locale": "zh-CN"
+}
+```
+
+**插件 → 前端**:
+```json
+{
+  "type": "metadata",
+  "plugin": "terminal",
+  "locale": "zh-CN",
+  "defaultLocale": "en-US",
+  "metadata": {
+    "name": "terminal",
+    "version": "1.0.0",
+    "displayName": "终端控制插件",
+    "description": "执行终端命令、管理Shell会话",
+    "author": "NyaDeskPet",
+    "type": "external",
+    "permissions": ["terminal.execute", "terminal.session"],
+    "capabilities": ["execute", "createSession", "getSessions"]
+  }
+}
+```
+
+**字段说明**：
+- `locale`: 当前返回的语言（zh-CN 或 en-US），与请求的语言一致
+- `defaultLocale`: 插件的默认语言，当请求的语言不支持时自动回退到此语言
+- `metadata.displayName`: 使用请求语言的插件名称（单一语言）
+- `metadata.description`: 使用请求语言的描述（单一语言）
+
+**语言回退机制**：
+- 前端请求 `zh-CN` → 插件内部使用 `zh-cn` → 返回中文元数据
+- 前端请求 `en-US` → 插件内部使用 `en` → 返回英文元数据
+- 前端请求不支持的语言（如 `ja`）→ 插件回退到 `defaultLocale` → 返回英文元数据
+
+### 语言切换
+
+前端可以动态切换插件语言：
+
+**请求**:
+```json
+{
+  "action": "setLocale",
+  "params": {
+    "locale": "en-US"
+  }
+}
+```
+
+**响应**:
+```json
+{
+  "type": "plugin_response",
+  "success": true,
+  "locale": "en-US",
+  "metadata": {
+    "displayName": "Terminal Plugin",
+    "description": "Execute terminal commands and manage shell sessions"
+  }
+}
+```
+
+### 错误消息国际化
+
+所有错误响应包含 `errorKey` 用于前端本地化：
+
+```json
+{
+  "type": "plugin_response",
+  "success": false,
+  "error": "命令参数是必需的",
+  "errorKey": "error.command_required",
+  "locale": "zh-CN"
+}
+```
+
+前端可以根据 `errorKey` 显示自己的本地化文本，或直接使用 `error` 字段。
+
+### 语言代码映射
+
+| 前端语言 | 插件语言 | 说明 |
+|---------|---------|------|
+| zh-CN | zh-cn | 简体中文 |
+| en-US | en | English |
+
+插件收到不支持的语言代码时，返回 `defaultLocale` 指定的语言。
+
 ## 安全建议
 
 1. **HTTPS**: 生产环境必须使用 HTTPS

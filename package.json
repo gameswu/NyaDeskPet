@@ -1,6 +1,6 @@
 {
   "name": "nya-desk-pet",
-  "version": "1.0.0-beta-2602101632",
+  "version": "1.0.0-beta-2602102312",
   "description": "跨平台 Live2D 桌面宠物应用",
   "main": "dist/main.js",
   "scripts": {
@@ -27,7 +27,7 @@
     "ai",
     "typescript"
   ],
-  "author": "",
+  "author": "gameswu",
   "license": "MIT",
   "devDependencies": {
     "@types/node": "^20.10.0",
@@ -55,6 +55,7 @@
       "renderer/**/*",
       "models/**/*",
       "!models/live2d/nya",
+      "plugins/**/*",
       "assets/**/*",
       "node_modules/sherpa-onnx-node/**/*",
       "node_modules/sherpa-onnx-darwin-arm64/**/*",
@@ -70,7 +71,8 @@
       "node_modules/sherpa-onnx-*/**/*.dylib",
       "node_modules/sherpa-onnx-*/**/*.so",
       "node_modules/sherpa-onnx-*/**/*.dll",
-      "models/**/*"
+      "models/**/*",
+      "plugins/**/*"
     ],
     "win": {
       "target": [
