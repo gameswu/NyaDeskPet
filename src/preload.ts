@@ -21,6 +21,8 @@ export interface ElectronAPI {
   hideWindow: () => Promise<void>;
   toggleWindow: () => Promise<void>;
   setIgnoreMouseEvents: (ignore: boolean, options?: { forward?: boolean }) => Promise<void>;
+  getWindowPosition: () => Promise<{ x: number; y: number }>;
+  getCursorScreenPoint: () => Promise<{ x: number; y: number }>;
   
   // 消息通信
   sendMessage: (message: unknown) => Promise<{ success: boolean; message: string }>;
@@ -60,6 +62,8 @@ const electronAPI: ElectronAPI = {
   toggleWindow: () => ipcRenderer.invoke('toggle-window'),
   setIgnoreMouseEvents: (ignore: boolean, options?: { forward?: boolean }) => 
     ipcRenderer.invoke('set-ignore-mouse-events', ignore, options),
+  getWindowPosition: () => ipcRenderer.invoke('get-window-position'),
+  getCursorScreenPoint: () => ipcRenderer.invoke('get-cursor-screen-point'),
   
   // 消息通信
   sendMessage: (message: unknown) => ipcRenderer.invoke('send-message', message),

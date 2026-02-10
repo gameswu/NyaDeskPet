@@ -22,6 +22,8 @@ export interface ElectronAPI {
   hideWindow: () => Promise<void>;
   toggleWindow: () => Promise<void>;
   setIgnoreMouseEvents: (ignore: boolean, options?: { forward?: boolean }) => Promise<void>;
+  getWindowPosition: () => Promise<{ x: number; y: number }>;
+  getCursorScreenPoint: () => Promise<{ x: number; y: number }>;
   
   // 消息通信
   sendMessage: (message: unknown) => Promise<{ success: boolean; message: string }>;
@@ -75,11 +77,127 @@ export interface Live2DModel {
   anchor: { set: (x: number, y: number) => void };
   motion?: (group: string, index: number, priority: number) => void;
   expression?: (expressionId: string) => void;
+  destroy?: () => void;
   internalModel?: {
     coreModel: {
       addParameterValueById: (id: string, value: number) => void;
+      getParameterValueById: (id: string) => number;
+      getParameterMinValueById: (id: string) => number;
+      getParameterMaxValueById: (id: string) => number;
+      getParameterDefaultValueById: (id: string) => number;
+      // Cubism 4 包装类需要通过 getModel() 访问原生模型
+      getModel?: () => {
+        parameters: {
+          count: number;
+          ids: string[];
+          values: Float32Array;
+          minimumValues: Float32Array;
+          maximumValues: Float32Array;
+          defaultValues: Float32Array;
+        };
+      };
+    };
+    motionManager?: {
+      definitions?: {
+        [group: string]: any[];
+      };
+    };
+    settings?: {
+      expressions?: any[];
+    };
+    hitAreas?: Array<{
+      name?: string;
+      Name?: string;
+      id?: string;
+      Id?: string;
+    }>;
+  };
+}
+
+// Live2D模型信息类型
+export interface ModelInfo {
+  available: boolean;
+  modelPath: string;
+  dimensions: {
+    width: number;
+    height: number;
+  };
+  motions: {
+    [group: string]: {
+      count: number;
+      files: string[];
     };
   };
+  expressions: string[];
+  hitAreas: string[];
+  availableParameters: Array<{
+    id: string;
+    value: number;
+    min: number;
+    max: number;
+    default: number;
+  }>;
+  parameters: {
+    canScale: boolean;
+    currentScale: number;
+    userScale: number;
+    baseScale: number;
+  };
+}
+
+// 同步指令类型
+export interface SyncCommandData {
+  actions: Array<SyncAction>;
+}
+
+export interface SyncAction {
+  type: 'motion' | 'expression' | 'dialogue' | 'parameter';
+  waitComplete?: boolean;
+  duration?: number;
+  // motion
+  group?: string;
+  index?: number;
+  priority?: number;
+  // expression
+  expressionId?: string;
+  // dialogue
+  text?: string;
+  // parameter
+  parameters?: Array<{
+    id: string;
+    value: number;
+    blend?: number;
+  }>;
+}
+
+// 时间轴项类型
+export interface TimelineItem {
+  timing: string | number;
+  action: 'motion' | 'expression' | 'parameter';
+  // motion
+  group?: string;
+  index?: number;
+  priority?: number;
+  // expression
+  expressionId?: string;
+  // parameter
+  parameters?: Array<{
+    id: string;
+    value: number;
+    blend?: number;
+  }>;
+}
+
+// 角色信息类型
+export interface CharacterInfo {
+  useCustom: boolean;
+  name?: string;
+  personality?: string;
+}
+
+// Tap配置记录类型
+export interface TapConfigRecord {
+  [modelPath: string]: TapConfig;
 }
 
 export interface Live2DManagerConfig {
@@ -103,9 +221,16 @@ export interface Live2DManager {
   destroy(): void;
   extractModelInfo(): ModelInfo | null;
   isTapEnabled(hitAreaName: string): boolean;
-  loadTapConfig(): void;
-  executeSyncCommand(data: SyncCommandData): Promise<void>;  setLipSync(value: number): void;
-  stopLipSync(): void;}
+  loadTapConfig(): TapConfig;
+  executeSyncCommand(data: SyncCommandData): Promise<void>;
+  setLipSync(value: number): void;
+  stopLipSync(): void;
+  enableEyeTracking(enabled: boolean): void;
+  isEyeTrackingEnabled(): boolean;
+  setParameter(parameterId: string, value: number, weight?: number): void;
+  setParameters(params: Array<{id: string, value: number, blend?: number}>): void;
+  getAvailableParameters(): Array<{id: string, value: number, min: number, max: number, default: number}>;
+}
 
 // 后端通信相关类型
 export interface BackendConfig {
@@ -114,12 +239,19 @@ export interface BackendConfig {
 }
 
 export interface BackendMessage {
-  type: 'dialogue' | 'voice' | 'live2d' | 'system' | 'user_input' | 'interaction' | 'model_info' | 'tap_event' | 'sync_command' | 'character_info';
-  data?: unknown;
+  type: 'dialogue' | 'live2d' | 'system' | 'user_input' | 'interaction' | 'model_info' | 'tap_event' | 'sync_command' | 'character_info' | 'audio_stream_start' | 'audio_chunk' | 'audio_stream_end';
+  data?: DialogueData | Live2DCommandData | AudioStreamStartData | AudioChunkData | AudioStreamEndData | SyncCommandData | ModelInfo | CharacterInfo | unknown;
   text?: string;
   timestamp?: number;
   action?: string;
   position?: { x: number; y: number };
+  attachment?: {
+    type: 'image' | 'file';
+    url?: string;
+    data?: string;
+    source?: string;
+    name?: string;
+  };
 }
 
 export interface DialogueData {
@@ -132,17 +264,32 @@ export interface DialogueData {
   };
 }
 
-export interface VoiceData {
-  url?: string;
-  base64?: string;
+export interface AudioStreamStartData {
+  mimeType: string;
+  totalDuration?: number;
+  text?: string;
+  timeline?: TimelineItem[];
+}
+
+export interface AudioChunkData {
+  chunk: string;  // base64
+  sequence: number;
+}
+
+export interface AudioStreamEndData {
+  complete: boolean;
 }
 
 export interface Live2DCommandData {
-  command: 'motion' | 'expression';
+  command: 'motion' | 'expression' | 'parameter';
   group?: string;
   index?: number;
   priority?: number;
   expressionId?: string;
+  parameterId?: string;
+  value?: number;
+  weight?: number;
+  parameters?: Array<{id: string, value: number, blend?: number}>;
 }
 
 export interface BackendClient {
@@ -158,7 +305,6 @@ export interface BackendClient {
   connectWebSocket(): Promise<boolean>;
   handleMessage(data: string): void;
   handleDialogue(data: DialogueData): void;
-  handleVoice(data: VoiceData): void;
   handleLive2DCommand(data: Live2DCommandData): void;
   handleSystemMessage(data: unknown): void;
   sendMessage(message: BackendMessage): Promise<{ success: boolean; method?: string; data?: unknown; error?: string }>;
@@ -194,8 +340,6 @@ export interface AudioPlayer {
   isPlaying: boolean;
   volume: number;
   initAudioContext(): void;
-  playAudio(source: string): Promise<boolean>;
-  playLocalFile(filePath: string): Promise<boolean>;
   pause(): void;
   resume(): void;
   stop(): void;
@@ -206,6 +350,11 @@ export interface AudioPlayer {
     currentTime: number;
     duration: number;
   };
+  startStreamingAudio(mimeType: string): void;
+  appendAudioChunk(chunk: Uint8Array): void;
+  endStream(): void;
+  setTimeline(timeline: Array<{timing: string | number, callback: () => void}>, totalDuration?: number): void;
+  startTimeline(): void;
 }
 
 // 应用配置类型
@@ -228,6 +377,7 @@ export interface AppSettings {
   micBackgroundMode: boolean;
   micVolumeThreshold: number;
   micAutoSend: boolean;
+  enableEyeTracking: boolean;
 }
 
 // 触碰配置类型

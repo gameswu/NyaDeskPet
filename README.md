@@ -24,60 +24,47 @@
 
 ## ✨ 特性概览
 
-- 🎭 **Live2D 交互** - 高质量 Live2D 模型渲染与动画控制，支持**鼠标滚轮缩放**、视线跟随与口型同步
-- 🌐 **多语言支持 (i18n)** - 内置中英文支持，可根据系统语言自动切换或手动设置
-- 🌙 **主题系统** - 完善的深色/浅色模式切换，完美适配不同使用场景
+- 🎭 **Live2D 交互** - 高质量 Live2D 模型渲染与动画控制，支持鼠标滚轮缩放、视线跟随与口型同步
+- 🌐 **多语言支持** - 内置中英文国际化，可根据系统语言自动切换或手动设置
+- 🌙 **主题系统** - 深色/浅色模式切换，完美适配不同使用场景
 - 💬 **侧边栏对话** - 现代化的侧边栏聊天界面，支持对话历史记录与沉浸式体验
 - ⚙️ **分组设置面板** - 标签页式设置界面，包含模型、连接、角色、显示和关于等配置
 - 🎨 **角色自定义** - 支持自定义桌宠名称和人设，让 AI 对话更具个性
-- 🤖 **智能大脑** - 与后端 AI Agent 通信，实现自然语言交互
-- 🌐 **跨平台** - 一套代码支持 Windows, macOS 和 Linux
+- 🤖 **智能交互** - 与后端 AI Agent 通信，实现自然语言交互与智能决策
+- 🌐 **跨平台支持** - 一套代码支持 Windows、macOS 和 Linux
 - 📐 **窗口自适应** - Live2D 模型自动适应窗口大小变化，支持自由调整尺寸
 - 📥 **动态系统托盘** - 支持最小化到托盘，菜单按钮根据状态智能切换
-- 🎨 **现代UI** - 基于 Lucide Icons 的专业图标系统，分区布局设计，操作直观流畅
-- 👁️ **UI切换模式** - 支持完整UI和纯模型两种显示模式，双击模型或点击按钮即可切换
+- 🎨 **现代化 UI** - 基于 Lucide Icons 的专业图标系统，分区布局设计，操作直观流畅
+- 👁️ **UI 切换模式** - 支持完整 UI 和纯模型两种显示模式，双击模型或点击按钮即可切换
 - 🗣️ **实时口型同步** - 音频播放时自动进行口型动画，让对话更加生动自然
+- 🎙️ **本地语音识别** - 基于 Sherpa-ONNX 的离线 ASR，支持中英日韩粤五种语言
+- 📷 **视频输入支持** - 集成摄像头捕获，支持视觉多模态交互
 
 ---
 
 ## 🛠️ 快速运行
 
-### 下载模型文件
-
-由于模型文件较大，未包含在 Git 仓库中，需要单独下载：
-
-1. **Live2D 模型**
-   - 下载地址：https://cubism.live2d.com/sample-data/bin/mao_pro/mao_pro_zh.zip
-   - 解压到 `models/live2d/mao_pro_zh/` 目录
-
-2. **语音识别模型**
-   - 模型：Sherpa-ONNX Sense-Voice-Small (INT8)
-   - 下载地址：https://github.com/k2-fsa/sherpa-onnx/releases/
-   - 解压到 `models/asr/sense-voice-small/` 目录
-   - 需要的文件：`model.int8.onnx`, `tokens.txt`
-
-### 运行应用
+### 环境准备
 
 ```bash
 # 1. 安装依赖
 npm install
 
-# 2. 编译代码
+# 2. 编译 TypeScript 代码
 npm run compile
+```
 
-# 3. 启动应用（根据操作系统选择对应命令）
+### 启动应用
 
-# macOS:
-npm run dev:mac
+```bash
+# 开发模式（根据操作系统选择）
+npm run dev:mac     # macOS
+npm run dev:linux   # Linux
+npm run dev:win     # Windows
+npm run dev         # 通用命令
 
-# Linux:
-npm run dev:linux
-
-# Windows:
-npm run dev:win
-
-# 或使用通用命令（可能在某些环境下需要手动设置环境变量）:
-npm run dev
+# 生产模式
+npm start
 ```
 
 ---
@@ -92,4 +79,4 @@ npm run dev
 
 ## 📄 许可证
 
-[APGL-3.0 许可证](LICENSE)
+[MIT License](LICENSE)

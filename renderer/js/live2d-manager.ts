@@ -3,7 +3,14 @@
  * 负责加载、渲染和控制 Live2D 模型
  */
 
-import type { Live2DManager as ILive2DManager, Live2DModel } from '../types/global';
+import type { 
+  Live2DManager as ILive2DManager, 
+  Live2DModel,
+  ModelInfo,
+  SyncCommandData,
+  SyncAction,
+  TapConfig
+} from '../types/global';
 import type { Application } from 'pixi.js';
 
 // pixi-live2d-display 通过全局脚本加载（lib/pixi-live2d-cubism4.min.js）
@@ -35,6 +42,13 @@ class Live2DManager implements ILive2DManager {
   private lipSyncTarget: number = 0;
   private lipSyncEnabled: boolean = false;
   private baseScale: number = 1.0; // 自适应计算的基础缩放
+  
+  // 视线跟随相关
+  private eyeTrackingEnabled: boolean = false;
+  private mouseX: number = 0;
+  private mouseY: number = 0;
+  private eyeTrackingTimer: number | null = null;
+  private isPlayingMotion: boolean = false;  // 标记是否正在播放动作
 
   constructor(canvasId: string) {
     const canvas = document.getElementById(canvasId) as HTMLCanvasElement;
@@ -151,7 +165,9 @@ class Live2DManager implements ILive2DManager {
       
       // 提取并发送模型信息
       const modelInfo = this.extractModelInfo();
-      this.sendModelInfoToBackend(modelInfo);
+      if (modelInfo) {
+        this.sendModelInfoToBackend(modelInfo);
+      }
       
       console.log('模型加载成功');
       return true;
@@ -371,7 +387,25 @@ class Live2DManager implements ILive2DManager {
       
       // 使用 pixi-live2d-display 的动作播放
       if (model.internalModel && model.internalModel.motionManager) {
-        model.motion(motionGroup, motionIndex);
+        // 设置动作标记
+        this.isPlayingMotion = true;
+        
+        // 播放动作，并在完成后重置标记
+        const motionPromise = model.motion(motionGroup, motionIndex);
+        if (motionPromise && motionPromise.then) {
+          motionPromise.then(() => {
+            this.isPlayingMotion = false;
+          }).catch((error: any) => {
+            console.error('动作播放错误:', error);
+            this.isPlayingMotion = false;
+          });
+        } else {
+          // 如果没有返回Promise，使用定时器估算
+          setTimeout(() => {
+            this.isPlayingMotion = false;
+          }, 2000); // 默认2秒后恢复
+        }
+        
         console.log(`播放动作: ${motionGroup}[${motionIndex}]`);
         this.currentMotion = `${motionGroup}[${motionIndex}]`;
       } else {
@@ -379,6 +413,7 @@ class Live2DManager implements ILive2DManager {
       }
     } catch (error) {
       console.error('播放动作失败:', error);
+      this.isPlayingMotion = false;
     }
   }
 
@@ -410,8 +445,8 @@ class Live2DManager implements ILive2DManager {
 
   /**
    * 视线跟随
-   * @param x - 鼠标 X 坐标
-   * @param y - 鼠标 Y 坐标
+   * @param x - Canvas 内的 X 像素坐标（世界空间）
+   * @param y - Canvas 内的 Y 像素坐标（世界空间）
    */
   public lookAt(x: number, y: number): void {
     if (!this.model) return;
@@ -419,18 +454,13 @@ class Live2DManager implements ILive2DManager {
     try {
       const model = this.model as any;
       
-      // 计算相对于模型中心的位置
-      const modelX = model.x;
-      const modelY = model.y;
-      
-      // 归一化坐标 (-1 到 1)
-      const normalizedX = (x - modelX) / (this.canvas.width / 2);
-      const normalizedY = (y - modelY) / (this.canvas.height / 2);
-      
-      // 使用 pixi-live2d-display 的视线跟随功能
-      if (model.internalModel && model.internalModel.coreModel) {
-        // Focus 控制视线方向  
-        model.focus(normalizedX * 30, -normalizedY * 30);
+      // pixi-live2d-display 的 focus() 方法接受世界空间的像素坐标
+      // 库内部会自动：
+      // 1. 通过 toModelPosition() 转换为模型内部坐标
+      // 2. 归一化到 -1 ~ 1 范围
+      // 3. 传递给 focusController 进行平滑插值
+      if (typeof model.focus === 'function') {
+        model.focus(x, y);
       }
     } catch (error) {
       // 忽略视线跟随错误
@@ -480,18 +510,18 @@ class Live2DManager implements ILive2DManager {
   /**
    * 提取模型信息
    */
-  public extractModelInfo(): any {
+  public extractModelInfo(): ModelInfo | null {
     if (!this.model) return null;
     
     const model = this.model as any;
     const internalModel = model.internalModel;
     
     if (!internalModel) {
-      return { available: false };
+      return null;
     }
 
     // 提取动作组信息
-    const motions: any = {};
+    const motions: Record<string, { count: number; files: string[] }> = {};
     if (internalModel.motionManager?.definitions) {
       const definitions = internalModel.motionManager.definitions;
       for (const groupName in definitions) {
@@ -534,10 +564,11 @@ class Live2DManager implements ILive2DManager {
     return {
       available: true,
       modelPath: window.settingsManager?.getSettings().modelPath || 'unknown',
-      dimensions: this.originalModelBounds,
+      dimensions: this.originalModelBounds || { width: 0, height: 0 },
       motions,
       expressions,
       hitAreas,
+      availableParameters: this.getAvailableParameters(),
       parameters: {
         canScale: true,
         currentScale: this.userScale * this.baseScale,
@@ -550,7 +581,7 @@ class Live2DManager implements ILive2DManager {
   /**
    * 发送模型信息到后端
    */
-  private sendModelInfoToBackend(modelInfo: any): void {
+  private sendModelInfoToBackend(modelInfo: ModelInfo): void {
     if (!modelInfo || !modelInfo.available) {
       console.warn('模型信息不可用，跳过发送');
       return;
@@ -584,7 +615,7 @@ class Live2DManager implements ILive2DManager {
   /**
    * 加载触碰配置
    */
-  public loadTapConfig(): any {
+  public loadTapConfig(): TapConfig {
     // 从设置管理器中读取当前模型的触碰配置
     if (window.settingsManager) {
       return window.settingsManager.getCurrentTapConfig();
@@ -621,7 +652,7 @@ class Live2DManager implements ILive2DManager {
   /**
    * 执行同步指令（支持文字、音频、动作、表情的组合）
    */
-  public async executeSyncCommand(command: any): Promise<void> {
+  public async executeSyncCommand(command: SyncCommandData): Promise<void> {
     console.log('执行同步指令:', command);
 
     if (!command || !command.actions) {
@@ -643,26 +674,194 @@ class Live2DManager implements ILive2DManager {
   /**
    * 执行单个动作
    */
-  private async executeAction(action: any): Promise<void> {
+  private async executeAction(action: SyncAction): Promise<void> {
     switch (action.type) {
       case 'motion':
-        this.playMotion(action.group, action.index || 0, action.priority || 2);
-        break;
-      case 'expression':
-        this.setExpression(action.expressionId);
-        break;
-      case 'dialogue':
-        if (window.dialogueManager) {
-          window.dialogueManager.showDialogue(action.text, action.duration || 5000);
+        if (action.group) {
+          this.playMotion(action.group, action.index || 0, action.priority || 2);
         }
         break;
-      case 'audio':
-        if (window.audioPlayer) {
-          await window.audioPlayer.playAudio(action.url || action.base64);
+      case 'expression':
+        if (action.expressionId) {
+          this.setExpression(action.expressionId);
+        }
+        break;
+      case 'dialogue':
+        if (window.dialogueManager && action.text) {
+          window.dialogueManager.showDialogue(action.text, action.duration || 5000);
         }
         break;
       default:
         console.warn('未知动作类型:', action.type);
+    }
+  }
+
+  /**
+   * 启用/禁用视线跟随
+   */
+  public enableEyeTracking(enabled: boolean): void {
+    this.eyeTrackingEnabled = enabled;
+    
+    if (enabled) {
+      // 启动定时器持续获取鼠标位置
+      if (!this.eyeTrackingTimer) {
+        this.updateEyeTracking();
+      }
+    } else {
+      // 停止定时器
+      if (this.eyeTrackingTimer) {
+        cancelAnimationFrame(this.eyeTrackingTimer);
+        this.eyeTrackingTimer = null;
+      }
+      
+      // 重置视线到正面中央位置
+      if (this.model) {
+        const model = this.model as any;
+        // 直接操作 focusController 将视线重置为 (0, 0)
+        // Live2DModel.focus() 方法会将坐标转换为方向向量，无法得到 (0, 0)
+        // 因此需要直接调用 internalModel.focusController.focus(0, 0, true)
+        const focusController = model.internalModel?.focusController;
+        if (focusController && typeof focusController.focus === 'function') {
+          focusController.focus(0, 0, true);
+        }
+      }
+    }
+  }
+  
+  /**
+   * 更新视线跟随（使用requestAnimationFrame循环）
+   */
+  private async updateEyeTracking(): Promise<void> {
+    if (!this.eyeTrackingEnabled) return;
+    
+    try {
+      // 如果正在播放动作，跳过视线更新（动作优先）
+      if (!this.isPlayingMotion) {
+        // 获取鼠标在屏幕上的绝对坐标
+        const cursorPos = await window.electronAPI.getCursorScreenPoint();
+        
+        // 获取窗口在屏幕上的位置
+        const windowPos = await window.electronAPI.getWindowPosition();
+        
+        // 计算鼠标相对于窗口的位置（窗口坐标系）
+        const rect = this.canvas.getBoundingClientRect();
+        this.mouseX = cursorPos.x - windowPos.x - rect.left;
+        this.mouseY = cursorPos.y - windowPos.y - rect.top;
+        
+        // 直接传递 Canvas 内的像素坐标给 lookAt
+        // focus() 方法内部会自动处理坐标转换
+        this.lookAt(this.mouseX, this.mouseY);
+      }
+    } catch (error) {
+      console.error('[Live2D] 更新视线跟随失败:', error);
+    }
+    
+    // 继续下一帧
+    if (this.eyeTrackingEnabled) {
+      this.eyeTrackingTimer = requestAnimationFrame(() => this.updateEyeTracking());
+    }
+  }
+  
+  /**
+   * 检查视线跟随是否启用
+   */
+  public isEyeTrackingEnabled(): boolean {
+    return this.eyeTrackingEnabled;
+  }
+
+  /**
+   * 设置模型参数
+   * @param parameterId 参数ID（如 ParamEyeLOpen, ParamMouthOpenY）
+   * @param value 参数值
+   * @param weight 混合权重 (0-1)，用于平滑过渡
+   */
+  public setParameter(parameterId: string, value: number, weight: number = 1.0): void {
+    if (!this.model) {
+      console.warn('[Live2D] 模型未加载，无法设置参数');
+      return;
+    }
+
+    try {
+      const model = this.model as any;
+      const coreModel = model.internalModel?.coreModel;
+      
+      if (!coreModel) {
+        console.warn('[Live2D] 无法访问模型内部结构');
+        return;
+      }
+
+      // 使用 addParameterValueById 带权重设置参数
+      if (typeof coreModel.addParameterValueById === 'function') {
+        coreModel.addParameterValueById(parameterId, value * weight);
+      } else {
+        console.warn('[Live2D] 模型不支持 addParameterValueById 方法');
+      }
+    } catch (error) {
+      console.error('[Live2D] 设置参数失败:', error);
+    }
+  }
+
+  /**
+   * 批量设置模型参数
+   * @param params 参数数组
+   */
+  public setParameters(params: Array<{id: string, value: number, blend?: number}>): void {
+    if (!params || params.length === 0) return;
+    
+    params.forEach(param => {
+      this.setParameter(param.id, param.value, param.blend !== undefined ? param.blend : 1.0);
+    });
+  }
+
+  /**
+   * 获取模型所有可用参数
+   */
+  public getAvailableParameters(): Array<{id: string, value: number, min: number, max: number, default: number}> {
+    if (!this.model) return [];
+
+    try {
+      const model = this.model as any;
+      const coreModel = model.internalModel?.coreModel;
+      
+      if (!coreModel) return [];
+
+      const parameters: Array<{id: string, value: number, min: number, max: number, default: number}> = [];
+      
+      // Cubism 4 的 CubismModel 需要先获取底层的 model
+      const nativeModel = coreModel.getModel ? coreModel.getModel() : coreModel;
+      
+      if (!nativeModel || !nativeModel.parameters) {
+        console.warn('[Live2D] 无法访问模型参数');
+        return [];
+      }
+
+      // 从原生模型获取参数信息
+      const paramCount = nativeModel.parameters.count;
+      const paramIds = nativeModel.parameters.ids;
+      const paramValues = nativeModel.parameters.values;
+      const paramMinValues = nativeModel.parameters.minimumValues;
+      const paramMaxValues = nativeModel.parameters.maximumValues;
+      const paramDefaultValues = nativeModel.parameters.defaultValues;
+
+      for (let i = 0; i < paramCount; i++) {
+        try {
+          parameters.push({
+            id: paramIds[i],
+            value: paramValues[i],
+            min: paramMinValues[i],
+            max: paramMaxValues[i],
+            default: paramDefaultValues[i]
+          });
+        } catch (paramError) {
+          // 忽略单个参数的错误
+          console.warn(`[Live2D] 无法获取参数 [${i}]:`, paramError);
+        }
+      }
+
+      return parameters;
+    } catch (error) {
+      console.error('[Live2D] 获取参数列表失败:', error);
+      return [];
     }
   }
 

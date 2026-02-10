@@ -33,10 +33,11 @@ class MicrophoneManager implements IMicrophoneManager {
 
   /**
    * 初始化麦克风管理器
+   * 注意：不在这里枚举设备，只在真正需要使用时才请求权限
    */
   public async initialize(): Promise<void> {
-    console.log('麦克风管理器初始化');
-    await this.enumerateDevices();
+    console.log('麦克风管理器初始化（延迟加载设备）');
+    // 不在初始化时枚举设备，避免过早请求权限
     
     // 从设置中加载配置
     if (window.settingsManager) {
@@ -48,12 +49,11 @@ class MicrophoneManager implements IMicrophoneManager {
 
   /**
    * 枚举所有麦克风设备
+   * 只在用户主动使用麦克风功能时调用
    */
   public async enumerateDevices(): Promise<MediaDeviceInfo[]> {
     try {
-      // 先请求一次权限
-      await navigator.mediaDevices.getUserMedia({ audio: true });
-      
+      // 不预先请求权限，只枚举设备（可能获取不到设备标签，但避免过早弹出权限请求）
       const devices = await navigator.mediaDevices.enumerateDevices();
       this.devices = devices.filter(device => device.kind === 'audioinput');
       
@@ -80,6 +80,11 @@ class MicrophoneManager implements IMicrophoneManager {
     try {
       if (this.stream) {
         this.stopListening();
+      }
+
+      // 首次启动时重新枚举设备（获取权限后可以拿到设备标签）
+      if (this.devices.length === 0) {
+        await this.enumerateDevices();
       }
 
       const constraints: MediaStreamConstraints = {

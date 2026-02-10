@@ -3,7 +3,7 @@
  * 负责应用设置的存储、读取和管理
  */
 
-import type { SettingsManager as ISettingsManager, AppSettings } from '../types/global';
+import type { SettingsManager as ISettingsManager, AppSettings, TapConfig } from '../types/global';
 
 class SettingsManager implements ISettingsManager {
   private storageKey = 'nya-desk-pet-settings';
@@ -24,7 +24,8 @@ class SettingsManager implements ISettingsManager {
     customPersonality: '',
     micBackgroundMode: false,
     micVolumeThreshold: 30,
-    micAutoSend: true
+    micAutoSend: true,
+    enableEyeTracking: true
   };
 
   constructor() {
@@ -186,7 +187,7 @@ class SettingsManager implements ISettingsManager {
   /**
    * 获取指定模型的触碰配置
    */
-  public getTapConfig(modelPath: string): any {
+  public getTapConfig(modelPath: string): TapConfig {
     if (!this.settings.tapConfigs) {
       this.settings.tapConfigs = {};
     }
@@ -202,7 +203,7 @@ class SettingsManager implements ISettingsManager {
   /**
    * 更新指定模型的触碰配置
    */
-  public updateTapConfig(modelPath: string, config: any): void {
+  public updateTapConfig(modelPath: string, config: TapConfig): void {
     if (!this.settings.tapConfigs) {
       this.settings.tapConfigs = {};
     }

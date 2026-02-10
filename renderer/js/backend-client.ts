@@ -8,8 +8,12 @@ import type {
   BackendConfig, 
   BackendMessage,
   DialogueData,
-  VoiceData,
-  Live2DCommandData
+  AudioStreamStartData,
+  AudioChunkData,
+  AudioStreamEndData,
+  Live2DCommandData,
+  TimelineItem,
+  CharacterInfo
 } from '../types/global';
 
 class BackendClient implements IBackendClient {
@@ -118,8 +122,14 @@ class BackendClient implements IBackendClient {
         case 'dialogue':
           this.handleDialogue(message.data as DialogueData);
           break;
-        case 'voice':
-          this.handleVoice(message.data as VoiceData);
+        case 'audio_stream_start':
+          this.handleAudioStreamStart(message.data as AudioStreamStartData);
+          break;
+        case 'audio_chunk':
+          this.handleAudioChunk(message.data as AudioChunkData);
+          break;
+        case 'audio_stream_end':
+          this.handleAudioStreamEnd(message.data as AudioStreamEndData);
           break;
         case 'live2d':
           this.handleLive2DCommand(message.data as Live2DCommandData);
@@ -153,11 +163,85 @@ class BackendClient implements IBackendClient {
   }
 
   /**
-   * 处理语音消息
+   * 处理流式音频开始
    */
-  public handleVoice(data: VoiceData): void {
+  public handleAudioStreamStart(data: AudioStreamStartData): void {
+    console.log('[Backend] 开始流式音频传输');
+    
+    // 立即显示文字
+    if (data.text && window.dialogueManager) {
+      window.dialogueManager.showDialogue(data.text, data.totalDuration || 5000);
+    }
+    
+    // 初始化流式播放
     if (window.audioPlayer) {
-      window.audioPlayer.playAudio(data.url || data.base64 || '');
+      window.audioPlayer.startStreamingAudio(data.mimeType || 'audio/mpeg');
+      
+      // 设置时间轴
+      if (data.timeline && Array.isArray(data.timeline)) {
+        const timelineCallbacks = data.timeline.map((item: TimelineItem) => ({
+          timing: item.timing,
+          callback: () => this.executeTimelineAction(item)
+        }));
+        
+        window.audioPlayer.setTimeline(timelineCallbacks, data.totalDuration);
+        window.audioPlayer.startTimeline();
+      }
+    }
+  }
+
+  /**
+   * 处理音频块
+   */
+  public handleAudioChunk(data: AudioChunkData): void {
+    if (!window.audioPlayer) return;
+    
+    try {
+      // Base64 解码
+      const binaryString = atob(data.chunk);
+      const len = binaryString.length;
+      const bytes = new Uint8Array(len);
+      
+      for (let i = 0; i < len; i++) {
+        bytes[i] = binaryString.charCodeAt(i);
+      }
+      
+      window.audioPlayer.appendAudioChunk(bytes);
+    } catch (error) {
+      console.error('[Backend] 音频块解码失败:', error);
+    }
+  }
+
+  /**
+   * 处理流式音频结束
+   */
+  public handleAudioStreamEnd(_data: AudioStreamEndData): void {
+    console.log('[Backend] 音频流结束');
+    window.audioPlayer.endStream();
+  }
+
+  /**
+   * 执行时间轴动作
+   */  /**
+   * 执行时间轴动作
+   */
+  private executeTimelineAction(item: TimelineItem): void {
+    if (!window.live2dManager) return;
+    
+    switch (item.action) {
+      case 'expression':
+        window.live2dManager.setExpression(item.expressionId || '');
+        break;
+      case 'motion':
+        window.live2dManager.playMotion(item.group || '', item.index || 0, item.priority || 2);
+        break;
+      case 'parameter':
+        if (item.parameters && Array.isArray(item.parameters)) {
+          window.live2dManager.setParameters(item.parameters);
+        }
+        break;
+      default:
+        console.warn('[Backend] 未知时间轴动作:', item.action);
     }
   }
 
@@ -177,6 +261,14 @@ class BackendClient implements IBackendClient {
         break;
       case 'expression':
         window.live2dManager.setExpression(data.expressionId || '');
+        break;
+      case 'parameter':
+        if (data.parameters && Array.isArray(data.parameters)) {
+          window.live2dManager.setParameters(data.parameters);
+        } else if (data.parameterId !== undefined && data.value !== undefined) {
+          // 单个参数设置
+          window.live2dManager.setParameter(data.parameterId, data.value, data.weight || 1.0);
+        }
         break;
       default:
         console.warn('未知 Live2D 指令:', data.command);
@@ -298,7 +390,7 @@ class BackendClient implements IBackendClient {
     const settings = window.settingsManager.getSettings();
     
     // 构建角色信息消息
-    const characterInfo: any = {
+    const characterInfo: CharacterInfo = {
       useCustom: settings.useCustomCharacter
     };
     

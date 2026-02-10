@@ -3,7 +3,7 @@
  * 协调各个模块的工作
  */
 
-import type { AppState, AppDebugInterface, ThemeMode } from '../types/global';
+import type { AppState, AppDebugInterface, ThemeMode, TapConfig, BackendMessage } from '../types/global';
 
 // 应用状态
 const appState: AppState = {
@@ -89,6 +89,9 @@ async function initializeApp(): Promise<void> {
       await window.live2dManager.loadModel(settings.modelPath);
       appState.modelLoaded = true;
       console.log('模型加载成功');
+      
+      // 应用视线跟随设置
+      window.live2dManager.enableEyeTracking(settings.enableEyeTracking);
     } catch (error) {
       console.error('模型加载失败:', error);
       showError('模型加载失败，请检查模型文件路径或在设置中更改');
@@ -271,7 +274,7 @@ function setupWindowControls(): void {
   const btnClose = document.getElementById('btn-close');
   if (btnClose) {
     btnClose.addEventListener('click', () => {
-      if (confirm('确定要关闭桌面宠物吗？')) {
+      if (confirm(window.i18nManager.t('messages.confirmClose'))) {
         window.electronAPI.closeWindow();
       }
     });
@@ -408,7 +411,7 @@ async function sendChatMessage(): Promise<void> {
     await sendUserMessage(text);
   } catch (error) {
     console.error('发送消息失败:', error);
-    addChatMessage('发送失败，请检查连接', false);
+    addChatMessage(window.i18nManager.t('messages.sendFailed'), false);
   }
 }
 
@@ -591,6 +594,7 @@ function showSettingsPanel(): void {
   (document.getElementById('setting-language') as HTMLSelectElement).value = settings.locale;
   (document.getElementById('setting-theme') as HTMLSelectElement).value = settings.theme;
   (document.getElementById('setting-show-subtitle') as HTMLInputElement).checked = settings.showSubtitle;
+  (document.getElementById('setting-enable-eye-tracking') as HTMLInputElement).checked = settings.enableEyeTracking;
   (document.getElementById('setting-use-custom-character') as HTMLInputElement).checked = settings.useCustomCharacter;
   (document.getElementById('setting-custom-name') as HTMLInputElement).value = settings.customName;
   (document.getElementById('setting-custom-personality') as HTMLTextAreaElement).value = settings.customPersonality;
@@ -628,6 +632,7 @@ async function saveSettings(): Promise<void> {
   const locale = (document.getElementById('setting-language') as HTMLSelectElement).value;
   const theme = (document.getElementById('setting-theme') as HTMLSelectElement).value as ThemeMode;
   const showSubtitle = (document.getElementById('setting-show-subtitle') as HTMLInputElement).checked;
+  const enableEyeTracking = (document.getElementById('setting-enable-eye-tracking') as HTMLInputElement).checked;
   const useCustomCharacter = (document.getElementById('setting-use-custom-character') as HTMLInputElement).checked;
   const customName = (document.getElementById('setting-custom-name') as HTMLInputElement).value;
   const customPersonality = (document.getElementById('setting-custom-personality') as HTMLTextAreaElement).value;
@@ -649,6 +654,7 @@ async function saveSettings(): Promise<void> {
     locale,
     theme,
     showSubtitle,
+    enableEyeTracking,
     useCustomCharacter,
     customName,
     customPersonality,
@@ -668,6 +674,7 @@ async function saveSettings(): Promise<void> {
   window.audioPlayer.setVolume(volume);
   window.microphoneManager.setVolumeThreshold(micVolumeThreshold);
   window.microphoneManager.setBackgroundMode(micBackgroundMode);
+  window.live2dManager.enableEyeTracking(enableEyeTracking);
   
   // 保存触碰配置
   saveTapConfigFromUI();
@@ -884,7 +891,7 @@ function saveTapConfigFromUI(): void {
   const modelInfo = window.live2dManager?.extractModelInfo();
   const modelHitAreas = modelInfo?.hitAreas || [];
 
-  const tapConfig: any = {
+  const tapConfig: TapConfig = {
     // 始终保留 default 配置
     'default': { enabled: true, description: '默认触摸' }
   };
@@ -944,7 +951,7 @@ async function checkForUpdates(): Promise<void> {
   
   // 显示检查中状态
   statusEl.className = 'update-status checking';
-  statusEl.innerHTML = '<i data-lucide="loader" style="width: 14px; height: 14px; animation: spin 1s linear infinite;"></i> 正在检查更新...';
+  statusEl.innerHTML = `<i data-lucide="loader" style="width: 14px; height: 14px; animation: spin 1s linear infinite;"></i> ${window.i18nManager.t('update.checking')}`;
   statusEl.classList.remove('hidden');
   if (btnCheckUpdate) btnCheckUpdate.disabled = true;
   
@@ -958,19 +965,15 @@ async function checkForUpdates(): Promise<void> {
     
     if (result.error) {
       statusEl.className = 'update-status error';
-      statusEl.textContent = `检查更新失败: ${result.error}`;
+      statusEl.textContent = window.i18nManager.t('update.error').replace('{error}', result.error);
     } else if (result.hasUpdate) {
       statusEl.className = 'update-status has-update';
-      statusEl.innerHTML = `
-        <div><strong>发现新版本 ${result.latestVersion}</strong></div>
-        <div style="margin-top: 4px;">${result.releaseName || ''}</div>
-        <div style="margin-top: 8px;">
-          <a id="link-release" href="#">点击前往下载页面</a>
-        </div>
-      `;
+      const updateMessage = window.i18nManager.t('update.hasUpdate')
+        .replace('{version}', result.latestVersion || 'unknown');
+      statusEl.innerHTML = updateMessage;
       
       // 绑定链接点击事件
-      const linkRelease = document.getElementById('link-release');
+      const linkRelease = statusEl.querySelector('a');
       if (linkRelease && result.releaseUrl) {
         linkRelease.addEventListener('click', (e) => {
           e.preventDefault();
@@ -979,11 +982,11 @@ async function checkForUpdates(): Promise<void> {
       }
     } else {
       statusEl.className = 'update-status no-update';
-      statusEl.textContent = `当前已是最新版本 (${result.currentVersion})`;
+      statusEl.textContent = window.i18nManager.t('update.noUpdate');
     }
   } catch (error) {
     statusEl.className = 'update-status error';
-    statusEl.textContent = '检查更新失败，请稍后再试';
+    statusEl.textContent = window.i18nManager.t('update.error').replace('{error}', '未知错误');
   } finally {
     if (btnCheckUpdate) btnCheckUpdate.disabled = false;
   }
@@ -999,7 +1002,7 @@ async function sendUserMessage(text: string): Promise<void> {
   }
 
   try {
-    const message: any = {
+    const message: BackendMessage = {
       type: 'user_input',
       text: text.trim(),
       timestamp: Date.now()

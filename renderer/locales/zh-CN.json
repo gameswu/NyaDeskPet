@@ -1,12 +1,8 @@
 {
   "app": {
-    "name": "小夜桌宠",
-    "version": "版本",
     "toggleUI": "隐藏/显示UI"
   },
   "topBar": {
-    "status": "状态",
-    "connected": "已连接",
     "disconnected": "未连接",
     "settings": "设置",
     "minimize": "最小化",
@@ -42,12 +38,8 @@
       "browse": "浏览"
     },
     "tap": {
-      "title": "触碸反应配置",
-
-      "addArea": "添加触碸区域",
-      "areaName": "区域名称",
-      "areaDescription": "描述",
-      "delete": "删除"
+      "title": "触碰反应配置",
+      "areaDescription": "描述"
     },
     "backend": {
       "title": "后端连接",
@@ -82,7 +74,8 @@
       "themeLight": "明亮",
       "themeDark": "暗黑",
       "themeSystem": "跟随系统",
-      "showSubtitle": "显示对话字幕"
+      "showSubtitle": "显示对话字幕",
+      "enableEyeTracking": "启用视线跟随"
     },
     "about": {
       "title": "关于",
@@ -102,15 +95,12 @@
     "error": "检查更新失败: {error}"
   },
   "messages": {
-    "settingsSaved": "设置已保存！",
     "settingsReset": "已恢复默认设置",
     "settingsValidationFailed": "设置验证失败",
     "reloadConfirm": "设置已保存！部分设置需要重新加载才能生效，是否立即重新加载？",
     "resetConfirm": "确定要恢复默认设置吗？",
     "confirmClose": "确定要关闭桌面宠物吗？",
-    "sendFailed": "发送失败，请检查连接",
-    "voiceDevInProgress": "语音输入功能开发中...",
-    "cameraDevInProgress": "摄像头功能开发中..."
+    "sendFailed": "发送失败，请检查连接"
   },
   "camera": {
     "preview": "摄像头预览",

@@ -2,7 +2,7 @@
 
 /**
  * i18n 键值检查工具
- * 扫描HTML中的所有i18n键，并检查它们是否在语言文件中都有对应
+ * 扫描HTML和代码文件中的所有i18n键，并检查它们是否在语言文件中都有对应
  */
 
 const fs = require('fs');
@@ -16,7 +16,8 @@ const colors = {
   green: '\x1b[32m',
   yellow: '\x1b[33m',
   blue: '\x1b[34m',
-  cyan: '\x1b[36m'
+  cyan: '\x1b[36m',
+  magenta: '\x1b[35m'
 };
 
 function log(message, color = 'reset') {
@@ -28,6 +29,34 @@ const projectRoot = path.join(__dirname, '..');
 const rendererDir = path.join(projectRoot, 'renderer');
 const htmlFile = path.join(rendererDir, 'index.html');
 const localesDir = path.join(rendererDir, 'locales');
+const jsDir = path.join(rendererDir, 'js');
+
+// 递归获取目录下所有文件
+function getAllFiles(dirPath, fileExtensions = []) {
+  const files = [];
+  
+  function traverse(currentPath) {
+    if (!fs.existsSync(currentPath)) {
+      return;
+    }
+    
+    const stats = fs.statSync(currentPath);
+    
+    if (stats.isDirectory()) {
+      const entries = fs.readdirSync(currentPath);
+      entries.forEach(entry => {
+        traverse(path.join(currentPath, entry));
+      });
+    } else if (stats.isFile()) {
+      if (fileExtensions.length === 0 || fileExtensions.some(ext => currentPath.endsWith(ext))) {
+        files.push(currentPath);
+      }
+    }
+  }
+  
+  traverse(dirPath);
+  return files;
+}
 
 // 读取HTML文件并提取所有i18n键
 function extractI18nKeysFromHTML(htmlPath) {
@@ -53,7 +82,32 @@ function extractI18nKeysFromHTML(htmlPath) {
     keys.add(match[1]);
   }
 
-  return Array.from(keys).sort();
+  return Array.from(keys);
+}
+
+// 从代码文件中提取 i18n 键
+function extractI18nKeysFromCode(filePath) {
+  const content = fs.readFileSync(filePath, 'utf-8');
+  const keys = new Set();
+  
+  // 匹配 i18nManager.t('key') 或 i18n.t('key') 或 t('key')
+  const tFunctionRegex = /\b(?:i18nManager|i18n)?\.?t\s*\(\s*['"]([^'"]+)['"]\s*\)/g;
+  let match;
+  while ((match = tFunctionRegex.exec(content)) !== null) {
+    keys.add(match[1]);
+  }
+  
+  // 匹配 i18nManager.translate('key') 或类似方法
+  const translateRegex = /\b(?:i18nManager|i18n)\.translate\s*\(\s*['"]([^'"]+)['"]\s*\)/g;
+  while ((match = translateRegex.exec(content)) !== null) {
+    keys.add(match[1]);
+  }
+  
+  // 匹配 getAttribute('data-i18n')
+  const getAttributeRegex = /getAttribute\s*\(\s*['"]data-i18n['"]\s*\)/g;
+  // 这种情况比较复杂，先跳过动态键
+  
+  return Array.from(keys);
 }
 
 // 读取语言文件
@@ -119,10 +173,45 @@ function checkI18n() {
     process.exit(1);
   }
   
-  const usedKeys = extractI18nKeysFromHTML(htmlFile);
-  log(`  找到 ${usedKeys.length} 个i18n键\n`, 'green');
+  const htmlKeys = extractI18nKeysFromHTML(htmlFile);
+  log(`  找到 ${htmlKeys.length} 个i18n键\n`, 'green');
 
-  // 2. 加载语言文件
+  // 2. 扫描代码文件中的键
+  log('💻 扫描代码文件 (TS/JS)...', 'cyan');
+  const codeFiles = getAllFiles(jsDir, ['.ts', '.js']);
+  const codeKeysMap = new Map(); // 文件路径 -> 键数组
+  const allCodeKeys = new Set();
+  
+  codeFiles.forEach(filePath => {
+    const keys = extractI18nKeysFromCode(filePath);
+    if (keys.length > 0) {
+      const relativePath = path.relative(projectRoot, filePath);
+      codeKeysMap.set(relativePath, keys);
+      keys.forEach(key => allCodeKeys.add(key));
+    }
+  });
+  
+  log(`  扫描了 ${codeFiles.length} 个文件`, 'blue');
+  log(`  找到 ${allCodeKeys.size} 个i18n键（来自 ${codeKeysMap.size} 个文件）\n`, 'green');
+  
+  if (codeKeysMap.size > 0) {
+    log('  使用i18n的文件:', 'blue');
+    for (const [filePath, keys] of codeKeysMap) {
+      log(`    - ${filePath} (${keys.length}个键)`, 'blue');
+    }
+    log('');
+  }
+
+  // 3. 合并所有使用的键
+  const allUsedKeys = new Set([...htmlKeys, ...allCodeKeys]);
+  const usedKeys = Array.from(allUsedKeys).sort();
+  
+  log(`📊 总计使用的唯一键: ${usedKeys.length}`, 'cyan');
+  log(`  - HTML: ${htmlKeys.length}`, 'blue');
+  log(`  - 代码: ${allCodeKeys.size}`, 'blue');
+  log('');
+
+  // 4. 加载语言文件
   log('📦 加载语言文件...', 'cyan');
   const zhCNPath = path.join(localesDir, 'zh-CN.json');
   const enUSPath = path.join(localesDir, 'en-US.json');
@@ -137,8 +226,8 @@ function checkI18n() {
   log('  ✓ zh-CN.json 已加载', 'green');
   log('  ✓ en-US.json 已加载\n', 'green');
 
-  // 3. 检查HTML中的键是否在语言文件中存在
-  log('🔍 检查HTML中的键...', 'cyan');
+  // 5. 检查使用的键是否在语言文件中存在
+  log('🔍 检查键的完整性...', 'cyan');
   
   const missingInZhCN = [];
   const missingInEnUS = [];
@@ -158,15 +247,34 @@ function checkI18n() {
   } else {
     if (missingInZhCN.length > 0) {
       log(`  ✗ zh-CN.json 中缺失 ${missingInZhCN.length} 个键:`, 'red');
-      missingInZhCN.forEach(key => log(`    - ${key}`, 'yellow'));
+      missingInZhCN.forEach(key => {
+        // 找出是在哪个文件中使用的
+        const sources = [];
+        if (htmlKeys.includes(key)) sources.push('HTML');
+        for (const [filePath, keys] of codeKeysMap) {
+          if (keys.includes(key)) {
+            sources.push(path.basename(filePath));
+          }
+        }
+        log(`    - ${key} (用于: ${sources.join(', ')})`, 'yellow');
+      });
     }
     if (missingInEnUS.length > 0) {
       log(`  ✗ en-US.json 中缺失 ${missingInEnUS.length} 个键:`, 'red');
-      missingInEnUS.forEach(key => log(`    - ${key}`, 'yellow'));
+      missingInEnUS.forEach(key => {
+        const sources = [];
+        if (htmlKeys.includes(key)) sources.push('HTML');
+        for (const [filePath, keys] of codeKeysMap) {
+          if (keys.includes(key)) {
+            sources.push(path.basename(filePath));
+          }
+        }
+        log(`    - ${key} (用于: ${sources.join(', ')})`, 'yellow');
+      });
     }
   }
 
-  // 4. 检查语言文件中未使用的键
+  // 6. 检查语言文件中未使用的键
   log('\n🔍 检查未使用的键...', 'cyan');
   
   const zhCNKeys = getFlattenedKeys(zhCN);
@@ -177,19 +285,25 @@ function checkI18n() {
 
   if (unusedInZhCN.length > 0) {
     log(`  ⚠ zh-CN.json 中有 ${unusedInZhCN.length} 个未使用的键:`, 'yellow');
-    unusedInZhCN.forEach(key => log(`    - ${key}`, 'yellow'));
+    unusedInZhCN.slice(0, 10).forEach(key => log(`    - ${key}`, 'yellow'));
+    if (unusedInZhCN.length > 10) {
+      log(`    ... 还有 ${unusedInZhCN.length - 10} 个`, 'yellow');
+    }
   }
 
   if (unusedInEnUS.length > 0) {
     log(`  ⚠ en-US.json 中有 ${unusedInEnUS.length} 个未使用的键:`, 'yellow');
-    unusedInEnUS.forEach(key => log(`    - ${key}`, 'yellow'));
+    unusedInEnUS.slice(0, 10).forEach(key => log(`    - ${key}`, 'yellow'));
+    if (unusedInEnUS.length > 10) {
+      log(`    ... 还有 ${unusedInEnUS.length - 10} 个`, 'yellow');
+    }
   }
 
   if (unusedInZhCN.length === 0 && unusedInEnUS.length === 0) {
     log('  ✓ 没有未使用的键', 'green');
   }
 
-  // 5. 检查两个语言文件之间的差异
+  // 7. 检查两个语言文件之间的差异
   log('\n🔍 检查语言文件之间的差异...', 'cyan');
   
   const onlyInZhCN = zhCNKeys.filter(key => !enUSKeys.includes(key));
@@ -209,14 +323,61 @@ function checkI18n() {
     log('  ✓ 两个语言文件的键完全一致', 'green');
   }
 
-  // 6. 总结
+  // 8. 检查键值完整性（是否有空值或格式问题）
+  log('\n🔍 检查键值质量...', 'cyan');
+  
+  const emptyValuesZhCN = [];
+  const emptyValuesEnUS = [];
+  
+  usedKeys.forEach(key => {
+    const zhValue = getNestedValue(zhCN, key);
+    const enValue = getNestedValue(enUS, key);
+    
+    if (zhValue !== undefined && (zhValue === '' || zhValue === null)) {
+      emptyValuesZhCN.push(key);
+    }
+    if (enValue !== undefined && (enValue === '' || enValue === null)) {
+      emptyValuesEnUS.push(key);
+    }
+  });
+  
+  if (emptyValuesZhCN.length > 0) {
+    log(`  ⚠ zh-CN.json 中有 ${emptyValuesZhCN.length} 个空值:`, 'yellow');
+    emptyValuesZhCN.forEach(key => log(`    - ${key}`, 'yellow'));
+  }
+  
+  if (emptyValuesEnUS.length > 0) {
+    log(`  ⚠ en-US.json 中有 ${emptyValuesEnUS.length} 个空值:`, 'yellow');
+    emptyValuesEnUS.forEach(key => log(`    - ${key}`, 'yellow'));
+  }
+  
+  if (emptyValuesZhCN.length === 0 && emptyValuesEnUS.length === 0) {
+    log('  ✓ 所有使用的键都有有效值', 'green');
+  }
+
+  // 9. 生成详细报告（可选）
+  if (process.argv.includes('--detailed')) {
+    log('\n📋 详细报告...', 'cyan');
+    log('\n  HTML中使用的键:', 'magenta');
+    htmlKeys.sort().forEach(key => log(`    - ${key}`, 'blue'));
+    
+    if (allCodeKeys.size > 0) {
+      log('\n  代码中使用的键:', 'magenta');
+      Array.from(allCodeKeys).sort().forEach(key => log(`    - ${key}`, 'blue'));
+    }
+  }
+
+  // 10. 总结
   log('\n=== 检查总结 ===\n', 'bright');
   log(`📊 统计信息:`, 'cyan');
-  log(`  - HTML中使用的键: ${usedKeys.length}`, 'blue');
+  log(`  - HTML中的键: ${htmlKeys.length}`, 'blue');
+  log(`  - 代码中的键: ${allCodeKeys.size}`, 'blue');
+  log(`  - 总唯一键数: ${usedKeys.length}`, 'blue');
   log(`  - zh-CN.json总键数: ${zhCNKeys.length}`, 'blue');
   log(`  - en-US.json总键数: ${enUSKeys.length}`, 'blue');
   
-  const hasErrors = missingInZhCN.length > 0 || missingInEnUS.length > 0;
+  const hasErrors = missingInZhCN.length > 0 || missingInEnUS.length > 0 || 
+                    emptyValuesZhCN.length > 0 || emptyValuesEnUS.length > 0;
   const hasWarnings = unusedInZhCN.length > 0 || unusedInEnUS.length > 0 || 
                       onlyInZhCN.length > 0 || onlyInEnUS.length > 0;
 
@@ -224,10 +385,12 @@ function checkI18n() {
     log('\n✅ 太棒了！所有i18n键都正确配置！', 'green');
     process.exit(0);
   } else if (hasErrors) {
-    log('\n❌ 发现错误！请修复缺失的键。', 'red');
+    log('\n❌ 发现错误！请修复缺失的键或空值。', 'red');
+    log('提示：使用 --detailed 参数查看完整的键列表', 'yellow');
     process.exit(1);
   } else {
     log('\n⚠️  发现一些警告，建议检查。', 'yellow');
+    log('提示：使用 --detailed 参数查看完整的键列表', 'yellow');
     process.exit(0);
   }
 }

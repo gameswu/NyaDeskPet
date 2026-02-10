@@ -1,12 +1,8 @@
 {
   "app": {
-    "name": "Nya Desk Pet",
-    "version": "Version",
     "toggleUI": "Toggle UI"
   },
   "topBar": {
-    "status": "Status",
-    "connected": "Connected",
     "disconnected": "Disconnected",
     "settings": "Settings",
     "minimize": "Minimize",
@@ -43,10 +39,7 @@
     },
     "tap": {
       "title": "Tap Reaction Config",
-      "addArea": "Add Tap Area",
-      "areaName": "Area Name",
-      "areaDescription": "Description",
-      "delete": "Delete"
+      "areaDescription": "Description"
     },
     "backend": {
       "title": "Backend Connection",
@@ -81,7 +74,8 @@
       "themeLight": "Light",
       "themeDark": "Dark",
       "themeSystem": "Follow System",
-      "showSubtitle": "Show Dialogue Subtitles"
+      "showSubtitle": "Show Dialogue Subtitles",
+      "enableEyeTracking": "Enable Eye Tracking"
     },
     "about": {
       "title": "About",
@@ -101,15 +95,12 @@
     "error": "Update check failed: {error}"
   },
   "messages": {
-    "settingsSaved": "Settings saved!",
     "settingsReset": "Settings reset to defaults",
     "settingsValidationFailed": "Settings validation failed",
     "reloadConfirm": "Settings saved! Some settings require a reload. Reload now?",
     "resetConfirm": "Reset all settings to defaults?",
     "confirmClose": "Are you sure you want to close the desktop pet?",
-    "sendFailed": "Failed to send message. Please check your connection",
-    "voiceDevInProgress": "Voice input feature is under development...",
-    "cameraDevInProgress": "Camera feature is under development..."
+    "sendFailed": "Failed to send message. Please check your connection"
   },
   "camera": {
     "preview": "Camera Preview",

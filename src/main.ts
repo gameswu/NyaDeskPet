@@ -271,6 +271,17 @@ app.on('will-quit', () => {
 });
 
 // IPC 通信处理
+ipcMain.handle('get-window-position', () => {
+  if (!mainWindow) return { x: 0, y: 0 };
+  const bounds = mainWindow.getBounds();
+  return { x: bounds.x, y: bounds.y };
+});
+
+ipcMain.handle('get-cursor-screen-point', () => {
+  const point = screen.getCursorScreenPoint();
+  return { x: point.x, y: point.y };
+});
+
 ipcMain.handle('minimize-window', () => {
   mainWindow?.minimize();
 });
