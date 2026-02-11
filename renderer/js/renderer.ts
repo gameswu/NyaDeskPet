@@ -950,14 +950,14 @@ function initializeSettingsPanel(): void {
     });
   }
 
-  // 主题切换
-  const themeSelect = document.getElementById('setting-theme') as HTMLSelectElement;
-  if (themeSelect) {
-    themeSelect.addEventListener('change', (e: Event) => {
-      const newTheme = (e.target as HTMLSelectElement).value as ThemeMode;
-      window.themeManager.setTheme(newTheme);
-    });
-  }
+  // 主题切换 - 移除实时切换，仅在保存时生效
+  // const themeSelect = document.getElementById('setting-theme') as HTMLSelectElement;
+  // if (themeSelect) {
+  //   themeSelect.addEventListener('change', (e: Event) => {
+  //     const newTheme = (e.target as HTMLSelectElement).value as ThemeMode;
+  //     window.themeManager.setTheme(newTheme);
+  //   });
+  // }
 
   // 点击背景关闭
   const panel = document.getElementById('settings-panel');
@@ -998,8 +998,8 @@ async function loadLogFiles(): Promise<void> {
     
     if (files.length === 0) {
       logFilesList.innerHTML = `
-        <div class="log-files-empty" data-i18n="settings.logs.noLogFiles">
-          暂无日志文件
+        <div class="log-files-empty">
+          <p data-i18n="settings.logs.noLogFiles">暂无日志文件</p>
         </div>
       `;
       return;
@@ -1007,36 +1007,29 @@ async function loadLogFiles(): Promise<void> {
 
     logFilesList.innerHTML = files.map(file => {
       const size = formatFileSize(file.size);
-      const date = new Date(file.mtime).toLocaleString();
-      const currentBadge = file.isCurrent ? '<span class="log-file-current-badge" data-i18n="settings.logs.currentSession">当前会话</span>' : '';
+      const date = new Date(file.mtime).toLocaleString('zh-CN', {
+        year: 'numeric',
+        month: '2-digit',
+        day: '2-digit',
+        hour: '2-digit',
+        minute: '2-digit'
+      });
+      const currentBadge = file.isCurrent 
+        ? '<span class="badge" data-i18n="settings.logs.currentSession">当前会话</span>' 
+        : '';
       
       return `
         <div class="log-file-item ${file.isCurrent ? 'current-session' : ''}">
           <div class="log-file-info">
-            <div class="log-file-details">
-              <div class="log-file-name">
-                <i data-lucide="file-text" style="width: 14px; height: 14px;"></i>
-                ${file.name}
-                ${currentBadge}
-              </div>
-              <div class="log-file-meta">
-                <span><i data-lucide="hard-drive" style="width: 11px; height: 11px;"></i> ${size}</span>
-                <span><i data-lucide="clock" style="width: 11px; height: 11px;"></i> ${date}</span>
-              </div>
-            </div>
+            <div class="log-file-name">${file.name} ${currentBadge}</div>
+            <div class="log-file-meta">${size} • ${date}</div>
           </div>
           <button class="btn-delete-log" data-filename="${file.name}" ${file.isCurrent ? 'disabled' : ''}>
-            <i data-lucide="trash-2" style="width: 12px; height: 12px;"></i>
             <span data-i18n="settings.logs.delete">删除</span>
           </button>
         </div>
       `;
     }).join('');
-
-    // 刷新图标
-    if (window.lucide) {
-      window.lucide.createIcons();
-    }
 
     // 应用国际化翻译
     window.i18nManager.applyTranslations();

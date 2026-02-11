@@ -309,61 +309,87 @@
         <!-- 日志标签页 -->
         <div class="settings-tab-content" data-tab-content="logs">
           <div class="settings-section">
-            <h3 data-i18n="settings.logs.title">日志管理</h3>
-            <p class="settings-description" data-i18n="settings.logs.description">
-              管理应用日志记录和查看历史日志文件
-            </p>
-            
-            <!-- 日志配置 -->
+            <h3>
+              <i data-lucide="file-text" style="width: 18px; height: 18px;"></i>
+              <span data-i18n="settings.logs.title">日志</span>
+            </h3>
             <div class="setting-item">
               <label>
-                <input type="checkbox" id="setting-log-enabled">
+                <input type="checkbox" id="setting-log-enabled" checked>
                 <span data-i18n="settings.logs.enableLogging">启用日志记录</span>
               </label>
             </div>
-            
+          </div>
+          
+          <div class="settings-section">
+            <h3>
+              <i data-lucide="filter" style="width: 18px; height: 18px;"></i>
+              <span data-i18n="settings.logs.logLevels">日志等级</span>
+            </h3>
             <div class="setting-item">
-              <label data-i18n="settings.logs.logLevels">日志级别</label>
-              <div class="checkbox-group">
-                <label><input type="checkbox" id="log-level-debug" value="debug"> <span data-i18n="settings.logs.levelDebug">调试</span></label>
-                <label><input type="checkbox" id="log-level-info" value="info"> <span data-i18n="settings.logs.levelInfo">信息</span></label>
-                <label><input type="checkbox" id="log-level-warn" value="warn" checked> <span data-i18n="settings.logs.levelWarn">警告</span></label>
-                <label><input type="checkbox" id="log-level-error" value="error" checked> <span data-i18n="settings.logs.levelError">错误</span></label>
-                <label><input type="checkbox" id="log-level-critical" value="critical" checked> <span data-i18n="settings.logs.levelCritical">严重</span></label>
-              </div>
+              <label>
+                <input type="checkbox" id="log-level-debug" value="debug">
+                <span data-i18n="settings.logs.levelDebug">调试 (Debug)</span>
+              </label>
             </div>
-            
             <div class="setting-item">
-              <label for="setting-log-retention-days"><span data-i18n="settings.logs.retentionDays">日志保留天数</span></label>
+              <label>
+                <input type="checkbox" id="log-level-info" value="info">
+                <span data-i18n="settings.logs.levelInfo">信息 (Info)</span>
+              </label>
+            </div>
+            <div class="setting-item">
+              <label>
+                <input type="checkbox" id="log-level-warn" value="warn" checked>
+                <span data-i18n="settings.logs.levelWarn">警告 (Warn)</span>
+              </label>
+            </div>
+            <div class="setting-item">
+              <label>
+                <input type="checkbox" id="log-level-error" value="error" checked>
+                <span data-i18n="settings.logs.levelError">错误 (Error)</span>
+              </label>
+            </div>
+            <div class="setting-item">
+              <label>
+                <input type="checkbox" id="log-level-critical" value="critical" checked>
+                <span data-i18n="settings.logs.levelCritical">严重 (Critical)</span>
+              </label>
+            </div>
+          </div>
+          
+          <div class="settings-section">
+            <h3>
+              <i data-lucide="calendar" style="width: 18px; height: 18px;"></i>
+              <span data-i18n="settings.logs.retention">日志保留</span>
+            </h3>
+            <div class="setting-item">
+              <label for="setting-log-retention-days" data-i18n="settings.logs.retentionDays">保留天数</label>
               <input type="number" id="setting-log-retention-days" min="1" max="90" value="7">
             </div>
-            
-            <!-- 日志文件列表 -->
-            <div class="setting-item" style="margin-top: 20px;">
-              <div class="log-files-header">
-                <h4 data-i18n="settings.logs.logFiles">日志文件</h4>
-                <div class="log-files-actions">
-                  <button id="btn-refresh-logs" class="btn-small btn-secondary">
-                    <i data-lucide="refresh-cw" style="width: 14px; height: 14px;"></i>
-                    <span data-i18n="settings.logs.refresh">刷新</span>
-                  </button>
-                  <button id="btn-open-log-directory" class="btn-small btn-secondary">
-                    <i data-lucide="folder-open" style="width: 14px; height: 14px;"></i>
-                    <span data-i18n="settings.logs.openDirectory">打开目录</span>
-                  </button>
-                  <button id="btn-delete-all-logs" class="btn-small btn-danger">
-                    <i data-lucide="trash-2" style="width: 14px; height: 14px;"></i>
-                    <span data-i18n="settings.logs.deleteAll">全部删除</span>
-                  </button>
-                </div>
-              </div>
-              
-              <div id="log-files-list" class="log-files-tabs">
-                <!-- 日志文件列表将动态生成 -->
-                <div class="log-files-empty" data-i18n="settings.logs.noLogFiles">
-                  暂无日志文件
-                </div>
-              </div>
+          </div>
+          
+          <div class="settings-section">
+            <h3>
+              <i data-lucide="folder" style="width: 18px; height: 18px;"></i>
+              <span data-i18n="settings.logs.logFiles">日志文件</span>
+            </h3>
+            <div class="log-files-actions">
+              <button id="btn-refresh-logs" class="btn-small">
+                <i data-lucide="refresh-cw" style="width: 14px; height: 14px;"></i>
+                <span data-i18n="settings.logs.refresh">刷新</span>
+              </button>
+              <button id="btn-open-log-directory" class="btn-small">
+                <i data-lucide="folder-open" style="width: 14px; height: 14px;"></i>
+                <span data-i18n="settings.logs.openDirectory">打开文件夹</span>
+              </button>
+              <button id="btn-delete-all-logs" class="btn-small btn-danger">
+                <i data-lucide="trash-2" style="width: 14px; height: 14px;"></i>
+                <span data-i18n="settings.logs.deleteAll">删除全部</span>
+              </button>
+            </div>
+            <div id="log-files-list" class="log-files-list">
+              <!-- 日志文件列表将动态生成 -->
             </div>
           </div>
         </div>

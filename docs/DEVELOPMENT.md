@@ -241,6 +241,11 @@ NyaDeskPet/
 - 管理 WebSocket 连接
 - 处理配置请求和权限请求
 - 自动重连机制
+- **插件-后端通信桥接**：
+  - 自动转发插件响应到后端 Agent（`plugin_response` 消息）
+  - 处理后端的插件调用请求（`plugin_invoke` 消息）
+  - 生成唯一 requestId 关联请求和响应
+  - 支持超时控制和错误处理
 
 **插件配置管理器** (plugin-config-manager.ts)：
 - 读取和保存插件配置
@@ -379,15 +384,64 @@ plugins/
 
 3. **响应格式**：
    ```python
-   # 所有响应必须包含 requiredPermission 字段
+   # 所有响应必须包含 requiredPermission 和 requestId 字段
    return {
        "type": "plugin_response",
+       "requestId": request_id,  # 必须：用于关联请求
        "success": True,
        "action": "execute",
-       "data": {...},
+       "result": {...},
        "locale": "zh-CN",
-       "requiredPermission": "terminal.execute"  # 操作所需权限
+       "requiredPermission": "terminal.execute"
    }
+   ```
+
+**插件与后端 Agent 的通信流程**：
+
+1. **Agent 调用插件**：
+   ```
+   后端 Agent → (plugin_invoke) → 前端 BackendClient
+                                      ↓
+                                   PluginConnector
+                                      ↓
+                                   插件进程
+                                      ↓
+   后端 Agent ← (plugin_response) ← BackendClient ← PluginConnector
+   ```
+
+2. **通信细节**：
+   - Agent 发送 `plugin_invoke` 消息（包含 requestId、pluginId、action、params）
+   - 前端 BackendClient 接收后转发给 PluginConnector
+   - PluginConnector 调用对应插件并等待响应
+   - 插件返回响应后，PluginConnector 自动转发给 BackendClient
+   - BackendClient 将 `plugin_response` 发送回 Agent
+   - Agent 根据 requestId 关联请求和响应
+
+3. **错误处理**：
+   - 插件未启动：前端立即返回错误响应
+   - 插件超时：前端在超时后返回超时错误
+   - 插件执行失败：插件返回 success=false 的响应
+   - 权限被拒绝：插件请求权限失败后返回错误
+
+4. **实现示例（Agent 端）**：
+   ```python
+   # Agent 调用插件
+   request_id = str(uuid.uuid4())
+   await websocket.send(json.dumps({
+       "type": "plugin_invoke",
+       "data": {
+           "requestId": request_id,
+           "pluginId": "terminal",
+           "action": "execute",
+           "params": {"command": "ls -la"},
+           "timeout": 30000
+       }
+   }))
+   
+   # 等待响应
+   response = await wait_for_plugin_response(request_id)
+   if response["success"]:
+       result = response["result"]
    ```
 
 ### 设置管理器 (settings-manager.ts)

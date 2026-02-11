@@ -274,19 +274,111 @@ if __name__ == '__main__':
 
 ### 处理响应
 
+插件必须按照规范格式返回响应，支持多种内容类型。
+
+**基础响应格式**：
+
 ```json
 {
   "type": "plugin_response",
   "requestId": "uuid-1234",
-  "plugin": "my-plugin",
-  "action": "actionName",
   "success": true,
-  "data": {
-    "result": "success"
-  },
-  "duration": 125
+  "action": "actionName",
+  "result": {
+    "type": "data",
+    "content": {
+      "key": "value"
+    }
+  }
 }
 ```
+
+**富内容类型支持**：
+
+插件可以返回不同类型的内容，通过 `result.type` 标识：
+
+**1. 文本内容** (`"text"`)
+```json
+{
+  "result": {
+    "type": "text",
+    "content": {
+      "text": "纯文本内容",
+      "format": "plain"  // 可选: "plain", "markdown", "html"
+    }
+  }
+}
+```
+
+**2. 图片内容** (`"image"`)
+```json
+{
+  "result": {
+    "type": "image",
+    "content": {
+      "data": "base64_encoded_image_data",
+      "format": "png",  // "png", "jpeg", "gif", "webp"
+      "width": 1920,
+      "height": 1080,
+      "filename": "screenshot.png"  // 可选
+    }
+  }
+}
+```
+
+**3. 文件内容** (`"file"`)
+```json
+{
+  "result": {
+    "type": "file",
+    "content": {
+      "filename": "report.pdf",
+      "size": 102400,
+      "mimeType": "application/pdf",
+      "data": "base64_encoded_file_data",  // Base64编码的文件内容
+      "path": "/path/to/file"  // 或本地文件路径（仅限本地插件）
+    }
+  }
+}
+```
+
+**4. 结构化数据** (`"data"`)
+```json
+{
+  "result": {
+    "type": "data",
+    "content": {
+      "key1": "value1",
+      "key2": 123,
+      "nested": { "data": "here" }
+    }
+  }
+}
+```
+
+**5. 混合内容** (`"mixed"`)
+```json
+{
+  "result": {
+    "type": "mixed",
+    "content": [
+      {
+        "type": "text",
+        "content": { "text": "命令执行完成" }
+      },
+      {
+        "type": "image",
+        "content": { "data": "base64...", "format": "png", "width": 800, "height": 600 }
+      }
+    ]
+  }
+}
+```
+
+**规范要求**：
+- 所有响应必须严格遵循上述格式，`result` 必须包含 `type` 字段
+- 不支持简单对象自动包装，请明确指定内容类型
+- 不符合规范的响应将导致调用失败
 
 ## 最佳实践
 

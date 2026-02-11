@@ -300,11 +300,14 @@ class TerminalPlugin:
                 "type": "plugin_response",
                 "success": True,
                 "action": "execute",
-                "data": {
-                    "stdout": result.stdout,
-                    "stderr": result.stderr,
-                    "exitCode": result.returncode,
-                    "command": command
+                "result": {
+                    "type": "data",
+                    "content": {
+                        "stdout": result.stdout,
+                        "stderr": result.stderr,
+                        "exitCode": result.returncode,
+                        "command": command
+                    }
                 },
                 "locale": self.i18n.get_frontend_locale(),
                 "requiredPermission": "terminal.execute" if self.is_dangerous_command(command) else None
@@ -363,10 +366,13 @@ class TerminalPlugin:
             "type": "plugin_response",
             "success": True,
             "action": "createSession",
-            "data": {
-                "sessionId": session_id,
-                "shell": shell,
-                "cwd": cwd
+            "result": {
+                "type": "data",
+                "content": {
+                    "sessionId": session_id,
+                    "shell": shell,
+                    "cwd": cwd
+                }
             },
             "locale": self.i18n.get_frontend_locale(),
             "requiredPermission": "terminal.session"
@@ -388,8 +394,11 @@ class TerminalPlugin:
             "type": "plugin_response",
             "success": True,
             "action": "getSessions",
-            "data": {
-                "sessions": sessions_info
+            "result": {
+                "type": "data",
+                "content": {
+                    "sessions": sessions_info
+                }
             },
             "locale": self.i18n.get_frontend_locale()
         }
@@ -443,8 +452,11 @@ class TerminalPlugin:
             "type": "plugin_response",
             "success": True,
             "action": "closeSession",
-            "data": {
-                "sessionId": session_id
+            "result": {
+                "type": "data",
+                "content": {
+                    "sessionId": session_id
+                }
             },
             "locale": self.i18n.get_frontend_locale(),
             "requiredPermission": "terminal.session"
@@ -482,8 +494,11 @@ class TerminalPlugin:
             "type": "plugin_response",
             "success": success,
             "action": "sendInput",
-            "data": {
-                "sessionId": session_id
+            "result": {
+                "type": "data",
+                "content": {
+                    "sessionId": session_id
+                }
             },
             "locale": self.i18n.get_frontend_locale(),
             "requiredPermission": "terminal.session"
@@ -500,8 +515,11 @@ class TerminalPlugin:
                     "type": "plugin_response",
                     "success": True,
                     "action": "getCurrentDirectory",
-                    "data": {
-                        "cwd": session.cwd
+                    "result": {
+                        "type": "data",
+                        "content": {
+                            "cwd": session.cwd
+                        }
                     },
                     "locale": self.i18n.get_frontend_locale()
                 }
@@ -510,8 +528,11 @@ class TerminalPlugin:
             "type": "plugin_response",
             "success": True,
             "action": "getCurrentDirectory",
-            "data": {
-                "cwd": os.getcwd()
+            "result": {
+                "type": "data",
+                "content": {
+                    "cwd": os.getcwd()
+                }
             },
             "locale": self.i18n.get_frontend_locale()
         }

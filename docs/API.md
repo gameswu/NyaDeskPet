@@ -142,6 +142,149 @@
 - 前端限制：支持100MB以内的文件上传
 - 后端应根据fileType判断文件类型并进行相应处理
 - 建议：对于大文件，后端应考虑异步处理以避免超时
+**插件响应转发**
+
+前端将插件的响应转发给后端 Agent：
+```json
+{
+  "type": "plugin_response",
+  "data": {
+    "pluginId": "terminal",
+    "requestId": "uuid-here",
+    "success": true,
+    "action": "execute",
+    "result": {
+      "type": "text",
+      "content": {
+        "output": "命令执行结果",
+        "exitCode": 0
+      }
+    },
+    "error": null,
+    "timestamp": 1234567890
+  }
+}
+```
+
+**插件响应转发说明**：
+- `pluginId`: 响应来源的插件 ID
+- `requestId`: 对应的请求 ID，用于匹配请求和响应
+- `success`: 操作是否成功
+- `action`: 执行的操作类型
+- `result`: 操作结果数据（支持富内容类型）
+- `error`: 错误信息（成功时为 null）
+- 前端接收到插件响应后，自动转发给后端 Agent
+- Agent 可根据 requestId 关联之前发出的请求
+
+**富内容类型支持**：
+
+插件可以返回多种类型的内容，通过 `result.type` 字段标识：
+
+1. **文本类型** (`"text"`)：
+```json
+{
+  "result": {
+    "type": "text",
+    "content": {
+      "text": "纯文本内容",
+      "format": "plain"  // 可选: "plain", "markdown", "html"
+    }
+  }
+}
+```
+
+2. **图片类型** (`"image"`)：
+```json
+{
+  "result": {
+    "type": "image",
+    "content": {
+      "data": "base64_encoded_image_data",
+      "format": "png",  // "png", "jpeg", "gif", "webp"
+      "width": 1920,
+      "height": 1080,
+      "filename": "screenshot.png"  // 可选
+    }
+  }
+}
+```
+
+3. **文件类型** (`"file"`)：
+```json
+{
+  "result": {
+    "type": "file",
+    "content": {
+      "filename": "report.pdf",
+      "size": 102400,
+      "mimeType": "application/pdf",
+      "data": "base64_encoded_file_data",  // Base64编码的文件内容
+      "path": "/path/to/file"  // 或本地文件路径（仅限本地插件）
+    }
+  }
+}
+```
+
+4. **结构化数据** (`"data"`)：
+```json
+{
+  "result": {
+    "type": "data",
+    "content": {
+      "key1": "value1",
+      "key2": 123,
+      "nested": { "data": "here" }
+    }
+  }
+}
+```
+
+5. **多内容混合** (`"mixed"`)：
+```json
+{
+  "result": {
+    "type": "mixed",
+    "content": [
+      {
+        "type": "text",
+        "content": { "text": "命令执行完成" }
+      },
+      {
+        "type": "image",
+        "content": { "data": "base64...", "format": "png" }
+      }
+    ]
+  }
+}
+```
+
+**规范要求**：
+- 所有插件响应必须严格遵循上述格式，`result` 必须包含 `type` 字段
+- 前端不会自动包装响应格式，请插件开发者确保返回标准格式
+- 不符合规范的响应将被视为错误
+
+**错误响应**：
+
+当操作失败时，插件应返回错误响应：
+```json
+{
+  "type": "plugin_response",
+  "data": {
+    "pluginId": "terminal",
+    "requestId": "uuid-here",
+    "success": false,
+    "action": "execute",
+    "error": "命令执行失败：权限不足",
+    "timestamp": 1234567890
+  }
+}
+```
+
+错误响应说明：
+- `success` 必须为 `false`
+- `error` 包含错误信息字符串
+- 不包含 `result` 字段
+- 可选字段如 `errorKey`（用于国际化）、`requiredPermission`（权限相关错误）
 
 ### 后端 → 前端消息
 
@@ -225,6 +368,42 @@
 - **百分比数值**：0-100 的数字，表示音频进度百分比
 
 前端根据 `totalDuration` 自动计算具体触发时间。
+
+**插件调用请求**
+
+后端 Agent 请求前端调用插件功能：
+```json
+{
+  "type": "plugin_invoke",
+  "data": {
+    "requestId": "uuid-here",
+    "pluginId": "terminal",
+    "action": "execute",
+    "params": {
+      "command": "ls -la",
+      "cwd": "/home/user"
+    },
+    "timeout": 30000
+  }
+}
+```
+
+**插件调用说明**：
+- `requestId`: 唯一请求 ID，用于匹配响应
+- `pluginId`: 目标插件的 ID
+- `action`: 要执行的操作
+- `params`: 操作参数（根据插件和操作类型而定）
+- `timeout`: 超时时间（毫秒），可选
+- 前端收到后会调用对应插件，并将结果通过 `plugin_response` 返回
+- 如果插件未启动或未连接，前端返回错误响应
+- 如果操作超时，前端返回超时错误
+
+**插件调用流程**：
+1. Agent 发送 `plugin_invoke` 消息
+2. 前端检查插件状态并调用
+3. 插件处理请求并返回结果
+4. 前端将结果通过 `plugin_response` 转发给 Agent
+5. Agent 接收响应并继续处理
 
 **Live2D 控制**
 

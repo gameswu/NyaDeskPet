@@ -261,11 +261,15 @@ class UIAutomationPlugin:
                 "type": "plugin_response",
                 "success": True,
                 "action": "captureScreen",
-                "data": {
-                    "image": img_base64,
-                    "format": format_type,
-                    "width": screenshot.width,
-                    "height": screenshot.height
+                "result": {
+                    "type": "image",
+                    "content": {
+                        "data": img_base64,
+                        "format": format_type.lower(),
+                        "width": screenshot.width,
+                        "height": screenshot.height,
+                        "filename": f"screenshot_{int(asyncio.get_event_loop().time())}.{format_type.lower()}"
+                    }
                 },
                 "locale": self.i18n.get_frontend_locale(),
                 "requiredPermission": "ui-automation.screen"
@@ -305,11 +309,14 @@ class UIAutomationPlugin:
             "type": "plugin_response",
             "success": True,
             "action": "mouseClick",
-            "data": {
-                "x": x,
-                "y": y,
-                "button": button,
-                "clicks": clicks
+            "result": {
+                "type": "data",
+                "content": {
+                    "x": x,
+                    "y": y,
+                    "button": button,
+                    "clicks": clicks
+                }
             },
             "locale": self.i18n.get_frontend_locale(),
             "requiredPermission": "ui-automation.mouse"
@@ -355,10 +362,13 @@ class UIAutomationPlugin:
             "type": "plugin_response",
             "success": True,
             "action": "mouseMove",
-            "data": {
-                "x": x,
-                "y": y,
-                "duration": duration
+            "result": {
+                "type": "data",
+                "content": {
+                    "x": x,
+                    "y": y,
+                    "duration": duration
+                }
             },
             "locale": self.i18n.get_frontend_locale(),
             "requiredPermission": "ui-automation.mouse"
@@ -408,12 +418,15 @@ class UIAutomationPlugin:
             "type": "plugin_response",
             "success": True,
             "action": "mouseDrag",
-            "data": {
-                "x": x,
-                "y": y,
-                "endX": end_x,
-                "endY": end_y,
-                "button": button
+            "result": {
+                "type": "data",
+                "content": {
+                    "x": x,
+                    "y": y,
+                    "endX": end_x,
+                    "endY": end_y,
+                    "button": button
+                }
             },
             "locale": self.i18n.get_frontend_locale()
         }
@@ -426,9 +439,12 @@ class UIAutomationPlugin:
             "type": "plugin_response",
             "success": True,
             "action": "getMousePosition",
-            "data": {
-                "x": position.x,
-                "y": position.y
+            "result": {
+                "type": "data",
+                "content": {
+                    "x": position.x,
+                    "y": position.y
+                }
             },
             "locale": self.i18n.get_frontend_locale()
         }
@@ -471,9 +487,12 @@ class UIAutomationPlugin:
             "type": "plugin_response",
             "success": True,
             "action": "keyboardType",
-            "data": {
-                "text": text,
-                "interval": interval
+            "result": {
+                "type": "data",
+                "content": {
+                    "text": text,
+                    "interval": interval
+                }
             },
             "locale": self.i18n.get_frontend_locale()
         }
@@ -498,9 +517,12 @@ class UIAutomationPlugin:
             "type": "plugin_response",
             "success": True,
             "action": "keyboardPress",
-            "data": {
-                "key": key,
-                "presses": presses
+            "result": {
+                "type": "data",
+                "content": {
+                    "key": key,
+                    "presses": presses
+                }
             },
             "locale": self.i18n.get_frontend_locale()
         }
@@ -532,8 +554,11 @@ class UIAutomationPlugin:
             "type": "plugin_response",
             "success": True,
             "action": "mouseScroll",
-            "data": {
-                "clicks": clicks
+            "result": {
+                "type": "data",
+                "content": {
+                    "clicks": clicks
+                }
             },
             "locale": self.i18n.get_frontend_locale()
         }
@@ -546,9 +571,12 @@ class UIAutomationPlugin:
             "type": "plugin_response",
             "success": True,
             "action": "getScreenSize",
-            "data": {
-                "width": size.width,
-                "height": size.height
+            "result": {
+                "type": "data",
+                "content": {
+                    "width": size.width,
+                    "height": size.height
+                }
             },
             "locale": self.i18n.get_frontend_locale()
         }
@@ -562,8 +590,11 @@ class UIAutomationPlugin:
             "type": "plugin_response",
             "success": True,
             "action": "setMouseSpeed",
-            "data": {
-                "speed": speed
+            "result": {
+                "type": "data",
+                "content": {
+                    "speed": speed
+                }
             },
             "locale": self.i18n.get_frontend_locale()
         }

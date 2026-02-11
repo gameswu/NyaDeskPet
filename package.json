@@ -1,6 +1,6 @@
 {
   "name": "nya-desk-pet",
-  "version": "1.0.0-beta-2602111353",
+  "version": "1.0.0-beta-2602111859",
   "description": "跨平台 Live2D 桌面宠物应用",
   "main": "dist/main.js",
   "scripts": {

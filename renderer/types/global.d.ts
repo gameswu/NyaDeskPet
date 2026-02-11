@@ -237,6 +237,74 @@ export interface FileUploadData {
   timestamp: number;
 }
 
+// 插件调用数据类型
+export interface PluginInvokeData {
+  requestId: string;
+  pluginId: string;
+  action: string;
+  params: Record<string, unknown>;
+  timeout?: number;
+}
+
+// 插件富内容类型
+export interface PluginTextContent {
+  type: 'text';
+  content: {
+    text: string;
+    format?: 'plain' | 'markdown' | 'html';
+  };
+}
+
+export interface PluginImageContent {
+  type: 'image';
+  content: {
+    data: string; // Base64编码
+    format: 'png' | 'jpeg' | 'gif' | 'webp';
+    width: number;
+    height: number;
+    filename?: string;
+  };
+}
+
+export interface PluginFileContent {
+  type: 'file';
+  content: {
+    filename: string;
+    size: number;
+    mimeType: string;
+    data?: string; // Base64编码的文件内容
+    path?: string; // 本地文件路径
+  };
+}
+
+export interface PluginDataContent {
+  type: 'data';
+  content: Record<string, unknown>;
+}
+
+export interface PluginMixedContent {
+  type: 'mixed';
+  content: Array<PluginTextContent | PluginImageContent | PluginFileContent | PluginDataContent>;
+}
+
+export type PluginResultContent = 
+  | PluginTextContent 
+  | PluginImageContent 
+  | PluginFileContent 
+  | PluginDataContent 
+  | PluginMixedContent;
+
+// 插件响应数据类型
+export interface PluginResponseData {
+  pluginId: string;
+  requestId: string;
+  success: boolean;
+  action: string;
+  result?: PluginResultContent; // 必须使用标准富内容格式
+  error?: string;
+  timestamp: number;
+}
+
 // Tap配置记录类型
 export interface TapConfigRecord {
   [modelPath: string]: TapConfig;
@@ -381,6 +449,7 @@ export interface PluginConnector {
   getPlugins(): PluginInfo[];
   getPlugin(name: string): PluginInfo | undefined;
   getPluginI18n(name: string): { displayName: string; description: string; category: string } | null;
+  handlePluginInvoke(data: PluginInvokeData): Promise<void>;
   connectAll(): Promise<void>;
   disconnectAll(): void;
 }
@@ -425,8 +494,8 @@ export interface BackendConfig {
 }
 
 export interface BackendMessage {
-  type: 'dialogue' | 'live2d' | 'system' | 'user_input' | 'interaction' | 'model_info' | 'tap_event' | 'sync_command' | 'character_info' | 'audio_stream_start' | 'audio_chunk' | 'audio_stream_end' | 'file_upload';
-  data?: DialogueData | Live2DCommandData | AudioStreamStartData | AudioChunkData | AudioStreamEndData | SyncCommandData | ModelInfo | CharacterInfo | FileUploadData | unknown;
+  type: 'dialogue' | 'live2d' | 'system' | 'user_input' | 'interaction' | 'model_info' | 'tap_event' | 'sync_command' | 'character_info' | 'audio_stream_start' | 'audio_chunk' | 'audio_stream_end' | 'file_upload' | 'plugin_invoke' | 'plugin_response';
+  data?: DialogueData | Live2DCommandData | AudioStreamStartData | AudioChunkData | AudioStreamEndData | SyncCommandData | ModelInfo | CharacterInfo | FileUploadData | PluginInvokeData | PluginResponseData | unknown;
   text?: string;
   timestamp?: number;
   action?: string;

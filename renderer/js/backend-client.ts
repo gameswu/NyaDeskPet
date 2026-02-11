@@ -140,6 +140,9 @@ class BackendClient implements IBackendClient {
         case 'system':
           this.handleSystemMessage(message.data);
           break;
+        case 'plugin_invoke':
+          this.handlePluginInvoke(message.data as import('../types/global').PluginInvokeData);
+          break;
         default:
           window.logger.warn('未知消息类型:', message.type);
       }
@@ -410,6 +413,36 @@ class BackendClient implements IBackendClient {
       data: characterInfo
     }).catch(err => {
       window.logger.error('发送角色信息失败:', err);
+    });
+  }
+
+  /**
+   * 处理后端的插件调用请求
+   */
+  private handlePluginInvoke(data: import('../types/global').PluginInvokeData): void {
+    if (!window.pluginConnector) {
+      window.logger.error('[Backend] 插件连接器未初始化');
+      
+      // 发送错误响应
+      this.sendMessage({
+        type: 'plugin_response',
+        data: {
+          pluginId: data.pluginId,
+          requestId: data.requestId,
+          success: false,
+          action: data.action,
+          error: '插件系统未初始化',
+          timestamp: Date.now()
+        }
+      }).catch(err => {
+        window.logger.error('[Backend] 发送插件错误响应失败:', err);
+      });
+      return;
+    }
+
+    // 转发给插件连接器处理
+    window.pluginConnector.handlePluginInvoke(data).catch(err => {
+      window.logger.error('[Backend] 处理插件调用失败:', err);
     });
   }
 

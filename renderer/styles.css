@@ -855,6 +855,16 @@ body {
   color: #333;
 }
 
+/* 插件面板关闭按钮 */
+.plugins-header .btn-icon {
+  color: #999;
+}
+
+.plugins-header .btn-icon:hover {
+  background: #f0f0f0;
+  color: #333;
+}
+
 /* 设置标签页 */
 .settings-tabs {
   display: flex;
@@ -1422,6 +1432,16 @@ body.dark-theme {
 
 .dark-theme .btn-icon:hover {
   background: rgba(255, 255, 255, 0.1);
+}
+
+/* 插件面板关闭按钮 - 暗黑主题 */
+.dark-theme .plugins-header .btn-icon {
+  color: #e0e0e0;
+}
+
+.dark-theme .plugins-header .btn-icon:hover {
+  background: rgba(255, 255, 255, 0.1);
+  color: #ffffff;
 }
 
 /* 设置面板 - 暗黑主题 */
@@ -2528,178 +2548,737 @@ body.dark-theme {
   color: #999;
 }
 
-/* 日志管理样式 */
-.checkbox-group {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-  margin-top: 8px;
+/* 暗色主题 - 日志管理 */
+.dark-theme .log-config-card,
+.dark-theme .log-files-card {
+  background: #2a2a2a;
+  border-color: #444;
 }
 
-.checkbox-group label {
+.dark-theme .log-card-header {
+  background: linear-gradient(135deg, #2a2a2a 0%, #252525 100%);
+  border-bottom-color: #444;
+}
+
+.dark-theme .log-card-title h4 {
+  color: #d4d4d4;
+}
+
+.dark-theme .log-card-subtitle {
+  color: #999;
+}
+
+.dark-theme .setting-row {
+  border-bottom-color: #333;
+}
+
+.dark-theme .setting-row-header {
+  color: #d4d4d4;
+}
+
+.dark-theme .toggle-info {
+  color: #d4d4d4;
+}
+
+.dark-theme .toggle-slider {
+  background: #3a3a3a;
+}
+
+.dark-theme .log-level-chip .chip-content {
+  background: #2a2a2a;
+  border-color: #444;
+  color: #999;
+}
+
+.dark-theme .log-level-chip:hover .chip-content {
+  background: #333;
+  border-color: #555;
+}
+
+.dark-theme .log-level-chip input:checked + .chip-content {
+  background: rgba(102, 126, 234, 0.2);
+  border-color: #667eea;
+  color: #8b9cf9;
+}
+
+.dark-theme .retention-input {
+  background: #2a2a2a;
+  border-color: #444;
+  color: #d4d4d4;
+}
+
+.dark-theme .retention-input:focus {
+  border-color: #667eea;
+  background: #2f2f2f;
+}
+
+.dark-theme .btn-icon-action {
+  background: #2a2a2a;
+  border-color: #444;
+  color: #999;
+}
+
+.dark-theme .btn-icon-action:hover {
+  background: #333;
+  border-color: #667eea;
+  color: #8b9cf9;
+}
+
+.dark-theme .log-files-grid::-webkit-scrollbar-track {
+  background: #2a2a2a;
+}
+
+.dark-theme .log-files-grid::-webkit-scrollbar-thumb {
+  background: #444;
+}
+
+.dark-theme .log-files-grid::-webkit-scrollbar-thumb:hover {
+  background: #555;
+}
+
+.dark-theme .log-files-empty {
+  color: #666;
+}
+
+.dark-theme .log-files-empty i {
+  color: #444;
+}
+
+.dark-theme .log-file-item {
+  background: #2a2a2a;
+  border-color: #444;
+}
+
+.dark-theme .log-file-item:hover {
+  border-color: #667eea;
+  background: #2f2f2f;
+}
+
+.dark-theme .log-file-item.current-session {
+  border-color: #10b981;
+  background: linear-gradient(135deg, rgba(16, 185, 129, 0.1) 0%, #2a2a2a 100%);
+}
+
+.dark-theme .log-file-name {
+  color: #d4d4d4;
+}
+
+.dark-theme .log-file-meta {
+  color: #999;
+}
+
+.dark-theme .btn-delete-log {
+  background: rgba(220, 53, 69, 0.15);
+  border-color: rgba(220, 53, 69, 0.3);
+  color: #ff6b7a;
+}
+
+.dark-theme .btn-delete-log:hover:not(:disabled) {
+  background: #dc3545;
+  border-color: #dc3545;
+  color: white;
+}
+
+.dark-theme .btn-delete-log:disabled {
+  background: #2a2a2a;
+  border-color: #444;
+  color: #666;
+}
+
+/* 日志管理样式 - 现代化设计 */
+
+/* 日志配置卡片 */
+.log-config-card,
+.log-files-card {
+  background: white;
+  border: 1px solid #e5e7eb;
+  border-radius: 12px;
+  overflow: hidden;
+  margin-bottom: 20px;
+  transition: all 0.3s ease;
+}
+
+.log-config-card:hover,
+.log-files-card:hover {
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
+}
+
+/* 卡片头部 */
+.log-card-header {
   display: flex;
   align-items: center;
-  gap: 8px;
-  font-size: 14px;
+  gap: 12px;
+  padding: 20px;
+  background: linear-gradient(135deg, #f8f9fa 0%, #ffffff 100%);
+  border-bottom: 1px solid #e5e7eb;
 }
 
-.log-files-header {
+.log-card-icon {
+  width: 44px;
+  height: 44px;
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  border-radius: 10px;
   display: flex;
-  justify-content: space-between;
   align-items: center;
-  margin-bottom: 15px;
+  justify-content: center;
+  color: white;
+  flex-shrink: 0;
 }
 
-.log-files-header h4 {
-  margin: 0;
-  font-size: 14px;
+.log-card-title {
+  flex: 1;
+  min-width: 0;
+}
+
+.log-card-title h4 {
+  margin: 0 0 4px 0;
+  font-size: 16px;
   font-weight: 600;
-  color: #333;
+  color: #1f2937;
 }
 
+.log-card-subtitle {
+  display: block;
+  font-size: 13px;
+  color: #6b7280;
+}
+
+/* 卡片主体 */
+.log-card-body {
+  padding: 20px;
+}
+
+/* 设置行 */
+.setting-row {
+  padding: 16px 0;
+  border-bottom: 1px solid #f3f4f6;
+}
+
+.setting-row:last-child {
+  border-bottom: none;
+  padding-bottom: 0;
+}
+
+.setting-row-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 12px;
+  font-size: 14px;
+  font-weight: 500;
+  color: #374151;
+}
+
+.setting-row-header i {
+  color: #667eea;
+}
+
+/* 开关样式 */
+.toggle-label {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  cursor: pointer;
+  user-select: none;
+}
+
+.toggle-info {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 14px;
+  font-weight: 500;
+  color: #374151;
+}
+
+.toggle-info i {
+  color: #667eea;
+}
+
+.toggle-input {
+  display: none;
+}
+
+.toggle-slider {
+  position: relative;
+  width: 44px;
+  height: 24px;
+  background: #d1d5db;
+  border-radius: 24px;
+  transition: background 0.3s;
+}
+
+.toggle-slider:before {
+  content: '';
+  position: absolute;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: white;
+  top: 3px;
+  left: 3px;
+  transition: transform 0.3s;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+}
+
+.toggle-input:checked + .toggle-slider {
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+}
+
+.toggle-input:checked + .toggle-slider:before {
+  transform: translateX(20px);
+}
+
+/* 日志级别网格 */
+.log-levels-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
+  gap: 10px;
+}
+
+.log-level-chip {
+  position: relative;
+  cursor: pointer;
+}
+
+.log-level-chip input {
+  position: absolute;
+  opacity: 0;
+  pointer-events: none;
+}
+
+.log-level-chip .chip-content {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 10px 14px;
+  background: #f3f4f6;
+  border: 2px solid #e5e7eb;
+  border-radius: 8px;
+  font-size: 13px;
+  font-weight: 500;
+  color: #6b7280;
+  transition: all 0.2s;
+}
+
+.log-level-chip:hover .chip-content {
+  background: #e5e7eb;
+  border-color: #d1d5db;
+}
+
+.log-level-chip input:checked + .chip-content {
+  background: linear-gradient(135deg, rgba(102, 126, 234, 0.1) 0%, rgba(118, 75, 162, 0.1) 100%);
+  border-color: #667eea;
+  color: #667eea;
+}
+
+.log-level-chip input:checked + .chip-content i {
+  color: #667eea;
+}
+
+/* 保留天数输入 */
+.retention-input {
+  width: 100%;
+  padding: 10px 14px;
+  border: 2px solid #e5e7eb;
+  border-radius: 8px;
+  font-size: 14px;
+  transition: all 0.2s;
+}
+
+.retention-input:focus {
+  outline: none;
+  border-color: #667eea;
+  box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+}
+
+/* 日志文件操作按钮 */
 .log-files-actions {
   display: flex;
   gap: 8px;
+  margin-bottom: 15px;
 }
 
+.btn-small {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 14px;
+  background: #f8f9fa;
+  border: 1px solid #ddd;
+  border-radius: 6px;
+  color: #666;
+  font-size: 13px;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.btn-small:hover {
+  background: #e9ecef;
+  border-color: #4CAF50;
+  color: #4CAF50;
+}
+
+.btn-small.btn-danger {
+  color: #dc3545;
+}
+
+.btn-small.btn-danger:hover {
+  background: #fff5f5;
+  border-color: #dc3545;
+  color: #dc3545;
+}
+
+/* 日志文件列表 */
 .log-files-list {
-  display: flex;
-  flex-direction: row;
-  gap: 12px;
-  max-height: none;
-  overflow-x: auto;
-  overflow-y: hidden;
-  padding: 10px 0;
-  scrollbar-width: thin;
-  scrollbar-color: #ccc transparent;
+  max-height: 300px;
+  overflow-y: auto;
+  border: 1px solid #ddd;
+  border-radius: 6px;
+  background: #fafafa;
 }
 
 .log-files-list::-webkit-scrollbar {
-  height: 6px;
+  width: 8px;
 }
 
 .log-files-list::-webkit-scrollbar-track {
-  background: transparent;
+  background: #f1f1f1;
+  border-radius: 4px;
 }
 
 .log-files-list::-webkit-scrollbar-thumb {
   background: #ccc;
-  border-radius: 3px;
+  border-radius: 4px;
 }
 
 .log-files-list::-webkit-scrollbar-thumb:hover {
   background: #999;
 }
 
-.log-files-empty {
-  flex: 1;
-  text-align: center;
-  color: #999;
-  padding: 40px 20px;
-  font-size: 14px;
-  border: 1px dashed #e0e0e0;
-  border-radius: 4px;
-}
-
 .log-file-item {
-  flex: 0 0 auto;
   display: flex;
-  flex-direction: column;
-  padding: 14px 16px;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 15px;
+  border-bottom: 1px solid #e5e7eb;
   background: white;
-  border: 1px solid #e0e0e0;
-  border-radius: 8px;
-  min-width: 220px;
-  max-width: 260px;
-  transition: all 0.2s;
-  cursor: default;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
+  transition: background-color 0.2s;
 }
 
-.log-file-item.current-session {
-  border-color: #4CAF50;
-  background: linear-gradient(135deg, #f8fff8 0%, #ffffff 100%);
-  box-shadow: 0 2px 8px rgba(76, 175, 80, 0.2);
+.log-file-item:last-child {
+  border-bottom: none;
 }
 
 .log-file-item:hover {
-  border-color: #4CAF50;
-  box-shadow: 0 4px 12px rgba(76, 175, 80, 0.2);
-  transform: translateY(-2px);
+  background: #f8f9fa;
 }
 
-.log-file-current-badge {
-  display: inline-block;
-  background: #4CAF50;
-  color: white;
-  font-size: 10px;
-  padding: 2px 8px;
-  border-radius: 10px;
-  margin-left: 8px;
-  font-weight: 500;
-  vertical-align: middle;
+.log-file-item.current-session {
+  background: #f0f9ff;
+  border-left: 3px solid #4CAF50;
 }
 
 .log-file-info {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
   flex: 1;
-  margin-bottom: 10px;
-}
-
-.log-file-details {
-  flex: 1;
+  min-width: 0;
 }
 
 .log-file-name {
   font-size: 13px;
-  color: #333;
   font-weight: 500;
+  color: #333;
   margin-bottom: 4px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.log-file-name .badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  padding: 2px 8px;
+  background: #4CAF50;
+  color: white;
+  border-radius: 3px;
+  font-size: 11px;
+  font-weight: 600;
 }
 
 .log-file-meta {
-  font-size: 11px;
-  color: #666;
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
+  font-size: 12px;
+  color: #999;
 }
 
 .btn-delete-log {
-  background: #f44336;
-  border: none;
-  color: white;
-  cursor: pointer;
-  padding: 8px 12px;
+  padding: 6px 12px;
+  background: white;
+  border: 1px solid #ddd;
   border-radius: 4px;
+  color: #dc3545;
+  font-size: 12px;
+  cursor: pointer;
   transition: all 0.2s;
-  font-size: 11px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 4px;
 }
 
 .btn-delete-log:hover:not(:disabled) {
-  background: #d32f2f;
-  transform: scale(1.05);
+  background: #dc3545;
+  border-color: #dc3545;
+  color: white;
 }
 
 .btn-delete-log:disabled {
-  background: #ccc;
+  color: #ccc;
   cursor: not-allowed;
-  opacity: 0.6;
+  opacity: 0.5;
 }
 
-.btn-danger {
-  background: #dc3545;
+.log-files-empty {
+  padding: 40px 20px;
+  text-align: center;
+  color: #999;
+  font-size: 14px;
+}
+
+/* 旧的卡片样式 - 移除或注释掉 */
+  width: 36px;
+  height: 36px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: white;
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+  color: #6b7280;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.btn-icon-action:hover {
+  background: #f3f4f6;
+  border-color: #667eea;
+  color: #667eea;
+  transform: translateY(-1px);
+  box-shadow: 0 2px 6px rgba(102, 126, 234, 0.2);
+}
+
+.btn-icon-action.danger:hover {
+  border-color: #dc3545;
+  color: #dc3545;
+  box-shadow: 0 2px 6px rgba(220, 53, 69, 0.2);
+}
+
+/* 日志文件网格 */
+.log-files-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+  gap: 16px;
+  padding: 20px;
+  max-height: 400px;
+  overflow-y: auto;
+}
+
+.log-files-grid::-webkit-scrollbar {
+  width: 6px;
+}
+
+.log-files-grid::-webkit-scrollbar-track {
+  background: #f3f4f6;
+  border-radius: 3px;
+}
+
+.log-files-grid::-webkit-scrollbar-thumb {
+  background: #d1d5db;
+  border-radius: 3px;
+}
+
+.log-files-grid::-webkit-scrollbar-thumb:hover {
+  background: #9ca3af;
+}
+
+/* 空状态 */
+.log-files-empty {
+  grid-column: 1 / -1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 60px 20px;
+  color: #9ca3af;
+  font-size: 14px;
+}
+
+.log-files-empty i {
+  color: #d1d5db;
+}
+
+.log-files-empty p {
+  margin: 0;
+  font-weight: 500;
+}
+
+/* 日志文件项 */
+.log-file-item {
+  background: white;
+  border: 2px solid #e5e7eb;
+  border-radius: 10px;
+  padding: 16px;
+  transition: all 0.2s;
+  cursor: default;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.log-file-item:hover {
+  border-color: #667eea;
+  box-shadow: 0 4px 12px rgba(102, 126, 234, 0.15);
+  transform: translateY(-2px);
+}
+
+.log-file-item.current-session {
+  border-color: #10b981;
+  background: linear-gradient(135deg, rgba(16, 185, 129, 0.05) 0%, #ffffff 100%);
+}
+
+.log-file-item.current-session:hover {
+  border-color: #10b981;
+  box-shadow: 0 4px 12px rgba(16, 185, 129, 0.2);
+}
+
+/* 日志文件头部 */
+.log-file-header {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.log-file-icon {
+  width: 36px;
+  height: 36px;
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  border-radius: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
   color: white;
+  flex-shrink: 0;
+}
+
+.log-file-item.current-session .log-file-icon {
+  background: linear-gradient(135deg, #10b981 0%, #059669 100%);
+}
+
+.log-file-name {
+  flex: 1;
+  font-size: 13px;
+  font-weight: 600;
+  color: #1f2937;
+  word-break: break-all;
+}
+
+.log-file-current-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  background: #10b981;
+  color: white;
+  font-size: 10px;
+  padding: 3px 8px;
+  border-radius: 12px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+/* 日志文件信息 */
+.log-file-info {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.log-file-meta {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  color: #6b7280;
+}
+
+.log-file-meta i {
+  width: 14px;
+  height: 14px;
+  color: #9ca3af;
+}
+
+/* 删除按钮 */
+.btn-delete-log {
+  width: 100%;
+  padding: 8px;
+  background: #fee;
+  border: 1px solid #fcc;
+  border-radius: 6px;
+  color: #dc3545;
+  font-size: 12px;
+  font-weight: 500;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  transition: all 0.2s;
+}
+
+.btn-delete-log:hover:not(:disabled) {
+  background: #dc3545;
+  border-color: #dc3545;
+  color: white;
+  transform: scale(1.02);
+}
+
+.btn-delete-log:disabled {
+  background: #f3f4f6;
+  border-color: #e5e7eb;
+  color: #9ca3af;
+  cursor: not-allowed;
 }
 
 .btn-danger:hover {
   background: #c82333;
+}
+
+/* 暗色主题 - 日志相关 */
+.dark-theme .btn-small {
+  background: #3a3a3a;
+  border-color: #555;
+  color: #ccc;
+}
+
+.dark-theme .btn-small:hover {
+  background: #454545;
+  border-color: #4CAF50;
+  color: #4CAF50;
+}
+
+.dark-theme .btn-small.btn-danger {
+  color: #ff6b6b;
+}
+
+.dark-theme .btn-small.btn-danger:hover {
+  background: #3a2020;
+  border-color: #ff6b6b;
+}
+
+.dark-theme .log-files-list {
+  background: #2a2a2a;
+  border-color: #424242;
+}
+
+.dark-theme .log-files-list::-webkit-scrollbar-track {
+  background: #2a2a2a;
 }
 
 .dark-theme .log-files-list::-webkit-scrollbar-thumb {
@@ -2710,36 +3289,52 @@ body.dark-theme {
   background: #777;
 }
 
-.dark-theme .log-files-empty {
-  border-color: #424242;
-  color: #888;
-}
-
-.dark-theme .log-files-header h4 {
-  color: #d4d4d4;
-}
-
 .dark-theme .log-file-item {
-  background: #2a2a2a;
-  border-color: #424242;
-}
-
-.dark-theme .log-file-item.current-session {
-  border-color: #4CAF50;
-  background: linear-gradient(135deg, #1a2a1a 0%, #2a2a2a 100%);
+  background: #333;
+  border-color: #444;
 }
 
 .dark-theme .log-file-item:hover {
-  background: #2f2f2f;
-  border-color: #4CAF50;
+  background: #3a3a3a;
+}
+
+.dark-theme .log-file-item.current-session {
+  background: #1a2a1a;
+  border-left-color: #4CAF50;
 }
 
 .dark-theme .log-file-name {
-  color: #d4d4d4;
+  color: #e0e0e0;
+}
+
+.dark-theme .log-file-name .badge {
+  background: #4CAF50;
 }
 
 .dark-theme .log-file-meta {
   color: #999;
+}
+
+.dark-theme .btn-delete-log {
+  background: #3a2020;
+  border-color: #553030;
+  color: #ff6b6b;
+}
+
+.dark-theme .btn-delete-log:hover:not(:disabled) {
+  background: #d32f2f;
+  border-color: #d32f2f;
+  color: white;
+}
+
+.dark-theme .btn-delete-log:disabled {
+  background: #333;
+  border-color: #444;
+  color: #666;
+}
+
+.dark-theme .log-files-empty {
+  color: #888;
 }
 
 /* ============ 插件配置对话框 ============ */

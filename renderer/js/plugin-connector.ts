@@ -361,6 +361,11 @@ class PluginConnector {
       // 处理其他响应
       window.logger?.debug('插件系统：收到消息', { name, type: message.type });
       
+      // 自动转发插件响应到后端 Agent
+      if (message.type === 'plugin_response' && message.requestId) {
+        this.forwardPluginResponseToBackend(name, message);
+      }
+      
       // 触发自定义事件，让其他模块处理
       const event = new CustomEvent('plugin-message', {
         detail: { plugin: name, message }
@@ -397,23 +402,32 @@ class PluginConnector {
     }
 
     return new Promise((resolve, reject) => {
+      const requestId = this.generateRequestId();
       const message = {
+        requestId,
         action,
         params
       };
 
       // 设置超时
       const timeout = setTimeout(() => {
+        document.removeEventListener('plugin-message', handler);
         reject(new Error(`插件 ${name} 调用超时`));
-      }, 30000);
+      }, params.timeout as number || 30000);
 
       // 监听响应
       const handler = (event: Event) => {
         const customEvent = event as CustomEvent;
-        if (customEvent.detail.plugin === name) {
+        if (customEvent.detail.plugin === name && customEvent.detail.message.requestId === requestId) {
           clearTimeout(timeout);
           document.removeEventListener('plugin-message', handler);
-          resolve(customEvent.detail.message);
+          
+          const response = customEvent.detail.message;
+          if (response.success) {
+            resolve(response.result || response.data);
+          } else {
+            reject(new Error(response.error || '插件调用失败'));
+          }
         }
       };
 
@@ -423,6 +437,96 @@ class PluginConnector {
       plugin.ws!.send(JSON.stringify(message));
       window.logger.info(`📤 调用插件 ${name}.${action}:`, params);
     });
+  }
+
+  /**
+   * 生成请求ID
+   */
+  private generateRequestId(): string {
+    return `${Date.now()}-${Math.random().toString(36).substring(2, 9)}`;
+  }
+
+  /**
+   * 转发插件响应到后端 Agent
+   */
+  private forwardPluginResponseToBackend(pluginName: string, message: any): void {
+    if (!window.backendClient) {
+      window.logger?.warn('插件系统：后端客户端未初始化，无法转发插件响应');
+      return;
+    }
+
+    // 验证响应格式（成功的响应必须包含result字段，且result必须有type字段）
+    if (message.success && (!message.result || !message.result.type)) {
+      window.logger?.error('插件系统：插件响应格式不规范，缺少result或result.type字段', {
+        pluginName,
+        requestId: message.requestId,
+        hasResult: !!message.result,
+        resultType: message.result?.type
+      });
+      
+      // 将格式错误转为失败响应
+      const errorData: import('../types/global').PluginResponseData = {
+        pluginId: pluginName,
+        requestId: message.requestId,
+        success: false,
+        action: message.action || 'unknown',
+        error: '插件响应格式不规范：缺少result或result.type字段',
+        timestamp: Date.now()
+      };
+      
+      window.backendClient.sendMessage({
+        type: 'plugin_response',
+        data: errorData
+      });
+      return;
+    }
+
+    const responseData: import('../types/global').PluginResponseData = {
+      pluginId: pluginName,
+      requestId: message.requestId,
+      success: message.success || false,
+      action: message.action || 'unknown',
+      result: message.result, // 严格使用result字段，不再后备到data
+      error: message.error,
+      timestamp: Date.now()
+    };
+
+    window.backendClient.sendMessage({
+      type: 'plugin_response',
+      data: responseData
+    });
+
+    window.logger?.info('插件系统：已转发响应到后端', { pluginName, requestId: message.requestId });
+  }
+
+  /**
+   * 处理来自后端的插件调用请求
+   */
+  public async handlePluginInvoke(data: import('../types/global').PluginInvokeData): Promise<void> {
+    const { requestId, pluginId, action, params, timeout } = data;
+
+    window.logger?.info('插件系统：收到后端调用请求', { requestId, pluginId, action });
+
+    try {
+      // 调用插件
+      const result = await this.callPlugin(pluginId, action, { ...params, timeout });
+
+      // 发送成功响应
+      this.forwardPluginResponseToBackend(pluginId, {
+        requestId,
+        success: true,
+        action,
+        result
+      });
+    } catch (error) {
+      // 发送失败响应
+      this.forwardPluginResponseToBackend(pluginId, {
+        requestId,
+        success: false,
+        action,
+        error: String(error)
+      });
+    }
   }
 
   /**
