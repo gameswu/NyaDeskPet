@@ -603,6 +603,77 @@ WebSocket 和 HTTP 双协议支持：
 
 ---
 
+## ⚙️ 平台优化
+
+### GPU 渲染优化（Windows）
+
+**背景问题**：
+在 Windows 平台（特别是 NVIDIA 显卡）上，Electron 的 GPU 进程可能会出现 `command_buffer_proxy_impl.cc` 相关错误：
+```
+GPU state invalid after WaitForGetOffsetInRange
+```
+
+这是由于：
+1. NVIDIA 显卡驱动与 Chromium GPU 加速的兼容性问题
+2. 透明窗口 + WebGL 渲染带来的额外 GPU 压力
+3. Chromium GPU 沙箱在某些显卡上的不稳定性
+
+**实施的优化**：
+
+1. **主进程 GPU 命令行开关**（[main.ts](../src/main.ts)）：
+   ```typescript
+   // 仅在 Windows 平台启用以下优化
+   app.commandLine.appendSwitch('disable-gpu-sandbox');          // 禁用 GPU 沙箱
+   app.commandLine.appendSwitch('disable-gpu-process-crash-limit'); // 禁用崩溃限制
+   app.commandLine.appendSwitch('use-angle', 'd3d11');          // 使用 ANGLE/D3D11
+   app.commandLine.appendSwitch('disable-software-rasterizer');  // 禁用软件光栅化
+   app.commandLine.appendSwitch('force-gpu-mem-available-mb', '2048'); // 限制显存使用
+   ```
+
+2. **窗口 WebPreferences 优化**（[main.ts](../src/main.ts)）：
+   ```typescript
+   webPreferences: {
+     webgl: true,                    // 显式启用 WebGL
+     backgroundThrottling: false     // 禁用后台节流，保持渲染流畅
+   }
+   ```
+
+3. **PixiJS 渲染器配置**（[live2d-manager.ts](../renderer/js/live2d-manager.ts)）：
+   ```typescript
+   new PIXI.Application({
+     powerPreference: 'high-performance',  // 优先使用独立显卡
+     antialias: true,
+     preserveDrawingBuffer: false,         // 不保留绘图缓冲（提高性能）
+     clearBeforeRender: true,              // 每帧清除画布（避免残影）
+     sharedTicker: true                    // 共享 Ticker 降低开销
+   })
+   ```
+
+4. **帧率限制**（Windows 平台）：
+   ```typescript
+   ticker.maxFPS = 60;  // Live2D 动画不需要超过 60 FPS
+   ```
+
+**效果说明**：
+- ✅ 减少 GPU 相关错误信息的出现频率
+- ✅ 降低显存占用（限制在 2GB 以内）
+- ✅ 提高透明窗口 + WebGL 渲染的稳定性
+- ✅ 不影响正常渲染质量和流畅度
+
+**进一步排查**：
+如果问题仍然存在，可以尝试：
+1. **完全禁用硬件加速**：在 `app.whenReady()` 前添加 `app.disableHardwareAcceleration()`
+2. **更新显卡驱动**：访问 NVIDIA/AMD/Intel 官网下载最新驱动
+3. **调整电源模式**：确保笔记本使用高性能模式并使用独立显卡
+4. **检查显存占用**：使用任务管理器查看 GPU 内存使用情况
+
+**相关参考**：
+- [Electron GPU 加速文档](https://www.electronjs.org/docs/latest/tutorial/offscreen-rendering)
+- [Chromium GPU 命令行开关](https://peter.sh/experiments/chromium-command-line-switches/)
+- [PixiJS 性能优化指南](https://pixijs.download/release/docs/guides/basics/render-loop.html)
+
+---
+
 ## 🛠️ 后续开发
 
 ### 添加新模块

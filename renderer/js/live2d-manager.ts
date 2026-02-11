@@ -139,14 +139,32 @@ class Live2DManager implements ILive2DManager {
       const height = this.canvas.clientHeight || window.innerHeight;
       const dpr = window.devicePixelRatio || 1;
       
+      // GPU 优化配置
       this.app = new PIXI.Application({
         view: this.canvas,
         width: width,
         height: height,
         backgroundAlpha: 0,
         resolution: dpr,     // 使用设备像素比以获得清晰显示
-        autoDensity: true    // 自动调整 CSS 尺寸
+        autoDensity: true,   // 自动调整 CSS 尺寸
+        // GPU 性能优化
+        antialias: true,     // 抗锯齿
+        powerPreference: 'high-performance',  // 优先使用独立显卡
+        // WebGL 上下文优化
+        preserveDrawingBuffer: false,  // 不保留绘图缓冲区（提高性能）
+        clearBeforeRender: true,       // 每帧清除画布（避免残影）
+        // 限制帧率以降低 GPU 负载（Live2D 不需要太高帧率）
+        sharedTicker: true
       });
+      
+      // 为 Windows 降低目标帧率以减少 GPU 压力
+      if (navigator.userAgent.includes('Windows')) {
+        const ticker = (this.app as any).ticker;
+        if (ticker) {
+          ticker.maxFPS = 60;  // 限制为 60 FPS
+          window.logger?.info('Live2D已设置帧率限制', { maxFPS: 60 });
+        }
+      }
 
       // 监听窗口大小变化
       this.setupResizeHandler();

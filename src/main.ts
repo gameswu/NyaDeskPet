@@ -8,6 +8,21 @@ import asrService from './asr-service';
 import { logger } from './logger';
 import { AgentServer } from './agent-server';
 
+// GPU 优化：添加命令行开关以提高 Windows + NVIDIA 显卡的稳定性
+// 这些开关可以缓解 GPU 进程相关的错误（如 command_buffer_proxy_impl 错误）
+if (process.platform === 'win32') {
+  // 禁用 GPU 沙箱以避免某些驱动兼容性问题
+  app.commandLine.appendSwitch('disable-gpu-sandbox');
+  // 禁用 GPU 进程崩溃限制
+  app.commandLine.appendSwitch('disable-gpu-process-crash-limit');
+  // 使用 ANGLE 作为 WebGL 后端（D3D11），提高兼容性
+  app.commandLine.appendSwitch('use-angle', 'd3d11');
+  // 禁用软件光栅化回退
+  app.commandLine.appendSwitch('disable-software-rasterizer');
+  // 限制 GPU 内存使用
+  app.commandLine.appendSwitch('force-gpu-mem-available-mb', '2048');
+}
+
 // 在最开始设置动态库路径，确保 Electron 启动时就能找到 sherpa-onnx 库
 const platform = process.platform;
 const arch = process.arch;
@@ -78,7 +93,11 @@ function createWindow(): void {
     webPreferences: {
       preload: path.join(__dirname, 'preload.js'),
       contextIsolation: true,
-      nodeIntegration: false
+      nodeIntegration: false,
+      // GPU 优化：启用硬件加速和 WebGL 优化
+      webgl: true,
+      // 禁用 Chromium 的背景节流以保持渲染流畅
+      backgroundThrottling: false
     }
   });
 
