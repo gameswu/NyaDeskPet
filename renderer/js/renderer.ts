@@ -37,7 +37,7 @@ function toggleUI(): void {
         window.lucide.createIcons();
       }
     }
-    console.log('显示UI');
+    window.logger.info('显示UI');
   } else {
     topBar?.classList.add('hidden');
     bottomBar?.classList.add('hidden');
@@ -50,7 +50,7 @@ function toggleUI(): void {
         window.lucide.createIcons();
       }
     }
-    console.log('隐藏UI');
+    window.logger.info('隐藏UI');
   }
   // 通知主进程 UI 状态变化
   window.electronAPI.updateUIState({ uiVisible: isUIVisible });
@@ -60,16 +60,16 @@ function toggleUI(): void {
  * 初始化应用
  */
 async function initializeApp(): Promise<void> {
-  console.log('开始初始化应用...');
+  window.logger.info('开始初始化应用...');
 
   try {
     // 1. 初始化设置管理器
     window.settingsManager.initialize();
     const settings = window.settingsManager.getSettings();
-    console.log('当前设置:', settings);
+    window.logger.info('当前设置:', settings);
 
     // 2. 初始化日志系统
-    console.log('初始化日志系统...');
+    window.logger.info('初始化日志系统...');
     await window.logger.initialize();
     // 更新主进程日志配置
     await window.electronAPI.loggerUpdateConfig({
@@ -77,34 +77,34 @@ async function initializeApp(): Promise<void> {
       levels: settings.logLevels,
       retentionDays: settings.logRetentionDays
     });
-    console.log('日志系统初始化成功');
+    window.logger.info('日志系统初始化成功');
 
     // 3. 初始化国际化
-    console.log('初始化国际化...');
+    window.logger.info('初始化国际化...');
     await window.i18nManager.initialize();
-    console.log('国际化初始化成功');
+    window.logger.info('国际化初始化成功');
 
     // 3. 初始化主题
-    console.log('初始化主题...');
+    window.logger.info('初始化主题...');
     window.themeManager.initialize();
-    console.log('主题初始化成功');
+    window.logger.info('主题初始化成功');
 
     // 4. 初始化 Live2D
-    console.log('初始化 Live2D...');
+    window.logger.info('初始化 Live2D...');
     await window.live2dManager.initialize();
-    console.log('Live2D 初始化成功');
+    window.logger.info('Live2D 初始化成功');
     
     // 5. 加载模型
     try {
-      console.log('加载模型:', settings.modelPath);
+      window.logger.info('加载模型:', settings.modelPath);
       await window.live2dManager.loadModel(settings.modelPath);
       appState.modelLoaded = true;
-      console.log('模型加载成功');
+      window.logger.info('模型加载成功');
       
       // 应用视线跟随设置
       window.live2dManager.enableEyeTracking(settings.enableEyeTracking);
     } catch (error) {
-      console.error('模型加载失败:', error);
+      window.logger.error('模型加载失败:', error);
       showError('模型加载失败，请检查模型文件路径或在设置中更改');
     }
 
@@ -112,30 +112,30 @@ async function initializeApp(): Promise<void> {
     window.audioPlayer.setVolume(settings.volume);
     
     // 5. 初始化摄像头管理器
-    console.log('初始化摄像头管理器...');
+    window.logger.info('初始化摄像头管理器...');
     await window.cameraManager.initialize();
-    console.log('摄像头管理器初始化成功');
+    window.logger.info('摄像头管理器初始化成功');
     
     // 6. 初始化麦克风管理器
-    console.log('初始化麦克风管理器...');
+    window.logger.info('初始化麦克风管理器...');
     await window.microphoneManager.initialize();
-    console.log('麦克风管理器初始化成功');
+    window.logger.info('麦克风管理器初始化成功');
     
     // 7. 初始化 ASR 服务
-    console.log('初始化 ASR 服务...');
+    window.logger.info('初始化 ASR 服务...');
     try {
       const asrResult = await (window as any).electronAPI.asrInitialize();
       if (asrResult.success) {
-        console.log('ASR 服务初始化成功');
+        window.logger.info('ASR 服务初始化成功');
         window.logger.info('ASR语音识别服务初始化成功');
         appState.asrReady = true;
       } else {
-        console.warn('ASR 服务初始化失败，语音识别功能将不可用');
+        window.logger.warn('ASR 服务初始化失败，语音识别功能将不可用');
         window.logger.warn('ASR语音识别服务初始化失败');
         appState.asrReady = false;
       }
     } catch (error) {
-      console.error('ASR 服务初始化异常:', error);
+      window.logger.error('ASR 服务初始化异常:', error);
       window.logger.error('ASR语音识别服务初始化异常', { error });
       appState.asrReady = false;
     }
@@ -160,12 +160,12 @@ async function initializeApp(): Promise<void> {
 
     // 8. 初始化后端连接
     if (settings.autoConnect) {
-      console.log('连接后端服务器...');
+      window.logger.info('连接后端服务器...');
       await window.backendClient.initialize();
     }
 
     // 9. 插件系统已初始化（插件需要手动启动）
-    console.log('插件系统已就绪，等待用户操作');
+    window.logger.info('插件系统已就绪，等待用户操作');
 
     // 10. 设置事件监听
     setupEventListeners();
@@ -174,7 +174,7 @@ async function initializeApp(): Promise<void> {
     setupWindowControls();
 
     appState.initialized = true;
-    console.log('应用初始化完成');
+    window.logger.info('应用初始化完成');
 
     // 显示欢迎消息
     setTimeout(() => {
@@ -185,7 +185,7 @@ async function initializeApp(): Promise<void> {
     }, 1000);
 
   } catch (error) {
-    console.error('应用初始化失败:', error);
+    window.logger.error('应用初始化失败:', error);
   }
 }
 
@@ -197,7 +197,7 @@ function setupEventListeners(): void {
   const interactionArea = document.getElementById('interaction-area');
   
   if (!interactionArea) {
-    console.error('交互区域元素未找到');
+    window.logger.error('交互区域元素未找到');
     return;
   }
 
@@ -211,7 +211,7 @@ function setupEventListeners(): void {
     const x = e.clientX - rect.left;
     const y = e.clientY - rect.top;
     
-    console.log('点击了宠物');
+    window.logger.info('点击了宠物');
     window.live2dManager.tap(x, y);
     
     // 发送点击事件到后端
@@ -245,9 +245,9 @@ function setupEventListeners(): void {
       if (deviceId) {
         try {
           await window.cameraManager.switchDevice(deviceId);
-          console.log('已切换到摄像头:', deviceId);
+          window.logger.info('已切换到摄像头:', deviceId);
         } catch (error) {
-          console.error('切换摄像头失败:', error);
+          window.logger.error('切换摄像头失败:', error);
         }
       }
     });
@@ -267,7 +267,7 @@ function setupEventListeners(): void {
 
   // 监听后端消息
   window.backendClient.onMessage((message) => {
-    console.log('收到后端消息:', message);
+    window.logger.info('收到后端消息:', message);
     if (message.type === 'dialogue') {
       const data = message.data as any;
       addChatMessage(data.text, false, data.attachment);
@@ -466,7 +466,7 @@ async function sendChatMessage(): Promise<void> {
   try {
     await sendUserMessage(text);
   } catch (error) {
-    console.error('发送消息失败:', error);
+    window.logger.error('发送消息失败:', error);
     addChatMessage(window.i18nManager.t('messages.sendFailed'), false);
   }
 }
@@ -520,15 +520,15 @@ function initializeChatWindow(): void {
           // 停止监听
           window.microphoneManager.stopListening();
           btnVoice.classList.remove('active');
-          console.log('麦克风已停止');
+          window.logger.info('麦克风已停止');
         } else {
           // 启动监听
           await window.microphoneManager.startListening();
           btnVoice.classList.add('active');
-          console.log('麦克风已启动');
+          window.logger.info('麦克风已启动');
         }
       } catch (error) {
-        console.error('麦克风操作失败:', error);
+        window.logger.error('麦克风操作失败:', error);
         window.dialogueManager?.showQuick('麦克风启动失败，请检查权限设置', 2000);
       }
     });
@@ -544,7 +544,7 @@ function initializeChatWindow(): void {
           // 停止摄像头
           window.cameraManager.stop();
           btnCamera.classList.remove('active');
-          console.log('摄像头已停止');
+          window.logger.info('摄像头已停止');
         } else {
           // 启动摄像头
           await window.cameraManager.start();
@@ -563,10 +563,10 @@ function initializeChatWindow(): void {
             });
           }
           
-          console.log('摄像头已启动');
+          window.logger.info('摄像头已启动');
         }
       } catch (error) {
-        console.error('摄像头操作失败:', error);
+        window.logger.error('摄像头操作失败:', error);
         window.dialogueManager?.showQuick('摄像头启动失败，请检查权限设置', 2000);
       }
     });
@@ -586,6 +586,23 @@ function initializeChatWindow(): void {
 
       for (let i = 0; i < files.length; i++) {
         const file = files[i];
+        const fileSizeMB = file.size / (1024 * 1024);
+        const maxSizeMB = 100;
+        
+        // 检查文件大小
+        if (fileSizeMB > maxSizeMB) {
+          window.dialogueManager?.showQuick(
+            `文件 ${file.name} 过大（${fileSizeMB.toFixed(1)}MB），最大支持${maxSizeMB}MB`,
+            3000
+          );
+          window.logger?.warn('文件超过大小限制', { 
+            fileName: file.name, 
+            size: fileSizeMB.toFixed(2) + 'MB',
+            limit: maxSizeMB + 'MB'
+          });
+          continue;
+        }
+        
         const reader = new FileReader();
         
         reader.onload = (e) => {
@@ -598,20 +615,24 @@ function initializeChatWindow(): void {
             name: file.name
           });
           
-          // TODO: 发送文件数据到后端
-          console.log('发送文件:', file.name, '类型:', file.type);
+          // 发送文件数据到后端
+          sendFileToBackend(file, url);
         };
-
-        if (file.type.startsWith('image/') || file.type.startsWith('text/') || file.size < 1024 * 1024 * 5) {
-          reader.readAsDataURL(file);
-        } else {
-          // 对大文件仅显示名称
-          addChatMessage('', true, {
-            type: 'file',
-            url: '#',
-            name: file.name + ' (文件过大，预览暂存本地)'
-          });
+        
+        reader.onerror = () => {
+          window.logger?.error('文件读取失败', { fileName: file.name });
+          window.dialogueManager?.showQuick(`文件 ${file.name} 读取失败`, 3000);
+        };
+        
+        // 对于大文件显示加载提示
+        if (fileSizeMB > 10) {
+          window.dialogueManager?.showQuick(
+            `正在加载文件 ${file.name} (${fileSizeMB.toFixed(1)}MB)，请稍候...`,
+            2000
+          );
         }
+
+        reader.readAsDataURL(file);
       }
       
       // 清空 input 允许重复选择同一文件
@@ -866,7 +887,7 @@ function initializeSettingsPanel(): void {
           }
         }
       } catch (error) {
-        console.error('选择文件失败:', error);
+        window.logger.error('选择文件失败:', error);
       }
     });
   }
@@ -1016,7 +1037,7 @@ async function loadLogFiles(): Promise<void> {
       });
     });
   } catch (error) {
-    console.error('加载日志文件列表失败:', error);
+    window.logger.error('加载日志文件列表失败:', error);
   }
 }
 
@@ -1040,7 +1061,7 @@ async function deleteLogFile(fileName: string): Promise<void> {
       window.dialogueManager.showDialogue(window.i18nManager.t('settings.logs.deleteFailed'), 2000);
     }
   } catch (error) {
-    console.error('删除日志文件失败:', error);
+    window.logger.error('删除日志文件失败:', error);
     window.logger.error(`删除日志文件失败: ${fileName}`, { error });
     window.dialogueManager.showDialogue(window.i18nManager.t('settings.logs.deleteFailed'), 2000);
   }
@@ -1059,7 +1080,7 @@ async function deleteAllLogs(): Promise<void> {
     window.dialogueManager.showDialogue(`${window.i18nManager.t('settings.logs.deleteSuccess')} (${result.count})`, 2000);
     loadLogFiles(); // 刷新列表
   } catch (error) {
-    console.error('删除所有日志失败:', error);
+    window.logger.error('删除所有日志失败:', error);
     window.dialogueManager.showDialogue(window.i18nManager.t('settings.logs.deleteFailed'), 2000);
   }
 }
@@ -1071,7 +1092,7 @@ async function openLogDirectory(): Promise<void> {
   try {
     await window.electronAPI.loggerOpenDirectory();
   } catch (error) {
-    console.error('打开日志目录失败:', error);
+    window.logger.error('打开日志目录失败:', error);
   }
 }
 
@@ -1165,7 +1186,7 @@ function saveTapConfigFromUI(): void {
 
     // 只保存模型中存在的区域
     if (!modelHitAreas.includes(areaName)) {
-      console.warn(`跳过不存在于模型中的区域: ${areaName}`);
+      window.logger.warn(`跳过不存在于模型中的区域: ${areaName}`);
       return;
     }
 
@@ -1194,7 +1215,7 @@ async function loadAppVersion(): Promise<void> {
       versionEl.textContent = version;
     }
   } catch (error) {
-    console.error('获取版本失败:', error);
+    window.logger.error('获取版本失败:', error);
   }
 }
 
@@ -1279,16 +1300,66 @@ async function sendUserMessage(text: string): Promise<void> {
           data: frame,
           source: 'camera'
         };
-        console.log('已附加摄像头截图');
+        window.logger.info('已附加摄像头截图');
       }
     }
     
     const result = await window.backendClient.sendMessage(message);
 
-    console.log('消息发送结果:', result);
+    window.logger.info('消息发送结果:', result);
   } catch (error) {
-    console.error('发送消息失败:', error);
+    window.logger.error('发送消息失败:', error);
     window.dialogueManager.showDialogue('发送消息失败，请检查网络连接', 3000);
+  }
+}
+
+/**
+ * 发送文件到后端
+ */
+async function sendFileToBackend(file: File, base64Data: string): Promise<void> {
+  try {
+    const fileSizeMB = file.size / (1024 * 1024);
+    
+    window.logger?.info('发送文件到后端', { 
+      fileName: file.name, 
+      fileType: file.type, 
+      fileSize: fileSizeMB.toFixed(2) + 'MB'
+    });
+    
+    // 对于大文件显示发送提示
+    if (fileSizeMB > 10) {
+      window.dialogueManager?.showQuick(
+        `正在发送文件 ${file.name} (${fileSizeMB.toFixed(1)}MB)，请稍候...`,
+        3000
+      );
+    }
+
+    // 提取base64数据部分（去除data:xxx;base64,前缀）
+    const base64Content = base64Data.split(',')[1] || base64Data;
+
+    await window.backendClient.sendMessage({
+      type: 'file_upload',
+      data: {
+        fileName: file.name,
+        fileType: file.type,
+        fileSize: file.size,
+        fileData: base64Content,
+        timestamp: Date.now()
+      }
+    });
+
+    window.logger?.info('文件发送成功', { fileName: file.name });
+    
+    // 大文件发送成功后显示提示
+    if (fileSizeMB > 10) {
+      window.dialogueManager?.showQuick(
+        `文件 ${file.name} 发送成功`,
+        2000
+      );
+    }
+  } catch (error) {
+    window.logger?.error('发送文件失败', { fileName: file.name, error });
+    window.dialogueManager?.showQuick(`文件 ${file.name} 发送失败`, 3000);
   }
 }
 
@@ -1296,7 +1367,7 @@ async function sendUserMessage(text: string): Promise<void> {
  * 显示错误消息
  */
 function showError(message: string, duration: number = 5000): void {
-  console.error(message);
+  window.logger.error(message);
   window.dialogueManager?.showDialogue(`❌ ${message}`, duration);
 }
 
@@ -1304,21 +1375,21 @@ function showError(message: string, duration: number = 5000): void {
  * 页面加载完成后初始化
  */
 window.addEventListener('DOMContentLoaded', () => {
-  console.log('DOM 加载完成');
+  window.logger.info('DOM 加载完成');
   initializeSettingsPanel();
   initializeChatWindow();
   initializeApp();
 
   // 监听来自主进程的设置打开请求
   window.electronAPI.onOpenSettings(() => {
-    console.log('收到主进程打开设置请求');
+    window.logger.info('收到主进程打开设置请求');
     showSettingsPanel();
   });
 
   // 监听来自主进程的插件管理打开请求
   if (window.electronAPI.onOpenPlugins) {
     window.electronAPI.onOpenPlugins(() => {
-      console.log('收到主进程打开插件管理请求');
+      window.logger.info('收到主进程打开插件管理请求');
       showPluginsPanel();
     });
   }
@@ -1326,7 +1397,7 @@ window.addEventListener('DOMContentLoaded', () => {
   // 监听来自主进程的打开对话请求
   if (window.electronAPI.onOpenChat) {
     window.electronAPI.onOpenChat(() => {
-      console.log('收到主进程打开对话请求');
+      window.logger.info('收到主进程打开对话请求');
       showChatWindow();
     });
   }
@@ -1334,7 +1405,7 @@ window.addEventListener('DOMContentLoaded', () => {
   // 监听来自主进程的切换UI请求
   if (window.electronAPI.onToggleUI) {
     window.electronAPI.onToggleUI(() => {
-      console.log('收到主进程切换UI请求');
+      window.logger.info('收到主进程切换UI请求');
       toggleUI();
     });
   }
@@ -1344,7 +1415,7 @@ window.addEventListener('DOMContentLoaded', () => {
  * 页面卸载时清理
  */
 window.addEventListener('beforeunload', () => {
-  console.log('页面卸载，清理资源');
+  window.logger.info('页面卸载，清理资源');
   
   if (window.live2dManager) {
     window.live2dManager.destroy();
@@ -1373,5 +1444,5 @@ const appDebug: AppDebugInterface = {
 
 window.app = appDebug;
 
-console.log('渲染进程脚本加载完成');
-console.log('调试命令: window.app');
+window.logger.info('渲染进程脚本加载完成');
+window.logger.info('调试命令: window.app');

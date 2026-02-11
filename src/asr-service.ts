@@ -6,6 +6,7 @@
 import * as path from 'path';
 import * as fs from 'fs';
 import { app } from 'electron';
+import { logger } from './logger';
 
 // Sherpa-ONNX 类型定义
 interface SherpaConfig {
@@ -46,17 +47,17 @@ class ASRService {
    */
   public async initialize(): Promise<boolean> {
     try {
-      console.log('[ASR] 开始初始化...');
+      logger.info('[ASR] 开始初始化...');
       
       // 检查模型文件是否存在
       if (!fs.existsSync(this.modelConfig.modelPath)) {
-        console.error('[ASR] 模型文件不存在:', this.modelConfig.modelPath);
-        console.error('[ASR] 请确保模型文件已正确放置在 models/asr/sense-voice-small/ 目录');
+        logger.error('[ASR] 模型文件不存在:', this.modelConfig.modelPath);
+        logger.error('[ASR] 请确保模型文件已正确放置在 models/asr/sense-voice-small/ 目录');
         return false;
       }
       
       if (!fs.existsSync(this.modelConfig.tokensPath)) {
-        console.error('[ASR] Tokens 文件不存在:', this.modelConfig.tokensPath);
+        logger.error('[ASR] Tokens 文件不存在:', this.modelConfig.tokensPath);
         return false;
       }
 
@@ -65,8 +66,8 @@ class ASRService {
       try {
         sherpa = require('sherpa-onnx-node');
       } catch (loadError) {
-        console.error('[ASR] 加载 sherpa-onnx-node 模块失败:', loadError);
-        console.error('[ASR] 请确保 sherpa-onnx-node 已正确安装');
+        logger.error('[ASR] 加载 sherpa-onnx-node 模块失败:', loadError);
+        logger.error('[ASR] 请确保 sherpa-onnx-node 已正确安装');
         return false;
       }
       
@@ -91,10 +92,10 @@ class ASRService {
       // 创建识别器实例
       this.recognizer = new sherpa.OfflineRecognizer(config);
       this.isInitialized = true;
-      console.log('[ASR] 初始化成功');
+      logger.info('[ASR] 初始化成功');
       return true;
     } catch (error) {
-      console.error('[ASR] 初始化失败:', error);
+      logger.error('[ASR] 初始化失败:', error);
       return false;
     }
   }
@@ -106,7 +107,7 @@ class ASRService {
    */
   public async recognize(audioBuffer: Buffer): Promise<RecognitionResult | null> {
     if (!this.isInitialized || !this.recognizer) {
-      console.error('[ASR] 识别器未初始化');
+      logger.error('[ASR] 识别器未初始化');
       return null;
     }
 
@@ -115,7 +116,7 @@ class ASRService {
       const samples = this.bufferToFloat32Array(audioBuffer);
       
       if (samples.length === 0) {
-        console.warn('[ASR] 音频数据为空');
+        logger.warn('[ASR] 音频数据为空');
         return { text: '', confidence: 0 };
       }
 
@@ -143,7 +144,7 @@ class ASRService {
 
       return { text: '', confidence: 0 };
     } catch (error) {
-      console.error('[ASR] 识别失败:', error);
+      logger.error('[ASR] 识别失败:', error);
       return null;
     }
   }
@@ -159,7 +160,7 @@ class ASRService {
       const audioBuffer = fs.readFileSync(audioFilePath);
       return await this.recognize(audioBuffer);
     } catch (error) {
-      console.error('[ASR] 识别文件失败:', error);
+      logger.error('[ASR] 识别文件失败:', error);
       return null;
     }
   }

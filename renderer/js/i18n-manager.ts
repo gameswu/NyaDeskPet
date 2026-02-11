@@ -8,7 +8,7 @@ import type { I18nManager as II18nManager } from '../types/global';
 type NestedMessages = { [key: string]: string | NestedMessages };
 
 class I18nManager implements II18nManager {
-  private currentLocale: string = 'zh-CN';
+  public currentLocale: string = 'zh-CN';
   private messages: { [locale: string]: NestedMessages } = {};
   private storageKey = 'nya-desk-pet-locale';
 
@@ -46,7 +46,7 @@ class I18nManager implements II18nManager {
       if (response.ok) {
         this.messages[locale] = await response.json();
       } else {
-        console.error(`无法加载语言文件: ${locale}`);
+        window.logger.error(`无法加载语言文件: ${locale}`);
         // 回退到中文
         if (locale !== 'zh-CN') {
           const fallbackResponse = await fetch('locales/zh-CN.json');
@@ -55,7 +55,7 @@ class I18nManager implements II18nManager {
         }
       }
     } catch (error) {
-      console.error('加载语言文件失败:', error);
+      window.logger.error('加载语言文件失败:', error);
     }
   }
 

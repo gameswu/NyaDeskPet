@@ -10,6 +10,7 @@ import json
 import base64
 import signal
 import sys
+import uuid
 from typing import Set
 import websockets
 from websockets.server import WebSocketServerProtocol
@@ -28,8 +29,10 @@ class UIAutomationPlugin:
         self.port = port
         self.clients: Set[WebSocketServerProtocol] = set()
         self.i18n = I18n(locale, default_locale="en-US")
+        self.config = {}  # 配置存储
+        self.pending_permissions = {}  # 等待权限确认的请求
         
-        # 配置 pyautogui
+        # 配置 pyautogui（使用默认值，稍后从配置加载）
         pyautogui.FAILSAFE = True
         pyautogui.PAUSE = 0.1
         
@@ -75,8 +78,28 @@ class UIAutomationPlugin:
                         }))
                         continue
                     
+                    # 处理配置请求
+                    if data.get("action") == "getConfig":
+                        await self.request_config(websocket)
+                        continue
+                    
+                    # 处理配置响应
+                    if data.get("type") == "plugin_config":
+                        self.config = data.get("config", {})
+                        self.apply_config()
+                        print(f"✅ 已加载配置: {self.config}")
+                        continue
+                    
+                    # 处理权限响应
+                    if data.get("type") == "permission_response":
+                        request_id = data.get("requestId")
+                        if request_id in self.pending_permissions:
+                            future = self.pending_permissions.pop(request_id)
+                            future.set_result(data.get("granted", False))
+                        continue
+                    
                     # 处理其他操作
-                    response = await self.handle_message(data)
+                    response = await self.handle_message(data, websocket)
                     await websocket.send(json.dumps(response))
                     
                 except json.JSONDecodeError:
@@ -100,29 +123,75 @@ class UIAutomationPlugin:
             print(f"📱 {self.i18n.t('plugin.disconnected')}: {websocket.remote_address}")
         finally:
             self.clients.discard(websocket)
+    
+    async def request_config(self, websocket: WebSocketServerProtocol):
+        """向前端请求配置"""
+        await websocket.send(json.dumps({
+            "action": "getConfig",
+            "pluginId": "ui-automation"
+        }))
+    
+    def get_config(self, key: str, default=None):
+        """获取配置值"""
+        return self.config.get(key, default)
+    
+    def apply_config(self):
+        """应用配置"""
+        # 应用点击延迟配置
+        click_delay = self.get_config("clickDelay", 0.1)
+        pyautogui.PAUSE = click_delay / 1000.0  # 转换为秒
+        
+        # 应用安全模式配置
+        enable_safe_mode = self.get_config("enableSafeMode", True)
+        pyautogui.FAILSAFE = enable_safe_mode
+    
+    async def request_permission(self, websocket: WebSocketServerProtocol, permission_id: str, operation: str, details: dict = None) -> bool:
+        """请求权限"""
+        request_id = str(uuid.uuid4())
+        
+        # 创建 Future 用于等待响应
+        future = asyncio.Future()
+        self.pending_permissions[request_id] = future
+        
+        # 发送权限请求
+        await websocket.send(json.dumps({
+            "type": "permission_request",
+            "requestId": request_id,
+            "permissionId": permission_id,
+            "operation": operation,
+            "details": details or {}
+        }))
+        
+        try:
+            # 等待响应（30秒超时）
+            granted = await asyncio.wait_for(future, timeout=30.0)
+            return granted
+        except asyncio.TimeoutError:
+            self.pending_permissions.pop(request_id, None)
+            return False
             
-    async def handle_message(self, data: dict) -> dict:
+    async def handle_message(self, data: dict, websocket: WebSocketServerProtocol) -> dict:
         """处理消息"""
         action = data.get("action")
         params = data.get("params", {})
         
         try:
             if action == "captureScreen":
-                return await self.capture_screen(params)
+                return await self.capture_screen(params, websocket)
             elif action == "mouseClick":
-                return await self.mouse_click(params)
+                return await self.mouse_click(params, websocket)
             elif action == "mouseMove":
-                return await self.mouse_move(params)
+                return await self.mouse_move(params, websocket)
             elif action == "mouseDrag":
-                return await self.mouse_drag(params)
+                return await self.mouse_drag(params, websocket)
             elif action == "getMousePosition":
                 return await self.get_mouse_position(params)
             elif action == "keyboardType":
-                return await self.keyboard_type(params)
+                return await self.keyboard_type(params, websocket)
             elif action == "keyboardPress":
-                return await self.keyboard_press(params)
+                return await self.keyboard_press(params, websocket)
             elif action == "mouseScroll":
-                return await self.mouse_scroll(params)
+                return await self.mouse_scroll(params, websocket)
             elif action == "getScreenSize":
                 return await self.get_screen_size(params)
             elif action == "setMouseSpeed":
@@ -144,10 +213,29 @@ class UIAutomationPlugin:
                 "locale": self.i18n.get_frontend_locale()
             }
             
-    async def capture_screen(self, params: dict) -> dict:
+    async def capture_screen(self, params: dict, websocket: WebSocketServerProtocol) -> dict:
         """截取屏幕"""
+        # 请求截屏权限
+        granted = await self.request_permission(
+            websocket,
+            "ui-automation.screen",
+            "capture_screen",
+            {"display": params.get("display", 1)}
+        )
+        
+        if not granted:
+            return {
+                "type": "plugin_response",
+                "success": False,
+                "error": self.i18n.t("error.permission_denied"),
+                "errorKey": "error.permission_denied",
+                "locale": self.i18n.get_frontend_locale(),
+                "requiredPermission": "ui-automation.screen"
+            }
+        
         display = params.get("display", 1)
-        format_type = params.get("format", "png")
+        format_type = self.get_config("screenshotFormat", params.get("format", "png"))
+        quality = self.get_config("screenshotQuality", 90)
         
         with mss.mss() as sct:
             if display < 1 or display > len(sct.monitors) - 1:
@@ -163,7 +251,10 @@ class UIAutomationPlugin:
             img = Image.frombytes("RGB", screenshot.size, screenshot.rgb)
             
             buffer = io.BytesIO()
-            img.save(buffer, format=format_type.upper())
+            if format_type.upper() == "JPEG":
+                img.save(buffer, format="JPEG", quality=quality)
+            else:
+                img.save(buffer, format=format_type.upper())
             img_base64 = base64.b64encode(buffer.getvalue()).decode()
             
             return {
@@ -176,11 +267,30 @@ class UIAutomationPlugin:
                     "width": screenshot.width,
                     "height": screenshot.height
                 },
-                "locale": self.i18n.get_frontend_locale()
+                "locale": self.i18n.get_frontend_locale(),
+                "requiredPermission": "ui-automation.screen"
             }
             
-    async def mouse_click(self, params: dict) -> dict:
+    async def mouse_click(self, params: dict, websocket: WebSocketServerProtocol) -> dict:
         """鼠标点击"""
+        # 请求鼠标控制权限
+        granted = await self.request_permission(
+            websocket,
+            "ui-automation.mouse",
+            "mouse_click",
+            {"x": params.get("x"), "y": params.get("y")}
+        )
+        
+        if not granted:
+            return {
+                "type": "plugin_response",
+                "success": False,
+                "error": self.i18n.t("error.permission_denied"),
+                "errorKey": "error.permission_denied",
+                "locale": self.i18n.get_frontend_locale(),
+                "requiredPermission": "ui-automation.mouse"
+            }
+        
         x = params.get("x")
         y = params.get("y")
         button = params.get("button", "left")
@@ -201,11 +311,30 @@ class UIAutomationPlugin:
                 "button": button,
                 "clicks": clicks
             },
-            "locale": self.i18n.get_frontend_locale()
+            "locale": self.i18n.get_frontend_locale(),
+            "requiredPermission": "ui-automation.mouse"
         }
         
-    async def mouse_move(self, params: dict) -> dict:
+    async def mouse_move(self, params: dict, websocket: WebSocketServerProtocol) -> dict:
         """鼠标移动"""
+        # 请求鼠标控制权限
+        granted = await self.request_permission(
+            websocket,
+            "ui-automation.mouse",
+            "mouse_move",
+            {"x": params.get("x"), "y": params.get("y")}
+        )
+        
+        if not granted:
+            return {
+                "type": "plugin_response",
+                "success": False,
+                "error": self.i18n.t("error.permission_denied"),
+                "errorKey": "error.permission_denied",
+                "locale": self.i18n.get_frontend_locale(),
+                "requiredPermission": "ui-automation.mouse"
+            }
+        
         x = params.get("x")
         y = params.get("y")
         
@@ -215,7 +344,8 @@ class UIAutomationPlugin:
                 "success": False,
                 "error": self.i18n.t("error.coordinates_required"),
                 "errorKey": "error.coordinates_required",
-                "locale": self.i18n.get_frontend_locale()
+                "locale": self.i18n.get_frontend_locale(),
+                "requiredPermission": "ui-automation.mouse"
             }
             
         duration = params.get("duration", 0.0)
@@ -230,11 +360,30 @@ class UIAutomationPlugin:
                 "y": y,
                 "duration": duration
             },
-            "locale": self.i18n.get_frontend_locale()
+            "locale": self.i18n.get_frontend_locale(),
+            "requiredPermission": "ui-automation.mouse"
         }
         
-    async def mouse_drag(self, params: dict) -> dict:
+    async def mouse_drag(self, params: dict, websocket: WebSocketServerProtocol) -> dict:
         """鼠标拖拽"""
+        # 请求鼠标控制权限
+        granted = await self.request_permission(
+            websocket,
+            "ui-automation.mouse",
+            "mouse_drag",
+            {"x": params.get("x"), "y": params.get("y")}
+        )
+        
+        if not granted:
+            return {
+                "type": "plugin_response",
+                "success": False,
+                "error": self.i18n.t("error.permission_denied"),
+                "errorKey": "error.permission_denied",
+                "locale": self.i18n.get_frontend_locale(),
+                "requiredPermission": "ui-automation.mouse"
+            }
+        
         x = params.get("x")
         y = params.get("y")
         end_x = params.get("endX")
@@ -284,8 +433,26 @@ class UIAutomationPlugin:
             "locale": self.i18n.get_frontend_locale()
         }
         
-    async def keyboard_type(self, params: dict) -> dict:
+    async def keyboard_type(self, params: dict, websocket: WebSocketServerProtocol) -> dict:
         """键盘输入"""
+        # 请求键盘控制权限
+        granted = await self.request_permission(
+            websocket,
+            "ui-automation.keyboard",
+            "keyboard_type",
+            {"text": params.get("text")}
+        )
+        
+        if not granted:
+            return {
+                "type": "plugin_response",
+                "success": False,
+                "error": self.i18n.t("error.permission_denied"),
+                "errorKey": "error.permission_denied",
+                "locale": self.i18n.get_frontend_locale(),
+                "requiredPermission": "ui-automation.keyboard"
+            }
+        
         text = params.get("text")
         
         if not text:
@@ -338,8 +505,26 @@ class UIAutomationPlugin:
             "locale": self.i18n.get_frontend_locale()
         }
         
-    async def mouse_scroll(self, params: dict) -> dict:
+    async def mouse_scroll(self, params: dict, websocket: WebSocketServerProtocol) -> dict:
         """鼠标滚轮"""
+        # 请求鼠标控制权限
+        granted = await self.request_permission(
+            websocket,
+            "ui-automation.mouse",
+            "mouse_scroll",
+            {"clicks": params.get("clicks")}
+        )
+        
+        if not granted:
+            return {
+                "type": "plugin_response",
+                "success": False,
+                "error": self.i18n.t("error.permission_denied"),
+                "errorKey": "error.permission_denied",
+                "locale": self.i18n.get_frontend_locale(),
+                "requiredPermission": "ui-automation.mouse"
+            }
+        
         clicks = params.get("clicks", 1)
         pyautogui.scroll(clicks)
         

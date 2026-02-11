@@ -1,8 +1,8 @@
 {
-  "version": "v1.0.0-beta-2602102312",
-  "versionWithoutPrefix": "1.0.0-beta-2602102312",
+  "version": "v1.0.0-beta-2602111323",
+  "versionWithoutPrefix": "1.0.0-beta-2602111323",
   "baseVersion": "1.0.0",
   "type": "beta",
-  "buildTime": "2026-02-10T15:12:38.127Z",
-  "timestamp": "2602102312"
+  "buildTime": "2026-02-11T05:23:55.265Z",
+  "timestamp": "2602111323"
 }

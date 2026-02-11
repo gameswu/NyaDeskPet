@@ -1,6 +1,6 @@
 {
   "name": "nya-desk-pet",
-  "version": "1.0.0-beta-2602102312",
+  "version": "1.0.0-beta-2602111323",
   "description": "跨平台 Live2D 桌面宠物应用",
   "main": "dist/main.js",
   "scripts": {
@@ -18,6 +18,8 @@
     "watch": "tsc -p . --watch",
     "watch:renderer": "tsc -p renderer --watch",
     "check-i18n": "node scripts/check-i18n.js",
+    "migrate-logger": "node scripts/migrate-console-to-logger.js",
+    "migrate-logger:preview": "node scripts/migrate-console-to-logger.js --dry-run",
     "version": "node scripts/update-version.js"
   },
   "keywords": [

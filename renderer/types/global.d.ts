@@ -62,6 +62,11 @@ export interface ElectronAPI {
   // 通用 IPC 调用（用于插件管理等扩展功能）
   invoke: (channel: string, ...args: any[]) => Promise<any>;
   
+  // 插件目录管理
+  openPluginDirectory: (pluginName: string) => Promise<{ success: boolean }>;
+  openPluginDataDirectory: (pluginName: string) => Promise<{ success: boolean }>;
+  clearPluginData: (pluginName: string) => Promise<{ success: boolean; error?: string }>;
+  
   // 状态同步
   updateUIState: (state: { uiVisible?: boolean; chatOpen?: boolean }) => void;
 }
@@ -79,6 +84,9 @@ declare global {
     themeManager: ThemeManager;
     pluginConnector: PluginConnector;
     pluginUI: PluginUI;
+    pluginConfigManager: PluginConfigManager;
+    pluginConfigUI: PluginConfigUI;
+    pluginPermissionManager: PluginPermissionManager;
     cameraManager: CameraManager;
     microphoneManager: MicrophoneManager;
     logger: any;
@@ -216,6 +224,15 @@ export interface CharacterInfo {
   personality?: string;
 }
 
+// 文件上传数据类型
+export interface FileUploadData {
+  fileName: string;
+  fileType: string;
+  fileSize: number;
+  fileData: string;  // base64编码的文件数据
+  timestamp: number;
+}
+
 // Tap配置记录类型
 export interface TapConfigRecord {
   [modelPath: string]: TapConfig;
@@ -254,6 +271,55 @@ export interface Live2DManager {
 }
 
 // 后端通信相关类型
+// 插件权限信息
+export interface PluginPermission {
+  id: string;
+  dangerLevel: 'safe' | 'low' | 'medium' | 'high' | 'critical';
+  i18n: {
+    [locale: string]: {
+      name: string;
+      description: string;
+    };
+  };
+}
+
+// 插件配置Schema类型
+export type PluginConfigType = 'string' | 'text' | 'int' | 'float' | 'bool' | 'object' | 'list' | 'dict' | 'template_list';
+
+export interface PluginConfigSchema {
+  type: PluginConfigType;
+  description?: string;
+  hint?: string;
+  obvious_hint?: boolean;
+  default?: any;
+  items?: { [key: string]: PluginConfigSchema };  // 用于 object 类型
+  invisible?: boolean;
+  options?: string[];
+  editor_mode?: boolean;
+  editor_language?: string;
+  // 以下为国际化支持
+  i18n?: {
+    [locale: string]: {
+      description?: string;
+      hint?: string;
+      options?: string[];  // 选项的翻译
+    };
+  };
+}
+
+export interface PluginConfigDefinition {
+  [key: string]: PluginConfigSchema;
+}
+
+// 插件权限审批记录
+export interface PluginPermissionGrant {
+  pluginId: string;
+  permissionId: string;
+  granted: boolean;
+  remember: boolean;
+  timestamp: number;
+}
+
 // 插件清单类型
 export interface PluginManifest {
   id: string;
@@ -263,7 +329,7 @@ export interface PluginManifest {
   type: string;
   url: string;
   autoStart: boolean;
-  permissions: string[];
+  permissions: PluginPermission[];
   capabilities: string[];
   i18n: {
     [locale: string]: {
@@ -285,6 +351,7 @@ export interface PluginManifest {
     linux: string | string[];
   };
   workingDirectory?: string;
+  config?: PluginConfigDefinition;  // 插件配置定义（可选）
 }
 
 // 插件信息类型
@@ -296,6 +363,7 @@ export interface PluginInfo {
   locale: string;
   reconnectTimer: number | null;
   reconnectAttempts: number;
+  directoryName: string;  // 插件所在的文件夹名称
 }
 
 // 插件连接器接口
@@ -318,14 +386,43 @@ export interface PluginUI {
   renderPlugins(): void;
 }
 
+// 插件配置管理器接口
+export interface PluginConfigManager {
+  getConfig(pluginId: string): Promise<{ [key: string]: any }>;
+  saveConfig(pluginId: string, config: { [key: string]: any }): Promise<boolean>;
+  resetConfig(pluginId: string, schema: PluginConfigDefinition): Promise<boolean>;
+  getDefaultConfig(schema: PluginConfigDefinition): { [key: string]: any };
+  validateConfig(schema: PluginConfigDefinition, config: { [key: string]: any }): { valid: boolean; errors: string[] };
+  getLocalizedField(field: PluginConfigSchema, locale: string, fieldName: 'description' | 'hint'): string;
+  getLocalizedOptions(field: PluginConfigSchema, locale: string): string[];
+}
+
+// 插件配置UI接口
+export interface PluginConfigUI {
+  showConfigDialog(pluginId: string, pluginName: string, schema: PluginConfigDefinition): Promise<void>;
+  addListItem(key: string): void;
+  removeListItem(key: string, index: number): void;
+  saveConfig(): Promise<void>;
+  resetConfig(): Promise<void>;
+}
+
+// 插件权限管理器接口
+export interface PluginPermissionManager {
+  checkPermission(pluginId: string, permissionId: string, dangerLevel: string): Promise<boolean>;
+  grantPermission(pluginId: string, permissionId: string, remember: boolean): Promise<void>;
+  revokePermission(pluginId: string, permissionId: string): Promise<void>;
+  getGrantedPermissions(pluginId: string): Promise<string[]>;
+  clearPermissions(pluginId: string): Promise<void>;
+}
+
 export interface BackendConfig {
   httpUrl?: string;
   wsUrl?: string;
 }
 
 export interface BackendMessage {
-  type: 'dialogue' | 'live2d' | 'system' | 'user_input' | 'interaction' | 'model_info' | 'tap_event' | 'sync_command' | 'character_info' | 'audio_stream_start' | 'audio_chunk' | 'audio_stream_end';
-  data?: DialogueData | Live2DCommandData | AudioStreamStartData | AudioChunkData | AudioStreamEndData | SyncCommandData | ModelInfo | CharacterInfo | unknown;
+  type: 'dialogue' | 'live2d' | 'system' | 'user_input' | 'interaction' | 'model_info' | 'tap_event' | 'sync_command' | 'character_info' | 'audio_stream_start' | 'audio_chunk' | 'audio_stream_end' | 'file_upload';
+  data?: DialogueData | Live2DCommandData | AudioStreamStartData | AudioChunkData | AudioStreamEndData | SyncCommandData | ModelInfo | CharacterInfo | FileUploadData | unknown;
   text?: string;
   timestamp?: number;
   action?: string;
@@ -517,6 +614,7 @@ export interface AppDebugInterface {
 
 // 国际化管理器接口
 export interface I18nManager {
+  currentLocale: string;
   initialize(): Promise<void>;
   t(key: string, params?: { [key: string]: string }): string;
   setLocale(locale: string): Promise<void>;

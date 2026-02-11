@@ -69,7 +69,7 @@ class BackendClient implements IBackendClient {
         this.ws = new WebSocket(this.wsUrl);
 
         this.ws.onopen = () => {
-          console.log('WebSocket 连接成功');
+          window.logger.info('WebSocket 连接成功');
           this.isConnecting = false;
           this.updateStatus('connected');
           this.clearReconnectTimer();
@@ -85,19 +85,19 @@ class BackendClient implements IBackendClient {
         };
 
         this.ws.onerror = (error: Event) => {
-          console.error('WebSocket 错误:', error);
+          window.logger.error('WebSocket 错误:', error);
           this.isConnecting = false;
         };
 
         this.ws.onclose = () => {
-          console.log('WebSocket 连接关闭');
+          window.logger.info('WebSocket 连接关闭');
           this.isConnecting = false;
           this.updateStatus('disconnected');
           this.scheduleReconnect();
           resolve(false);
         };
       } catch (error) {
-        console.error('WebSocket 连接失败:', error);
+        window.logger.error('WebSocket 连接失败:', error);
         this.isConnecting = false;
         this.updateStatus('disconnected');
         this.scheduleReconnect();
@@ -112,7 +112,7 @@ class BackendClient implements IBackendClient {
   public handleMessage(data: string): void {
     try {
       const message = JSON.parse(data) as BackendMessage;
-      console.log('收到消息:', message);
+      window.logger.info('收到消息:', message);
 
       // 触发所有消息处理器
       this.messageHandlers.forEach(handler => handler(message));
@@ -141,10 +141,10 @@ class BackendClient implements IBackendClient {
           this.handleSystemMessage(message.data);
           break;
         default:
-          console.warn('未知消息类型:', message.type);
+          window.logger.warn('未知消息类型:', message.type);
       }
     } catch (error) {
-      console.error('消息处理失败:', error);
+      window.logger.error('消息处理失败:', error);
     }
   }
 
@@ -166,7 +166,7 @@ class BackendClient implements IBackendClient {
    * 处理流式音频开始
    */
   public handleAudioStreamStart(data: AudioStreamStartData): void {
-    console.log('[Backend] 开始流式音频传输');
+    window.logger.info('[Backend] 开始流式音频传输');
     
     // 立即显示文字
     if (data.text && window.dialogueManager) {
@@ -208,7 +208,7 @@ class BackendClient implements IBackendClient {
       
       window.audioPlayer.appendAudioChunk(bytes);
     } catch (error) {
-      console.error('[Backend] 音频块解码失败:', error);
+      window.logger.error('[Backend] 音频块解码失败:', error);
     }
   }
 
@@ -216,7 +216,7 @@ class BackendClient implements IBackendClient {
    * 处理流式音频结束
    */
   public handleAudioStreamEnd(_data: AudioStreamEndData): void {
-    console.log('[Backend] 音频流结束');
+    window.logger.info('[Backend] 音频流结束');
     window.audioPlayer.endStream();
   }
 
@@ -241,7 +241,7 @@ class BackendClient implements IBackendClient {
         }
         break;
       default:
-        console.warn('[Backend] 未知时间轴动作:', item.action);
+        window.logger.warn('[Backend] 未知时间轴动作:', item.action);
     }
   }
 
@@ -271,7 +271,7 @@ class BackendClient implements IBackendClient {
         }
         break;
       default:
-        console.warn('未知 Live2D 指令:', data.command);
+        window.logger.warn('未知 Live2D 指令:', data.command);
     }
   }
 
@@ -282,7 +282,7 @@ class BackendClient implements IBackendClient {
     if (window.live2dManager && typeof (window.live2dManager as any).executeSyncCommand === 'function') {
       (window.live2dManager as any).executeSyncCommand(data);
     } else {
-      console.warn('Live2D管理器不支持同步指令');
+      window.logger.warn('Live2D管理器不支持同步指令');
     }
   }
 
@@ -290,7 +290,7 @@ class BackendClient implements IBackendClient {
    * 处理系统消息
    */
   public handleSystemMessage(data: unknown): void {
-    console.log('系统消息:', data);
+    window.logger.info('系统消息:', data);
   }
 
   /**
@@ -325,7 +325,7 @@ class BackendClient implements IBackendClient {
       return { success: true, method: 'http', data };
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : 'Unknown error';
-      console.error('HTTP 请求失败:', error);
+      window.logger.error('HTTP 请求失败:', error);
       return { success: false, method: 'http', error: errorMessage };
     }
   }
@@ -368,7 +368,7 @@ class BackendClient implements IBackendClient {
   public scheduleReconnect(): void {
     this.clearReconnectTimer();
     this.reconnectTimer = window.setTimeout(() => {
-      console.log('尝试重新连接...');
+      window.logger.info('尝试重新连接...');
       this.connectWebSocket();
     }, this.reconnectInterval);
   }
@@ -409,7 +409,7 @@ class BackendClient implements IBackendClient {
       type: 'character_info',
       data: characterInfo
     }).catch(err => {
-      console.error('发送角色信息失败:', err);
+      window.logger.error('发送角色信息失败:', err);
     });
   }
 

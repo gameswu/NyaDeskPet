@@ -1,0 +1,133 @@
+{
+  "shell_path": {
+    "type": "string",
+    "description": "默认使用的Shell路径",
+    "hint": "留空则使用系统默认Shell（macOS/Linux: /bin/zsh 或 /bin/bash, Windows: cmd.exe）",
+    "default": "",
+    "i18n": {
+      "zh-CN": {
+        "description": "默认使用的Shell路径",
+        "hint": "留空则使用系统默认Shell（macOS/Linux: /bin/zsh 或 /bin/bash, Windows: cmd.exe）"
+      },
+      "en-US": {
+        "description": "Default shell path",
+        "hint": "Leave empty to use system default shell (macOS/Linux: /bin/zsh or /bin/bash, Windows: cmd.exe)"
+      }
+    }
+  },
+  "max_buffer_size": {
+    "type": "int",
+    "description": "命令输出缓冲区大小（字节）",
+    "hint": "控制单次命令最多可以输出多少字节的内容，避免内存溢出",
+    "default": 10485760,
+    "i18n": {
+      "zh-CN": {
+        "description": "命令输出缓冲区大小（字节）",
+        "hint": "控制单次命令最多可以输出多少字节的内容，避免内存溢出"
+      },
+      "en-US": {
+        "description": "Command output buffer size (bytes)",
+        "hint": "Controls the maximum bytes that can be output by a single command to avoid memory overflow"
+      }
+    }
+  },
+  "timeout": {
+    "type": "int",
+    "description": "命令执行超时时间（秒）",
+    "hint": "命令运行超过此时间将被强制终止，0表示不限制",
+    "default": 30,
+    "i18n": {
+      "zh-CN": {
+        "description": "命令执行超时时间（秒）",
+        "hint": "命令运行超过此时间将被强制终止，0表示不限制"
+      },
+      "en-US": {
+        "description": "Command execution timeout (seconds)",
+        "hint": "Commands running longer than this will be forcefully terminated, 0 means no limit"
+      }
+    }
+  },
+  "enable_history": {
+    "type": "bool",
+    "description": "是否启用命令历史记录",
+    "hint": "启用后会保存最近执行的命令",
+    "default": true,
+    "i18n": {
+      "zh-CN": {
+        "description": "是否启用命令历史记录",
+        "hint": "启用后会保存最近执行的命令"
+      },
+      "en-US": {
+        "description": "Enable command history",
+        "hint": "When enabled, recently executed commands will be saved"
+      }
+    }
+  },
+  "max_history_size": {
+    "type": "int",
+    "description": "历史记录保存数量",
+    "hint": "最多保存多少条命令历史",
+    "default": 100,
+    "i18n": {
+      "zh-CN": {
+        "description": "历史记录保存数量",
+        "hint": "最多保存多少条命令历史"
+      },
+      "en-US": {
+        "description": "History size",
+        "hint": "Maximum number of command history entries to keep"
+      }
+    }
+  },
+  "allowed_commands": {
+    "type": "list",
+    "description": "允许执行的命令白名单",
+    "hint": "为空则允许所有命令。设置后只能执行列表中的命令，提高安全性",
+    "obvious_hint": true,
+    "default": [],
+    "i18n": {
+      "zh-CN": {
+        "description": "允许执行的命令白名单",
+        "hint": "为空则允许所有命令。设置后只能执行列表中的命令，提高安全性"
+      },
+      "en-US": {
+        "description": "Allowed commands whitelist",
+        "hint": "Empty means all commands are allowed. When set, only commands in the list can be executed for better security"
+      }
+    }
+  },
+  "working_directory": {
+    "type": "string",
+    "description": "默认工作目录",
+    "hint": "命令执行时的默认目录，留空使用用户主目录",
+    "default": "",
+    "i18n": {
+      "zh-CN": {
+        "description": "默认工作目录",
+        "hint": "命令执行时的默认目录，留空使用用户主目录"
+      },
+      "en-US": {
+        "description": "Default working directory",
+        "hint": "Default directory for command execution, leave empty to use user home directory"
+      }
+    }
+  },
+  "environment_variables": {
+    "type": "dict",
+    "description": "自定义环境变量",
+    "hint": "JSON格式的键值对，例如 {\"PATH\": \"/custom/path\"}",
+    "default": {},
+    "editor_mode": true,
+    "editor_language": "json",
+    "i18n": {
+      "zh-CN": {
+        "description": "自定义环境变量",
+        "hint": "JSON格式的键值对，例如 {\"PATH\": \"/custom/path\"}"
+      },
+      "en-US": {
+        "description": "Custom environment variables",
+        "hint": "JSON format key-value pairs, e.g. {\"PATH\": \"/custom/path\"}"
+      }
+    }
+  }
+}

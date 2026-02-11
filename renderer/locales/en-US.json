@@ -131,6 +131,11 @@
     "preview": "Camera Preview",
     "selectDevice": "Select Camera..."
   },
+  "plugin": {
+    "openDirectory": "Open Plugin Directory",
+    "openDataDirectory": "Open Data Directory",
+    "clearData": "Clear Data"
+  },
   "plugins": {
     "title": "Plugin Management",
     "description": "Manage application plugins, control plugin permissions and status",

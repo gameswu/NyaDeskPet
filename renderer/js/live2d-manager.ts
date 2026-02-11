@@ -88,11 +88,11 @@ class Live2DManager implements ILive2DManager {
       // 监听窗口大小变化
       this.setupResizeHandler();
 
-      console.log('Live2D 初始化成功, 尺寸:', width, 'x', height, 'DPR:', dpr);
+      window.logger?.info('Live2D初始化成功', { width, height, dpr });
       this.initialized = true;
       return true;
     } catch (error) {
-      console.error('Live2D 初始化失败:', error);
+      window.logger?.error('Live2D初始化失败', { error });
       return false;
     }
   }
@@ -107,7 +107,7 @@ class Live2DManager implements ILive2DManager {
         await this.initialize();
       }
 
-      console.log('开始加载模型:', modelPath);
+      window.logger?.info('Live2D开始加载模型', { modelPath });
       
       // 清除旧模型
       if (this.model && this.app) {
@@ -151,7 +151,7 @@ class Live2DManager implements ILive2DManager {
           };
         }
         
-        console.log('模型原始尺寸:', this.originalModelBounds);
+        window.logger?.debug('Live2D模型原始尺寸', this.originalModelBounds);
         
         // 调整模型位置和大小
         this.adjustModelTransform();
@@ -169,10 +169,10 @@ class Live2DManager implements ILive2DManager {
         this.sendModelInfoToBackend(modelInfo);
       }
       
-      console.log('模型加载成功');
+      window.logger?.info('Live2D模型加载成功', { modelPath });
       return true;
     } catch (error) {
-      console.error('模型加载失败:', error);
+      window.logger?.error('Live2D模型加载失败', { modelPath, error });
       throw error;
     }
   }
@@ -190,7 +190,7 @@ class Live2DManager implements ILive2DManager {
       }
       
       resizeTimeout = window.setTimeout(() => {
-        console.log('窗口大小变化，调整模型位置');
+        window.logger?.debug('Live2D窗口大小变化，调整模型位置');
         this.handleResize();
         resizeTimeout = null;
       }, 100);
@@ -210,7 +210,7 @@ class Live2DManager implements ILive2DManager {
     const newWidth = container.clientWidth;
     const newHeight = container.clientHeight;
 
-    console.log(`调整窗口尺寸: ${newWidth}x${newHeight}`);
+    window.logger?.debug('Live2D调整窗口尺寸', { width: newWidth, height: newHeight });
 
     // 更新canvas的CSS尺寸
     this.canvas.style.width = newWidth + 'px';
@@ -275,7 +275,7 @@ class Live2DManager implements ILive2DManager {
         
         // 如果没有移动，触发点击事件
         if (!hasMoved && this.model) {
-          console.log('模型被点击');
+          window.logger?.debug('Live2D模型被点击');
           // 可以在这里触发点击事件
         }
       }
@@ -330,7 +330,7 @@ class Live2DManager implements ILive2DManager {
     model.x = canvasWidth / 2;
     model.y = canvasHeight / 2;
     
-    console.log('模型位置调整:', {
+    window.logger?.debug('Live2D模型位置调整', {
       originalSize: this.originalModelBounds,
       baseScale: this.baseScale,
       userScale: this.userScale,
@@ -363,7 +363,7 @@ class Live2DManager implements ILive2DManager {
       const finalScale = this.baseScale * this.userScale;
       model.scale.set(finalScale);
       
-      console.log('滚轮缩放:', {
+      window.logger?.debug('Live2D滚轮缩放', {
         userScale: this.userScale.toFixed(2),
         finalScale: finalScale.toFixed(2)
       });
@@ -378,7 +378,7 @@ class Live2DManager implements ILive2DManager {
    */
   public playMotion(motionGroup: string, motionIndex: number = 0, _priority: number = 2): void {
     if (!this.model) {
-      console.warn('模型未加载');
+      window.logger?.warn('Live2D模型未加载，无法播放动作');
       return;
     }
 
@@ -396,7 +396,7 @@ class Live2DManager implements ILive2DManager {
           motionPromise.then(() => {
             this.isPlayingMotion = false;
           }).catch((error: any) => {
-            console.error('动作播放错误:', error);
+            window.logger?.error('Live2D动作播放错误', { motionGroup, motionIndex, error });
             this.isPlayingMotion = false;
           });
         } else {
@@ -406,13 +406,13 @@ class Live2DManager implements ILive2DManager {
           }, 2000); // 默认2秒后恢复
         }
         
-        console.log(`播放动作: ${motionGroup}[${motionIndex}]`);
+        window.logger?.debug('Live2D播放动作', { motionGroup, motionIndex });
         this.currentMotion = `${motionGroup}[${motionIndex}]`;
       } else {
-        console.warn('模型不支持动作播放');
+        window.logger?.warn('Live2D模型不支持动作播放');
       }
     } catch (error) {
-      console.error('播放动作失败:', error);
+      window.logger.error('播放动作失败:', error);
       this.isPlayingMotion = false;
     }
   }
@@ -423,7 +423,7 @@ class Live2DManager implements ILive2DManager {
    */
   public setExpression(expressionId: string): void {
     if (!this.model) {
-      console.warn('模型未加载');
+      window.logger?.warn('Live2D模型未加载，无法设置表情');
       return;
     }
 
@@ -433,13 +433,13 @@ class Live2DManager implements ILive2DManager {
       // 使用 pixi-live2d-display 的表情设置
       if (model.internalModel && model.internalModel.motionManager) {
         model.expression(expressionId);
-        console.log(`设置表情: ${expressionId}`);
+        window.logger?.debug('Live2D设置表情', { expressionId });
         this.currentExpression = expressionId;
       } else {
-        console.warn('模型不支持表情设置');
+        window.logger?.warn('Live2D模型不支持表情设置');
       }
     } catch (error) {
-      console.error('设置表情失败:', error);
+      window.logger?.error('Live2D设置表情失败', { expressionId, error });
     }
   }
 
@@ -475,7 +475,7 @@ class Live2DManager implements ILive2DManager {
   public tap(x: number, y: number): void {
     if (!this.model) return;
 
-    console.log('点击模型:', x, y);
+    window.logger?.debug('Live2D点击模型', { x, y });
     
     const model = this.model as any;
     
@@ -484,14 +484,14 @@ class Live2DManager implements ILive2DManager {
       const hitAreaNames = model.internalModel.hitTest(x, y);
       if (hitAreaNames && hitAreaNames.length > 0) {
         const hitAreaName = hitAreaNames[0];
-        console.log('命中区域:', hitAreaName);
+        window.logger?.debug('Live2D命中区域', { hitAreaName, x, y });
         
         // 检查该部位是否启用触摸反应
         if (this.isTapEnabled(hitAreaName)) {
           // 仅发送触碰事件到后端，由后端决定如何响应
           this.sendTapEventToBackend(hitAreaName, x, y);
         } else {
-          console.log('该部位触摸反应未启用:', hitAreaName);
+          window.logger?.debug('Live2D该部位触摸反应未启用', { hitAreaName });
         }
       } else {
         // 未命中任何区域
@@ -583,11 +583,11 @@ class Live2DManager implements ILive2DManager {
    */
   private sendModelInfoToBackend(modelInfo: ModelInfo): void {
     if (!modelInfo || !modelInfo.available) {
-      console.warn('模型信息不可用，跳过发送');
+      window.logger?.warn('Live2D模型信息不可用，跳过发送');
       return;
     }
 
-    console.log('发送模型信息到后端:', modelInfo);
+    window.logger?.info('Live2D发送模型信息到后端', { modelPath: modelInfo.modelPath });
     
     // 通过 backend-client 发送
     if (window.backendClient) {
@@ -595,7 +595,7 @@ class Live2DManager implements ILive2DManager {
         type: 'model_info',
         data: modelInfo
       }).catch(err => {
-        console.error('发送模型信息失败:', err);
+        window.logger?.error('Live2D发送模型信息失败', { error: err });
       });
     }
   }
@@ -645,7 +645,7 @@ class Live2DManager implements ILive2DManager {
         timestamp: Date.now()
       }
     }).catch(err => {
-      console.error('发送触碰事件失败:', err);
+      window.logger?.error('Live2D发送触碰事件失败', { hitAreaName, error: err });
     });
   }
 
@@ -653,10 +653,10 @@ class Live2DManager implements ILive2DManager {
    * 执行同步指令（支持文字、音频、动作、表情的组合）
    */
   public async executeSyncCommand(command: SyncCommandData): Promise<void> {
-    console.log('执行同步指令:', command);
+    window.logger?.info('Live2D执行同步指令', { actions: command.actions?.length });
 
     if (!command || !command.actions) {
-      console.warn('同步指令格式错误');
+      window.logger?.warn('Live2D同步指令格式错误');
       return;
     }
 
@@ -692,7 +692,7 @@ class Live2DManager implements ILive2DManager {
         }
         break;
       default:
-        console.warn('未知动作类型:', action.type);
+        window.logger?.warn('Live2D未知动作类型', { type: action.type });
     }
   }
 
@@ -753,7 +753,7 @@ class Live2DManager implements ILive2DManager {
         this.lookAt(this.mouseX, this.mouseY);
       }
     } catch (error) {
-      console.error('[Live2D] 更新视线跟随失败:', error);
+      window.logger?.error('Live2D更新视线跟随失败', { error });
     }
     
     // 继续下一帧
@@ -777,7 +777,7 @@ class Live2DManager implements ILive2DManager {
    */
   public setParameter(parameterId: string, value: number, weight: number = 1.0): void {
     if (!this.model) {
-      console.warn('[Live2D] 模型未加载，无法设置参数');
+      window.logger.warn('[Live2D] 模型未加载，无法设置参数');
       return;
     }
 
@@ -786,7 +786,7 @@ class Live2DManager implements ILive2DManager {
       const coreModel = model.internalModel?.coreModel;
       
       if (!coreModel) {
-        console.warn('[Live2D] 无法访问模型内部结构');
+        window.logger.warn('[Live2D] 无法访问模型内部结构');
         return;
       }
 
@@ -794,10 +794,10 @@ class Live2DManager implements ILive2DManager {
       if (typeof coreModel.addParameterValueById === 'function') {
         coreModel.addParameterValueById(parameterId, value * weight);
       } else {
-        console.warn('[Live2D] 模型不支持 addParameterValueById 方法');
+        window.logger.warn('[Live2D] 模型不支持 addParameterValueById 方法');
       }
     } catch (error) {
-      console.error('[Live2D] 设置参数失败:', error);
+      window.logger.error('[Live2D] 设置参数失败:', error);
     }
   }
 
@@ -831,7 +831,7 @@ class Live2DManager implements ILive2DManager {
       const nativeModel = coreModel.getModel ? coreModel.getModel() : coreModel;
       
       if (!nativeModel || !nativeModel.parameters) {
-        console.warn('[Live2D] 无法访问模型参数');
+        window.logger?.warn('Live2D无法访问模型参数');
         return [];
       }
 
@@ -854,13 +854,13 @@ class Live2DManager implements ILive2DManager {
           });
         } catch (paramError) {
           // 忽略单个参数的错误
-          console.warn(`[Live2D] 无法获取参数 [${i}]:`, paramError);
+          window.logger?.warn('Live2D无法获取参数', { index: i, error: paramError });
         }
       }
 
       return parameters;
     } catch (error) {
-      console.error('[Live2D] 获取参数列表失败:', error);
+      window.logger?.error('Live2D获取参数列表失败', { error });
       return [];
     }
   }

@@ -161,19 +161,39 @@ class PluginUI {
 
             <div class="plugin-capabilities">
               <span class="capabilities-label">
-                <i data-lucide="zap" style="width: 14px; height: 14px;"></i>
-                功能:
+                <i data-lucide="shield" style="width: 14px; height: 14px;"></i>
+                权限:
               </span>
-              ${plugin.manifest.capabilities.slice(0, 3).map(cap => 
-                `<span class="capability-tag">${cap}</span>`
-              ).join('')}
-              ${plugin.manifest.capabilities.length > 3 ? 
-                `<span class="capability-tag">+${plugin.manifest.capabilities.length - 3}</span>` : ''}
+              <div class="permission-tags" id="permissions-${plugin.manifest.name}">
+                ${this.renderPermissions(plugin.manifest, false)}
+              </div>
+              ${plugin.manifest.permissions.length > 3 ? `
+                <button class="permission-toggle-btn" onclick="window.pluginUI.togglePermissions('${plugin.manifest.name}')">
+                  <span class="toggle-text">展开</span>
+                  <i data-lucide="chevron-down" style="width: 14px; height: 14px;"></i>
+                </button>
+              ` : ''}
             </div>
           </div>
 
           <div class="plugin-card-footer">
-            ${actionButtons}
+            <div class="plugin-footer-left">
+              <button class="plugin-icon-btn" onclick="window.pluginUI.showPluginSettings('${plugin.manifest.name}')" title="插件设置">
+                <i data-lucide="settings" style="width: 16px; height: 16px;"></i>
+              </button>
+              <button class="plugin-icon-btn" onclick="window.electronAPI.openPluginDirectory('${plugin.directoryName}')" title="${window.i18nManager?.t('plugin.openDirectory') || '打开插件目录'}">
+                <i data-lucide="folder" style="width: 20px; height: 20px;"></i>
+              </button>
+              <button class="plugin-icon-btn" onclick="window.electronAPI.openPluginDataDirectory('${plugin.manifest.id}')" title="${window.i18nManager?.t('plugin.openDataDirectory') || '打开数据目录'}">
+                <i data-lucide="database" style="width: 20px; height: 20px;"></i>
+              </button>
+              <button class="plugin-icon-btn plugin-btn-danger-icon" onclick="window.pluginUI.clearPluginData('${plugin.manifest.name}')" title="${window.i18nManager?.t('plugin.clearData') || '清除数据'}">
+                <i data-lucide="trash-2" style="width: 16px; height: 16px;"></i>
+              </button>
+            </div>
+            <div class="plugin-footer-right">
+              ${actionButtons}
+            </div>
           </div>
         </div>
       `;
@@ -182,6 +202,101 @@ class PluginUI {
     // 创建 Lucide 图标
     if (window.lucide) {
       window.lucide.createIcons();
+    }
+  }
+
+  /**
+   * 渲染权限标签
+   */
+  private renderPermissions(manifest: any, expanded: boolean): string {
+    const permissions = manifest.permissions || [];
+    const locale = window.i18nManager?.getLocale() || 'zh-CN';
+    
+    const visiblePermissions = expanded ? permissions : permissions.slice(0, 3);
+    
+    const dangerLevelColors: { [key: string]: string } = {
+      'safe': '#28a745',
+      'low': '#17a2b8',
+      'medium': '#ffc107',
+      'high': '#fd7e14',
+      'critical': '#dc3545'
+    };
+    
+    const tags = visiblePermissions.map((perm: any) => {
+      const permI18n = perm.i18n?.[locale] || perm.i18n?.['zh-CN'] || {};
+      const color = dangerLevelColors[perm.dangerLevel] || '#6c757d';
+      const description = (permI18n.description || '').replace(/"/g, '&quot;');
+      return `<span class="permission-tag" style="border-color: ${color}; color: ${color};" data-hint="${description}">${permI18n.name || perm.id}</span>`;
+    }).join('');
+    
+    return tags + (expanded && permissions.length > 3 ? '' : (!expanded && permissions.length > 3 ? `<span class="permission-tag" style="border-color: #6c757d; color: #6c757d;">+${permissions.length - 3}</span>` : ''));
+  }
+
+  /**
+   * 切换权限显示
+   */
+  public togglePermissions(pluginName: string): void {
+    const container = document.getElementById(`permissions-${pluginName}`);
+    const button = container?.parentElement?.querySelector('.permission-toggle-btn');
+    if (!container || !button) return;
+
+    const plugin = window.pluginConnector.getPlugins().find(p => p.manifest.name === pluginName);
+    if (!plugin) return;
+
+    const isExpanded = container.dataset.expanded === 'true';
+    container.dataset.expanded = String(!isExpanded);
+    container.innerHTML = this.renderPermissions(plugin.manifest, !isExpanded);
+
+    const toggleText = button.querySelector('.toggle-text');
+    const toggleIcon = button.querySelector('i');
+    if (toggleText && toggleIcon) {
+      toggleText.textContent = isExpanded ? '展开' : '收起';
+      toggleIcon.setAttribute('data-lucide', isExpanded ? 'chevron-down' : 'chevron-up');
+      if (window.lucide) {
+        window.lucide.createIcons();
+      }
+    }
+  }
+
+  /**
+   * 显示插件设置
+   */
+  public showPluginSettings(pluginName: string): void {
+    const plugin = window.pluginConnector.getPlugin(pluginName);
+    if (!plugin) {
+      alert('插件不存在');
+      return;
+    }
+    
+    const schema = plugin.manifest.config;
+    if (!schema || Object.keys(schema).length === 0) {
+      alert('此插件没有可配置的设置项');
+      return;
+    }
+    
+    const i18n = window.pluginConnector.getPluginI18n(pluginName);
+    const displayName = i18n?.displayName || pluginName;
+    
+    window.pluginConfigUI.showConfigDialog(plugin.manifest.id, displayName, schema);
+  }
+
+  /**
+   * 清除插件数据
+   */
+  public async clearPluginData(pluginName: string): Promise<void> {
+    const confirmed = confirm(`确定要清除插件 "${pluginName}" 的所有数据吗？此操作不可撤销。`);
+    if (!confirmed) return;
+
+    try {
+      const result = await window.electronAPI.clearPluginData(pluginName);
+      if (result.success) {
+        alert('插件数据已清除');
+      } else {
+        alert(`清除失败: ${result.error || '未知错误'}`);
+      }
+    } catch (error) {
+      window.logger.error('清除插件数据失败:', error);
+      alert('清除失败，请查看控制台');
     }
   }
 }

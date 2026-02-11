@@ -2,15 +2,67 @@
   "id": "ui-automation",
   "name": "ui-automation",
   "version": "1.0.0",
-  "author": "NyaDeskPet",
+  "author": "gameswu",
   "type": "automation",
   "url": "ws://localhost:8766",
   "autoStart": false,
   "permissions": [
-    "ui.click",
-    "ui.type",
-    "ui.screenshot",
-    "ui.window"
+    {
+      "id": "ui.click",
+      "dangerLevel": "medium",
+      "i18n": {
+        "zh-CN": {
+          "name": "鼠标点击",
+          "description": "允许插件控制鼠标点击操作"
+        },
+        "en-US": {
+          "name": "Mouse Click",
+          "description": "Allow plugin to control mouse click operations"
+        }
+      }
+    },
+    {
+      "id": "ui.type",
+      "dangerLevel": "high",
+      "i18n": {
+        "zh-CN": {
+          "name": "键盘输入",
+          "description": "允许插件模拟键盘输入，可能捕获敏感信息"
+        },
+        "en-US": {
+          "name": "Keyboard Input",
+          "description": "Allow plugin to simulate keyboard input, may capture sensitive information"
+        }
+      }
+    },
+    {
+      "id": "ui.screenshot",
+      "dangerLevel": "medium",
+      "i18n": {
+        "zh-CN": {
+          "name": "屏幕截图",
+          "description": "允许插件捕获屏幕截图"
+        },
+        "en-US": {
+          "name": "Screenshot",
+          "description": "Allow plugin to capture screenshots"
+        }
+      }
+    },
+    {
+      "id": "ui.window",
+      "dangerLevel": "low",
+      "i18n": {
+        "zh-CN": {
+          "name": "窗口信息",
+          "description": "允许插件获取窗口列表和信息"
+        },
+        "en-US": {
+          "name": "Window Information",
+          "description": "Allow plugin to get window list and information"
+        }
+      }
+    }
   ],
   "capabilities": [
     "click",

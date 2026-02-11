@@ -21,7 +21,7 @@ class CameraManager implements ICameraManager {
    * 注意：不在这里枚举设备，只在真正需要使用时才请求权限
    */
   public async initialize(): Promise<void> {
-    console.log('摄像头管理器初始化（延迟加载设备）');
+    window.logger.info('摄像头管理器初始化（延迟加载设备）');
     // 不在初始化时枚举设备，避免过早请求权限
   }
 
@@ -35,11 +35,11 @@ class CameraManager implements ICameraManager {
       const devices = await navigator.mediaDevices.enumerateDevices();
       this.devices = devices.filter(device => device.kind === 'videoinput');
       
-      console.log(`发现 ${this.devices.length} 个摄像头设备:`, this.devices);
+      window.logger.info(`发现 ${this.devices.length} 个摄像头设备:`, this.devices);
       
       return this.devices;
     } catch (error) {
-      console.error('枚举摄像头设备失败:', error);
+      window.logger.error('枚举摄像头设备失败:', error);
       return [];
     }
   }
@@ -86,9 +86,9 @@ class CameraManager implements ICameraManager {
         }
       }
 
-      console.log('摄像头已启动:', deviceId || '默认设备');
+      window.logger.info('摄像头已启动:', deviceId || '默认设备');
     } catch (error) {
-      console.error('启动摄像头失败:', error);
+      window.logger.error('启动摄像头失败:', error);
       this.isActive = false;
       throw error;
     }
@@ -113,7 +113,7 @@ class CameraManager implements ICameraManager {
         container.classList.add('hidden');
       }
 
-      console.log('摄像头已停止');
+      window.logger.info('摄像头已停止');
     }
   }
 
@@ -148,7 +148,7 @@ class CameraManager implements ICameraManager {
    */
   public async captureFrame(): Promise<string | null> {
     if (!this.videoElement || !this.isActive) {
-      console.warn('摄像头未启动，无法截图');
+      window.logger.warn('摄像头未启动，无法截图');
       return null;
     }
 
@@ -166,11 +166,11 @@ class CameraManager implements ICameraManager {
       
       // 转换为 base64
       const base64 = canvas.toDataURL('image/jpeg', 0.8);
-      console.log('截取画面成功');
+      window.logger.info('截取画面成功');
       
       return base64;
     } catch (error) {
-      console.error('截取画面失败:', error);
+      window.logger.error('截取画面失败:', error);
       return null;
     }
   }

@@ -2071,13 +2071,143 @@ body.dark-theme {
   font-weight: 500;
 }
 
+/* 权限标签 */
+.plugin-capabilities {
+  margin-top: 12px;
+}
+
+.permission-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 8px;
+}
+
+.permission-tag {
+  display: inline-block;
+  padding: 4px 10px;
+  font-size: 12px;
+  border: 1.5px solid;
+  border-radius: 12px;
+  font-weight: 500;
+  transition: all 0.2s ease;
+  cursor: help;
+  position: relative;
+}
+
+.permission-tag:hover {
+  opacity: 0.8;
+  transform: scale(1.05);
+}
+
+.permission-tag[data-hint]:hover::after {
+  content: attr(data-hint);
+  position: absolute;
+  bottom: calc(100% + 8px);
+  left: 50%;
+  transform: translateX(-50%);
+  background: #333;
+  color: #fff;
+  padding: 10px 16px;
+  border-radius: 8px;
+  font-size: 13px;
+  line-height: 1.6;
+  white-space: normal;
+  min-width: 180px;
+  max-width: min(400px, 35vw);
+  width: max-content;
+  z-index: 10000;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.4);
+  pointer-events: none;
+  animation: tooltipFadeIn 0.2s ease;
+  font-weight: normal;
+}
+
+.permission-tag[data-hint]:hover::before {
+  content: '';
+  position: absolute;
+  bottom: calc(100% + 2px);
+  left: 50%;
+  transform: translateX(-50%);
+  border: 6px solid transparent;
+  border-top-color: #333;
+  z-index: 10000;
+  pointer-events: none;
+  animation: tooltipFadeIn 0.2s ease;
+}
+
+.permission-toggle-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 10px;
+  margin-top: 8px;
+  background: transparent;
+  border: 1px solid #d1d5db;
+  border-radius: 12px;
+  font-size: 12px;
+  color: #6b7280;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.permission-toggle-btn:hover {
+  background: #f3f4f6;
+  border-color: #9ca3af;
+}
+
 /* 卡片底部 */
 .plugin-card-footer {
   display: flex;
+  justify-content: space-between;
+  align-items: center;
   gap: 8px;
   padding: 12px 16px;
   background: #f9fafb;
   border-top: 1px solid #f3f4f6;
+}
+
+.plugin-footer-left {
+  display: flex;
+  gap: 6px;
+}
+
+.plugin-footer-right {
+  display: flex;
+  gap: 8px;
+  flex: 1;
+  justify-content: flex-end;
+}
+
+.plugin-icon-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  border: 1px solid #d1d5db;
+  border-radius: 8px;
+  background: white;
+  color: #6b7280;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.plugin-icon-btn:hover {
+  background: #f3f4f6;
+  border-color: #9ca3af;
+  color: #374151;
+}
+
+.plugin-btn-danger-icon {
+  color: #ef4444;
+  border-color: #fecaca;
+}
+
+.plugin-btn-danger-icon:hover {
+  background: #fef2f2;
+  border-color: #fca5a5;
+  color: #dc2626;
 }
 
 .plugin-btn {
@@ -2207,6 +2337,55 @@ body.dark-theme {
 .dark-theme .plugin-card-footer {
   background: #1a202c;
   border-top-color: #4a5568;
+}
+
+.dark-theme .plugin-icon-btn {
+  background: #2d3748;
+  border-color: #4a5568;
+  color: #a0aec0;
+}
+
+.dark-theme .plugin-icon-btn:hover {
+  background: #374151;
+  border-color: #6b7280;
+  color: #e2e8f0;
+}
+
+.dark-theme .plugin-btn-danger-icon {
+  color: #f56565;
+  border-color: #742a2a;
+}
+
+.dark-theme .plugin-btn-danger-icon:hover {
+  background: #2d1b1b;
+  border-color: #9b2c2c;
+  color: #fc8181;
+}
+
+.dark-theme .permission-tag {
+  background: transparent;
+}
+
+.dark-theme .permission-tag[data-hint]:hover::after {
+  background: rgba(26, 26, 26, 0.98);
+  color: #d4d4d4;
+  border: 1px solid #424242;
+  backdrop-filter: blur(8px);
+}
+
+.dark-theme .permission-tag[data-hint]:hover::before {
+  border-top-color: #1a1a1a;
+}
+
+.dark-theme .permission-toggle-btn {
+  background: transparent;
+  border-color: #4a5568;
+  color: #a0aec0;
+}
+
+.dark-theme .permission-toggle-btn:hover {
+  background: #2d3748;
+  border-color: #6b7280;
 }
 
 .dark-theme .empty-state {
@@ -2563,3 +2742,586 @@ body.dark-theme {
   color: #999;
 }
 
+/* ============ 插件配置对话框 ============ */
+.plugin-config-dialog-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.5);
+  backdrop-filter: blur(4px);
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  z-index: 10000;
+  animation: fadeIn 0.2s ease;
+}
+
+.plugin-config-dialog {
+  background: #fff;
+  border-radius: 12px;
+  width: 600px;
+  max-height: 80vh;
+  display: flex;
+  flex-direction: column;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.2);
+  animation: slideIn 0.3s ease;
+}
+
+.plugin-config-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 20px 24px;
+  border-bottom: 1px solid #e0e0e0;
+}
+
+.plugin-config-header h3 {
+  font-size: 18px;
+  font-weight: 600;
+  color: #333;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.plugin-config-header .close-btn {
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: 4px;
+  border-radius: 6px;
+  transition: background 0.2s ease;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.plugin-config-header .close-btn:hover {
+  background: rgba(0, 0, 0, 0.05);
+}
+
+.plugin-config-body {
+  padding: 24px;
+  overflow-y: auto;
+  flex: 1;
+}
+
+.plugin-config-fields {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+.plugin-config-field {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.plugin-config-label {
+  font-size: 14px;
+  font-weight: 500;
+  color: #333;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.plugin-config-hint {
+  color: #999;
+  cursor: help;
+  display: flex;
+  align-items: center;
+  position: relative;
+}
+
+.plugin-config-hint:hover::after {
+  content: attr(data-hint);
+  position: absolute;
+  left: 24px;
+  top: 50%;
+  transform: translateY(-50%);
+  background: #333;
+  color: #fff;
+  padding: 10px 16px;
+  border-radius: 8px;
+  font-size: 13px;
+  line-height: 1.6;
+  white-space: normal;
+  min-width: 200px;
+  max-width: min(450px, 40vw);
+  width: max-content;
+  z-index: 10000;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.4);
+  pointer-events: none;
+  animation: tooltipFadeIn 0.2s ease;
+}
+
+.plugin-config-hint:hover::before {
+  content: '';
+  position: absolute;
+  left: 18px;
+  top: 50%;
+  transform: translateY(-50%);
+  border: 6px solid transparent;
+  border-right-color: #333;
+  z-index: 10000;
+  pointer-events: none;
+  animation: tooltipFadeIn 0.2s ease;
+}
+
+.plugin-config-hint.obvious {
+  color: #ff9800;
+}
+
+.plugin-config-hint.obvious:hover::after {
+  background: #ff9800;
+  color: #fff;
+}
+
+.plugin-config-hint.obvious:hover::before {
+  border-right-color: #ff9800;
+}
+
+@keyframes tooltipFadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(-50%) translateX(-5px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(-50%) translateX(0);
+  }
+}
+
+.plugin-config-description {
+  font-size: 13px;
+  color: #666;
+  margin-top: -4px;
+}
+
+.plugin-config-input,
+.plugin-config-select,
+.plugin-config-textarea {
+  padding: 10px 12px;
+  border: 1px solid #ddd;
+  border-radius: 8px;
+  font-size: 14px;
+  font-family: inherit;
+  transition: border-color 0.2s ease;
+}
+
+.plugin-config-input:focus,
+.plugin-config-select:focus,
+.plugin-config-textarea:focus {
+  outline: none;
+  border-color: #4CAF50;
+}
+
+.plugin-config-textarea {
+  resize: vertical;
+  min-height: 80px;
+  font-family: 'Consolas', 'Monaco', monospace;
+}
+
+.plugin-config-textarea.editor {
+  min-height: 200px;
+  background: #f5f5f5;
+}
+
+.plugin-config-switch {
+  position: relative;
+  display: inline-block;
+  width: 48px;
+  height: 26px;
+}
+
+.plugin-config-switch input {
+  opacity: 0;
+  width: 0;
+  height: 0;
+}
+
+.plugin-config-slider {
+  position: absolute;
+  cursor: pointer;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background-color: #ccc;
+  transition: 0.3s;
+  border-radius: 26px;
+}
+
+.plugin-config-slider:before {
+  position: absolute;
+  content: "";
+  height: 20px;
+  width: 20px;
+  left: 3px;
+  bottom: 3px;
+  background-color: white;
+  transition: 0.3s;
+  border-radius: 50%;
+}
+
+.plugin-config-switch input:checked + .plugin-config-slider {
+  background-color: #4CAF50;
+}
+
+.plugin-config-switch input:checked + .plugin-config-slider:before {
+  transform: translateX(22px);
+}
+
+.plugin-config-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.plugin-config-list-item {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+.plugin-config-list-item input {
+  flex: 1;
+}
+
+.plugin-config-footer {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 16px 24px;
+  border-top: 1px solid #e0e0e0;
+}
+
+.plugin-config-footer-right {
+  display: flex;
+  gap: 12px;
+}
+
+.plugin-config-btn {
+  padding: 10px 20px;
+  border: none;
+  border-radius: 8px;
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.plugin-config-btn.primary {
+  background: #4CAF50;
+  color: white;
+}
+
+.plugin-config-btn.primary:hover {
+  background: #45a049;
+}
+
+.plugin-config-btn.secondary {
+  background: #f5f5f5;
+  color: #333;
+}
+
+.plugin-config-btn.secondary:hover {
+  background: #e8e8e8;
+}
+
+.plugin-config-btn.small {
+  padding: 6px 12px;
+  font-size: 13px;
+}
+
+.plugin-config-btn.danger {
+  background: #f44336;
+  color: white;
+}
+
+.plugin-config-btn.danger:hover {
+  background: #d32f2f;
+}
+
+/* 暗主题 */
+.dark-theme .plugin-config-dialog {
+  background: #2a2a2a;
+}
+
+.dark-theme .plugin-config-header {
+  border-bottom-color: #424242;
+}
+
+.dark-theme .plugin-config-header h3 {
+  color: #d4d4d4;
+}
+
+.dark-theme .plugin-config-header .close-btn:hover {
+  background: rgba(255, 255, 255, 0.05);
+}
+
+.dark-theme .plugin-config-label {
+  color: #d4d4d4;
+}
+
+.dark-theme .plugin-config-description {
+  color: #999;
+}
+
+.dark-theme .plugin-config-input,
+.dark-theme .plugin-config-select,
+.dark-theme .plugin-config-textarea {
+  background: #1e1e1e;
+  border-color: #424242;
+  color: #d4d4d4;
+}
+
+.dark-theme .plugin-config-input:focus,
+.dark-theme .plugin-config-select:focus,
+.dark-theme .plugin-config-textarea:focus {
+  border-color: #4CAF50;
+}
+
+.dark-theme .plugin-config-textarea.editor {
+  background: #1a1a1a;
+}
+
+.dark-theme .plugin-config-footer {
+  border-top-color: #424242;
+}
+
+.dark-theme .plugin-config-btn.secondary {
+  background: #3a3a3a;
+  color: #d4d4d4;
+}
+
+.dark-theme .plugin-config-btn.secondary:hover {
+  background: #4a4a4a;
+}
+
+.dark-theme .plugin-config-hint:hover::after {
+  background: rgba(26, 26, 26, 0.98);
+  border: 1px solid #424242;
+  backdrop-filter: blur(8px);
+}
+
+.dark-theme .plugin-config-hint:hover::before {
+  border-right-color: #1a1a1a;
+}
+
+.dark-theme .plugin-config-hint.obvious:hover::after {
+  background: #ff9800;
+  border-color: #ff9800;
+}
+
+.dark-theme .plugin-config-hint.obvious:hover::before {
+  border-right-color: #ff9800;
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes slideIn {
+  from {
+    transform: translateY(-20px);
+    opacity: 0;
+  }
+  to {
+    transform: translateY(0);
+    opacity: 1;
+  }
+}
+/* ============ 权限请求对话框 ============ */
+.permission-dialog-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.6);
+  backdrop-filter: blur(4px);
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  z-index: 10001;
+  animation: fadeIn 0.2s ease;
+}
+
+.permission-dialog {
+  background: #fff;
+  border-radius: 16px;
+  width: 460px;
+  box-shadow: 0 12px 48px rgba(0, 0, 0, 0.3);
+  animation: slideIn 0.3s ease;
+}
+
+.permission-dialog-header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 24px 24px 16px 24px;
+  border-bottom: 1px solid #e0e0e0;
+}
+
+.permission-dialog-header h3 {
+  font-size: 20px;
+  font-weight: 600;
+  color: #333;
+  margin: 0;
+}
+
+.permission-dialog-body {
+  padding: 24px;
+}
+
+.permission-dialog-plugin {
+  font-size: 15px;
+  color: #333;
+  margin-bottom: 16px;
+}
+
+.permission-dialog-plugin strong {
+  color: #4CAF50;
+  font-weight: 600;
+}
+
+.permission-dialog-detail {
+  background: #f8f9fa;
+  border-radius: 12px;
+  padding: 16px;
+  margin-bottom: 20px;
+}
+
+.permission-dialog-name {
+  font-size: 16px;
+  font-weight: 600;
+  color: #333;
+  margin-bottom: 8px;
+}
+
+.permission-dialog-description {
+  font-size: 14px;
+  color: #666;
+  line-height: 1.6;
+  margin-bottom: 12px;
+}
+
+.permission-dialog-danger {
+  font-size: 13px;
+  font-weight: 600;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.permission-dialog-remember {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  cursor: pointer;
+  user-select: none;
+}
+
+.permission-dialog-remember input[type="checkbox"] {
+  width: 18px;
+  height: 18px;
+  cursor: pointer;
+}
+
+.permission-dialog-remember span {
+  font-size: 14px;
+  color: #666;
+}
+
+.permission-dialog-footer {
+  display: flex;
+  gap: 12px;
+  padding: 16px 24px 24px 24px;
+  justify-content: flex-end;
+}
+
+.permission-dialog-btn {
+  padding: 12px 24px;
+  border: none;
+  border-radius: 10px;
+  font-size: 15px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  min-width: 100px;
+}
+
+.permission-dialog-btn.allow {
+  background: #4CAF50;
+  color: white;
+}
+
+.permission-dialog-btn.allow:hover {
+  background: #45a049;
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(76, 175, 80, 0.3);
+}
+
+.permission-dialog-btn.deny {
+  background: #f5f5f5;
+  color: #333;
+}
+
+.permission-dialog-btn.deny:hover {
+  background: #e8e8e8;
+}
+
+/* 暗主题 */
+.dark-theme .permission-dialog {
+  background: #2a2a2a;
+}
+
+.dark-theme .permission-dialog-header {
+  border-bottom-color: #424242;
+}
+
+.dark-theme .permission-dialog-header h3 {
+  color: #d4d4d4;
+}
+
+.dark-theme .permission-dialog-plugin {
+  color: #d4d4d4;
+}
+
+.dark-theme .permission-dialog-detail {
+  background: #1e1e1e;
+}
+
+.dark-theme .permission-dialog-name {
+  color: #d4d4d4;
+}
+
+.dark-theme .permission-dialog-description {
+  color: #999;
+}
+
+.dark-theme .permission-dialog-remember span {
+  color: #999;
+}
+
+.dark-theme .permission-dialog-btn.deny {
+  background: #3a3a3a;
+  color: #d4d4d4;
+}
+
+.dark-theme .permission-dialog-btn.deny:hover {
+  background: #4a4a4a;
+}

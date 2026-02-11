@@ -2,15 +2,67 @@
   "id": "terminal",
   "name": "terminal",
   "version": "1.0.0",
-  "author": "NyaDeskPet",
+  "author": "gameswu",
   "type": "system",
   "url": "ws://localhost:8765",
   "autoStart": false,
   "permissions": [
-    "terminal.execute",
-    "terminal.session",
-    "terminal.read",
-    "terminal.write"
+    {
+      "id": "terminal.execute",
+      "dangerLevel": "high",
+      "i18n": {
+        "zh-CN": {
+          "name": "执行终端命令",
+          "description": "允许插件执行系统命令，可能影响系统安全"
+        },
+        "en-US": {
+          "name": "Execute Commands",
+          "description": "Allow plugin to execute system commands, may affect system security"
+        }
+      }
+    },
+    {
+      "id": "terminal.session",
+      "dangerLevel": "medium",
+      "i18n": {
+        "zh-CN": {
+          "name": "会话管理",
+          "description": "允许插件创建和管理Shell会话"
+        },
+        "en-US": {
+          "name": "Session Management",
+          "description": "Allow plugin to create and manage shell sessions"
+        }
+      }
+    },
+    {
+      "id": "terminal.read",
+      "dangerLevel": "low",
+      "i18n": {
+        "zh-CN": {
+          "name": "读取输出",
+          "description": "允许插件读取终端输出内容"
+        },
+        "en-US": {
+          "name": "Read Output",
+          "description": "Allow plugin to read terminal output"
+        }
+      }
+    },
+    {
+      "id": "terminal.write",
+      "dangerLevel": "medium",
+      "i18n": {
+        "zh-CN": {
+          "name": "写入输入",
+          "description": "允许插件向终端发送输入内容"
+        },
+        "en-US": {
+          "name": "Write Input",
+          "description": "Allow plugin to send input to terminal"
+        }
+      }
+    }
   ],
   "capabilities": [
     "execute",

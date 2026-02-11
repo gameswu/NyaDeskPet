@@ -46,9 +46,9 @@ class AudioPlayer implements IAudioPlayer {
     try {
       const AudioContextClass = window.AudioContext || (window as any).webkitAudioContext;
       this.audioContext = new AudioContextClass();
-      console.log('音频上下文初始化成功');
+      window.logger.info('音频上下文初始化成功');
     } catch (error) {
-      console.error('音频上下文初始化失败:', error);
+      window.logger.error('音频上下文初始化失败:', error);
     }
   }
 
@@ -87,7 +87,7 @@ class AudioPlayer implements IAudioPlayer {
     this.isStreamMode = false;
     this.isPlaying = false;
     
-    console.log('音频播放已停止');
+    window.logger.info('音频播放已停止');
   }
 
   /**
@@ -96,7 +96,7 @@ class AudioPlayer implements IAudioPlayer {
   public resume(): void {
     if (this.currentAudio && !this.isPlaying) {
       this.currentAudio.play().catch(error => {
-        console.error('恢复播放失败:', error);
+        window.logger.error('恢复播放失败:', error);
       });
       this.isPlaying = true;
     }
@@ -110,7 +110,7 @@ class AudioPlayer implements IAudioPlayer {
     if (this.currentAudio) {
       this.currentAudio.volume = this.volume;
     }
-    console.log('音量已设置为:', this.volume);
+    window.logger.info('音量已设置为:', this.volume);
   }
 
   /**
@@ -208,9 +208,9 @@ class AudioPlayer implements IAudioPlayer {
           this.processQueue();
         });
         
-        console.log('[AudioPlayer] 流式播放器就绪');
+        window.logger.info('[AudioPlayer] 流式播放器就绪');
       } catch (error) {
-        console.error('[AudioPlayer] 创建 SourceBuffer 失败:', error);
+        window.logger.error('[AudioPlayer] 创建 SourceBuffer 失败:', error);
       }
     });
     
@@ -218,18 +218,18 @@ class AudioPlayer implements IAudioPlayer {
     this.currentAudio.onplay = () => {
       this.isPlaying = true;
       this.startLipSync();
-      console.log('[AudioPlayer] 流式音频开始播放');
+      window.logger.info('[AudioPlayer] 流式音频开始播放');
     };
     
     this.currentAudio.onended = () => {
       this.isPlaying = false;
       this.stopLipSync();
       this.clearTimeline();
-      console.log('[AudioPlayer] 流式音频播放结束');
+      window.logger.info('[AudioPlayer] 流式音频播放结束');
     };
     
     this.currentAudio.onerror = (error) => {
-      console.error('[AudioPlayer] 流式音频错误:', error);
+      window.logger.error('[AudioPlayer] 流式音频错误:', error);
       this.isPlaying = false;
       this.stopLipSync();
     };
@@ -241,7 +241,7 @@ class AudioPlayer implements IAudioPlayer {
    */
   public appendAudioChunk(chunk: Uint8Array): void {
     if (!this.isStreamMode) {
-      console.warn('[AudioPlayer] 未在流式模式下');
+      window.logger.warn('[AudioPlayer] 未在流式模式下');
       return;
     }
     
@@ -250,7 +250,7 @@ class AudioPlayer implements IAudioPlayer {
     // 如果还没开始播放，且队列中有足够的数据，尝试开始播放
     if (!this.isPlaying && this.audioQueue.length >= 2 && this.currentAudio) {
       this.currentAudio.play().catch(err => {
-        console.warn('[AudioPlayer] 自动播放失败:', err);
+        window.logger.warn('[AudioPlayer] 自动播放失败:', err);
       });
     }
     
@@ -270,7 +270,7 @@ class AudioPlayer implements IAudioPlayer {
     try {
       this.sourceBuffer.appendBuffer(chunk.buffer as ArrayBuffer);
     } catch (error) {
-      console.error('[AudioPlayer] 追加音频块失败:', error);
+      window.logger.error('[AudioPlayer] 追加音频块失败:', error);
     }
   }
 
@@ -291,10 +291,10 @@ class AudioPlayer implements IAudioPlayer {
         try {
           if (this.mediaSource && this.mediaSource.readyState === 'open') {
             this.mediaSource.endOfStream();
-            console.log('[AudioPlayer] 流式传输结束');
+            window.logger.info('[AudioPlayer] 流式传输结束');
           }
         } catch (error) {
-          console.warn('[AudioPlayer] 结束流失败:', error);
+          window.logger.warn('[AudioPlayer] 结束流失败:', error);
         }
       }
     };
@@ -318,7 +318,7 @@ class AudioPlayer implements IAudioPlayer {
         if (totalDuration) {
           triggerTime = (item.timing / 100) * totalDuration;
         } else {
-          console.warn('[AudioPlayer] 百分比时间轴需要 totalDuration');
+          window.logger.warn('[AudioPlayer] 百分比时间轴需要 totalDuration');
           return;
         }
       } else {
@@ -341,7 +341,7 @@ class AudioPlayer implements IAudioPlayer {
       });
     });
     
-    console.log('[AudioPlayer] 时间轴已设置:', this.timelineCallbacks.length, '个触发点');
+    window.logger.info('[AudioPlayer] 时间轴已设置:', this.timelineCallbacks.length, '个触发点');
   }
 
   /**

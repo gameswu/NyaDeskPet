@@ -43,6 +43,7 @@ interface PluginInfo {
   locale: string;
   reconnectTimer: number | null;
   reconnectAttempts: number;
+  directoryName: string;  // 插件所在的文件夹名称
 }
 
 class PluginConnector {
@@ -64,12 +65,12 @@ class PluginConnector {
       const scanResult = await window.electronAPI.invoke('plugin:scan-directory');
       
       if (!scanResult.success || scanResult.plugins.length === 0) {
-        console.warn('[Plugin] 没有找到插件目录');
+        window.logger?.warn('插件系统：没有找到插件目录');
         this.updatePluginUI();
         return;
       }
 
-      console.log(`[Plugin] 发现 ${scanResult.plugins.length} 个插件:`, scanResult.plugins);
+      window.logger?.info('插件系统：发现插件', { count: scanResult.plugins.length, plugins: scanResult.plugins });
 
       // 加载每个插件的清单
       for (const pluginDir of scanResult.plugins) {
@@ -77,11 +78,24 @@ class PluginConnector {
           const result = await window.electronAPI.invoke('plugin:read-manifest', pluginDir);
           
           if (!result.success) {
-            console.warn(`[Plugin] 无法加载插件清单: ${pluginDir} - ${result.error}`);
+            window.logger?.warn('插件系统：无法加载插件清单', { pluginDir, error: result.error });
             continue;
           }
 
           const manifest: PluginManifest = result.manifest;
+          
+          // 兼容性处理：将旧格式的权限数组转换为新格式
+          if (manifest.permissions && manifest.permissions.length > 0 && typeof manifest.permissions[0] === 'string') {
+            // 旧格式，转换为新格式
+            manifest.permissions = (manifest.permissions as any).map((perm: string) => ({
+              id: perm,
+              dangerLevel: 'medium' as const,
+              i18n: {
+                'zh-CN': { name: perm, description: '' },
+                'en-US': { name: perm, description: '' }
+              }
+            }));
+          }
           
           this.plugins.set(manifest.name, {
             manifest,
@@ -90,18 +104,22 @@ class PluginConnector {
             processId: null,
             locale: window.settingsManager?.getSettings().locale || 'en-US',
             reconnectTimer: null,
-            reconnectAttempts: 0
+            reconnectAttempts: 0,
+            directoryName: pluginDir  // 保存文件夹名称
           });
 
-          console.log(`[Plugin] 加载插件清单: ${manifest.name} (${manifest.i18n['zh-CN']?.displayName || manifest.name})`);
+          window.logger?.info('插件系统：加载插件清单', { 
+            name: manifest.name, 
+            displayName: manifest.i18n['zh-CN']?.displayName || manifest.name 
+          });
         } catch (error) {
-          console.error(`[Plugin] 加载插件清单失败 (${pluginDir}):`, error);
+          window.logger?.error('插件系统：加载插件清单失败', { pluginDir, error });
         }
       }
 
       this.updatePluginUI();
     } catch (error) {
-      console.error('[Plugin] 加载插件失败:', error);
+      window.logger?.error('插件系统：加载插件失败', { error });
       this.updatePluginUI();
     }
   }
@@ -112,19 +130,21 @@ class PluginConnector {
   public async startPlugin(name: string): Promise<boolean> {
     const plugin = this.plugins.get(name);
     if (!plugin) {
-      console.error(`[Plugin] 插件 ${name} 不存在`);
+      window.logger?.error('插件系统：插件不存在', { name });
       return false;
     }
 
     if (plugin.status === 'running' || plugin.status === 'connected') {
-      console.log(`[Plugin] 插件 ${name} 已在运行`);
+      window.logger?.info('插件系统：插件已在运行', { name });
       return true;
     }
 
-    console.log(`[Plugin] 启动插件: ${name}`);
-    console.log(`[Plugin] 工作目录: ${plugin.manifest.workingDirectory}`);
-    console.log(`[Plugin] 预执行命令:`, plugin.manifest.preCommands);
-    console.log(`[Plugin] 主命令:`, plugin.manifest.command);
+    window.logger?.info('插件系统：启动插件', { 
+      name, 
+      workingDirectory: plugin.manifest.workingDirectory,
+      preCommands: plugin.manifest.preCommands,
+      command: plugin.manifest.command
+    });
     plugin.status = 'starting';
     this.updatePluginUI();
 
@@ -140,10 +160,10 @@ class PluginConnector {
       if (result.success) {
         plugin.processId = result.pid;
         plugin.status = 'running';
-        console.log(`[Plugin] 插件 ${name} 启动成功 (PID: ${result.pid})`);
+        window.logger?.info('插件系统：插件启动成功', { name, pid: result.pid });
         
         // 等待3秒让插件服务完全启动，然后连接
-        console.log(`[Plugin] 等待3秒后尝试连接 WebSocket...`);
+        window.logger?.debug('插件系统：等待3秒后尝试连接WebSocket', { name });
         setTimeout(() => {
           this.connectPlugin(name);
         }, 3000);
@@ -154,7 +174,7 @@ class PluginConnector {
         throw new Error(result.error || '启动失败');
       }
     } catch (error) {
-      console.error(`[Plugin] 启动插件 ${name} 失败:`, error);
+      window.logger?.error('插件系统：启动插件失败', { name, error });
       plugin.status = 'error';
       this.updatePluginUI();
       return false;
@@ -167,11 +187,11 @@ class PluginConnector {
   public async stopPlugin(name: string): Promise<boolean> {
     const plugin = this.plugins.get(name);
     if (!plugin) {
-      console.error(`[Plugin] 插件 ${name} 不存在`);
+      window.logger?.error('插件系统：插件不存在', { name });
       return false;
     }
 
-    console.log(`[Plugin] 停止插件: ${name}`);
+    window.logger?.info('插件系统：停止插件', { name });
     
     // 先断开 WebSocket 连接
     this.disconnectPlugin(name);
@@ -186,14 +206,14 @@ class PluginConnector {
       if (result.success) {
         plugin.processId = null;
         plugin.status = 'stopped';
-        console.log(`[Plugin] 插件 ${name} 已停止`);
+        window.logger?.info('插件系统：插件已停止', { name });
         this.updatePluginUI();
         return true;
       } else {
         throw new Error(result.error || '停止失败');
       }
     } catch (error) {
-      console.error(`[Plugin] 停止插件 ${name} 失败:`, error);
+      window.logger?.error('插件系统：停止插件失败', { name, error });
       return false;
     }
   }
@@ -204,23 +224,23 @@ class PluginConnector {
   public async connectPlugin(name: string): Promise<boolean> {
     const plugin = this.plugins.get(name);
     if (!plugin) {
-      console.error(`插件 ${name} 不存在`);
+      window.logger?.error('插件系统：插件不存在', { name });
       return false;
     }
 
     if (plugin.ws && (plugin.status === 'connected')) {
-      console.log(`插件 ${name} 已连接`);
+      window.logger?.info('插件系统：插件已连接', { name });
       return true;
     }
 
-    console.log(`[Plugin] 连接插件 WebSocket: ${name} (${plugin.manifest.url})`);
+    window.logger?.info('插件系统：连接插件WebSocket', { name, url: plugin.manifest.url });
     this.updatePluginUI();
 
     try {
       plugin.ws = new WebSocket(plugin.manifest.url);
 
       plugin.ws.onopen = async () => {
-        console.log(`[Plugin] 插件 ${name} WebSocket 连接成功`);
+        window.logger?.info('插件系统：WebSocket连接成功', { name });
         plugin.status = 'connected';
         plugin.reconnectAttempts = 0;
         this.clearReconnectTimer(name);
@@ -235,13 +255,13 @@ class PluginConnector {
       };
 
       plugin.ws.onerror = (error: Event) => {
-        console.error(`[Plugin] 插件 ${name} WebSocket 错误:`, error);
+        window.logger?.error('插件系统：WebSocket错误', { name, error });
         // 保持 running 状态，只是 WebSocket 出错
         this.updatePluginUI();
       };
 
       plugin.ws.onclose = () => {
-        console.log(`[Plugin] 插件 ${name} WebSocket 关闭`);
+        window.logger?.info('插件系统：WebSocket关闭', { name });
         // 如果插件还在运行，尝试重连
         if (plugin.status === 'connected' || plugin.status === 'running') {
           plugin.status = 'running';
@@ -253,7 +273,7 @@ class PluginConnector {
 
       return true;
     } catch (error) {
-      console.error(`连接插件 ${name} WebSocket 失败:`, error);
+      window.logger?.error('插件系统：连接WebSocket失败', { name, error });
       this.updatePluginUI();
       return false;
     }
@@ -279,7 +299,7 @@ class PluginConnector {
     }
     
     this.updatePluginUI();
-    console.log(`[Plugin] 插件 ${name} WebSocket 已断开`);
+    window.logger?.info('插件系统：WebSocket已断开', { name });
   }
 
   /**
@@ -300,7 +320,7 @@ class PluginConnector {
     };
 
     plugin.ws.send(JSON.stringify(message));
-    console.log(`📨 请求插件 ${name} 元数据 (locale: ${locale})`);
+    window.logger?.debug('插件系统：请求元数据', { name, locale });
   }
 
   /**
@@ -313,21 +333,33 @@ class PluginConnector {
     try {
       const message = JSON.parse(data);
 
+      // 处理配置请求
+      if (message.action === 'getConfig') {
+        this.handleConfigRequest(name, message);
+        return;
+      }
+
+      // 处理权限请求
+      if (message.type === 'permission_request') {
+        this.handlePermissionRequest(name, message);
+        return;
+      }
+
       // 处理元数据响应（从插件服务器返回的，用于验证）
       if (message.type === 'metadata') {
-        console.log(`📦 收到插件 ${name} 元数据验证:`, message.metadata);
+        window.logger?.debug('插件系统：收到元数据验证', { name, metadata: message.metadata });
         // 这里可以验证插件服务器返回的元数据是否与本地清单匹配
         return;
       }
 
       // 处理连接确认
       if (message.type === 'connected') {
-        console.log(`✅ 插件 ${name} 确认连接:`, message.message);
+        window.logger?.debug('插件系统：插件确认连接', { name, message: message.message });
         return;
       }
 
       // 处理其他响应
-      console.log(`📨 插件 ${name} 消息:`, message);
+      window.logger?.debug('插件系统：收到消息', { name, type: message.type });
       
       // 触发自定义事件，让其他模块处理
       const event = new CustomEvent('plugin-message', {
@@ -336,7 +368,7 @@ class PluginConnector {
       document.dispatchEvent(event);
       
     } catch (error) {
-      console.error(`解析插件 ${name} 消息失败:`, error);
+      window.logger?.error('插件系统：解析消息失败', { name, error });
     }
   }
 
@@ -354,7 +386,7 @@ class PluginConnector {
   /**
    * 调用插件功能
    */
-  public async callPlugin(name: string, action: string, params: any = {}): Promise<any> {
+  public async callPlugin<T = unknown>(name: string, action: string, params: Record<string, unknown> = {}): Promise<T> {
     const plugin = this.plugins.get(name);
     if (!plugin) {
       throw new Error(`插件 ${name} 不存在`);
@@ -389,7 +421,7 @@ class PluginConnector {
 
       // 发送消息
       plugin.ws!.send(JSON.stringify(message));
-      console.log(`📤 调用插件 ${name}.${action}:`, params);
+      window.logger.info(`📤 调用插件 ${name}.${action}:`, params);
     });
   }
 
@@ -409,7 +441,7 @@ class PluginConnector {
 
     plugin.ws.send(JSON.stringify(message));
     plugin.locale = locale;
-    console.log(`🌍 切换插件 ${name} 语言为: ${locale}`);
+    window.logger?.info('插件系统：切换插件语言', { name, locale });
   }
 
   /**
@@ -420,7 +452,7 @@ class PluginConnector {
     if (!plugin) return;
 
     if (plugin.reconnectAttempts >= this.maxReconnectAttempts) {
-      console.log(`插件 ${name} 达到最大重连次数`);
+      window.logger?.warn('插件系统：达到最大重连次数', { name, attempts: plugin.reconnectAttempts });
       return;
     }
 
@@ -428,7 +460,11 @@ class PluginConnector {
     
     plugin.reconnectTimer = window.setTimeout(() => {
       plugin.reconnectAttempts++;
-      console.log(`🔄 重连插件 ${name} (尝试 ${plugin.reconnectAttempts}/${this.maxReconnectAttempts})`);
+      window.logger?.info('插件系统：重连插件', { 
+        name, 
+        attempt: plugin.reconnectAttempts, 
+        max: this.maxReconnectAttempts 
+      });
       this.connectPlugin(name);
     }, this.reconnectInterval);
   }
@@ -462,18 +498,18 @@ class PluginConnector {
    * 自动启动设置为 autoStart 的插件
    */
   public async connectAll(): Promise<void> {
-    console.log('[Plugin] 检查自动启动的插件...');
+    window.logger?.info('插件系统：检查自动启动的插件');
     
     const autoStartPlugins = Array.from(this.plugins.entries())
       .filter(([_, plugin]) => plugin.manifest.autoStart)
       .map(([name, _]) => name);
     
     if (autoStartPlugins.length === 0) {
-      console.log('[Plugin] 没有需要自动启动的插件');
+      window.logger?.info('插件系统：没有需要自动启动的插件');
       return;
     }
     
-    console.log('[Plugin] 自动启动插件:', autoStartPlugins);
+    window.logger?.info('插件系统：自动启动插件', { plugins: autoStartPlugins });
     const promises = autoStartPlugins.map(name => this.startPlugin(name));
     await Promise.allSettled(promises);
   }
@@ -482,10 +518,90 @@ class PluginConnector {
    * 断开所有插件
    */
   public disconnectAll(): void {
-    console.log('📴 断开所有插件...');
+    window.logger?.info('插件系统：断开所有插件');
     this.plugins.forEach((_, name) => {
       this.disconnectPlugin(name);
     });
+  }
+
+  /**
+   * 处理配置请求
+   */
+  private async handleConfigRequest(name: string, message: any): Promise<void> {
+    const plugin = this.plugins.get(name);
+    if (!plugin || !plugin.ws) return;
+
+    const pluginId = message.pluginId;
+    window.logger?.debug('插件系统：插件请求配置', { name, pluginId });
+
+    try {
+      // 从配置管理器获取配置
+      const config = await window.pluginConfigManager.getConfig(pluginId);
+      
+      // 发送配置给插件
+      plugin.ws.send(JSON.stringify({
+        type: 'plugin_config',
+        config: config
+      }));
+
+      window.logger?.info('插件系统：已发送配置', { name });
+    } catch (error) {
+      window.logger?.error('插件系统：发送配置失败', { name, error });
+    }
+  }
+
+  /**
+   * 处理权限请求
+   */
+  private async handlePermissionRequest(name: string, message: any): Promise<void> {
+    const plugin = this.plugins.get(name);
+    if (!plugin || !plugin.ws) return;
+
+    const { requestId, permissionId, operation } = message;
+    window.logger?.debug('插件系统：插件请求权限', { name, permissionId, operation });
+
+    try {
+      // 获取权限定义（权限可能是对象或字符串）
+      const permissionObj = plugin.manifest.permissions.find((p: any) => 
+        (typeof p === 'string' ? p : p.id) === permissionId
+      );
+      
+      if (!permissionObj) {
+        window.logger?.warn('插件系统：未找到权限定义', { name, permissionId });
+        plugin.ws.send(JSON.stringify({
+          type: 'permission_response',
+          requestId,
+          granted: false
+        }));
+        return;
+      }
+
+      // 获取危险等级（兼容旧格式的字符串权限）
+      const dangerLevel = typeof permissionObj === 'string' ? 'medium' : ((permissionObj as any).dangerLevel || 'medium');
+
+      // 检查权限
+      const granted = await window.pluginPermissionManager.checkPermission(
+        plugin.manifest.id,
+        permissionId,
+        dangerLevel
+      );
+
+      // 返回结果
+      plugin.ws.send(JSON.stringify({
+        type: 'permission_response',
+        requestId,
+        granted
+      }));
+
+      window.logger?.info('插件系统：权限请求结果', { name, permissionId, granted });
+    } catch (error) {
+      window.logger?.error('插件系统：处理权限请求失败', { name, error });
+      plugin.ws.send(JSON.stringify({
+        type: 'permission_response',
+        requestId,
+        granted: false
+      }));
+    }
   }
 
   /**
@@ -499,4 +615,4 @@ class PluginConnector {
 }
 
 // 导出全局实例
-window.pluginConnector = new PluginConnector();
+window.pluginConnector = new PluginConnector() as any;

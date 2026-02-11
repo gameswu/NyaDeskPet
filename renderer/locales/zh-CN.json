@@ -131,6 +131,11 @@
     "preview": "摄像头预览",
     "selectDevice": "选择摄像头..."
   },
+  "plugin": {
+    "openDirectory": "打开插件目录",
+    "openDataDirectory": "打开数据目录",
+    "clearData": "清除数据"
+  },
   "plugins": {
     "title": "插件管理",
     "description": "管理应用插件，控制插件权限和状态",

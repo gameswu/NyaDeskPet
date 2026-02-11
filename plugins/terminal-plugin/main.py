@@ -81,6 +81,8 @@ class TerminalPlugin:
         self.sessions: Dict[str, TerminalSession] = {}
         self.clients = set()
         self.i18n = I18n(locale, default_locale="en-US")
+        self.config = {}  # 配置存储
+        self.pending_permissions = {}  # 等待权限确认的请求
         
     async def handle_client(self, websocket: WebSocketServerProtocol):
         """处理客户端连接"""
@@ -124,8 +126,27 @@ class TerminalPlugin:
                         }))
                         continue
                     
+                    # 处理配置请求
+                    if data.get("action") == "getConfig":
+                        await self.request_config(websocket)
+                        continue
+                    
+                    # 处理配置响应
+                    if data.get("type") == "plugin_config":
+                        self.config = data.get("config", {})
+                        print(f"✅ 已加载配置: {self.config}")
+                        continue
+                    
+                    # 处理权限响应
+                    if data.get("type") == "permission_response":
+                        request_id = data.get("requestId")
+                        if request_id in self.pending_permissions:
+                            future = self.pending_permissions.pop(request_id)
+                            future.set_result(data.get("granted", False))
+                        continue
+                    
                     # 处理其他操作
-                    response = await self.handle_message(data)
+                    response = await self.handle_message(data, websocket)
                     await websocket.send(json.dumps(response))
                     
                 except json.JSONDecodeError:
@@ -149,23 +170,66 @@ class TerminalPlugin:
             print(f"[{self.i18n.t('plugin.name')}] {self.i18n.t('plugin.disconnected')}: {websocket.remote_address}")
         finally:
             self.clients.discard(websocket)
+    
+    async def request_config(self, websocket: WebSocketServerProtocol):
+        """向前端请求配置"""
+        await websocket.send(json.dumps({
+            "action": "getConfig",
+            "pluginId": "terminal"
+        }))
+    
+    def get_config(self, key: str, default=None):
+        """获取配置值"""
+        return self.config.get(key, default)
+    
+    async def request_permission(self, websocket: WebSocketServerProtocol, permission_id: str, operation: str, details: dict = None) -> bool:
+        """请求权限"""
+        request_id = str(uuid.uuid4())
+        
+        # 创建 Future 用于等待响应
+        future = asyncio.Future()
+        self.pending_permissions[request_id] = future
+        
+        # 发送权限请求
+        await websocket.send(json.dumps({
+            "type": "permission_request",
+            "requestId": request_id,
+            "permissionId": permission_id,
+            "operation": operation,
+            "details": details or {}
+        }))
+        
+        try:
+            # 等待响应（30秒超时）
+            granted = await asyncio.wait_for(future, timeout=30.0)
+            return granted
+        except asyncio.TimeoutError:
+            self.pending_permissions.pop(request_id, None)
+            return False
+    
+    def is_dangerous_command(self, command: str) -> bool:
+        """检查是否为危险命令"""
+        dangerous_list = self.get_config("dangerousCommands", [
+            "rm -rf", "del /f", "format", "mkfs", "dd if=", ">(", "curl", "wget"
+        ])
+        return any(danger in command.lower() for danger in dangerous_list)
             
-    async def handle_message(self, data: dict) -> dict:
+    async def handle_message(self, data: dict, websocket: WebSocketServerProtocol) -> dict:
         """处理消息"""
         action = data.get("action")
         params = data.get("params", {})
         
         try:
             if action == "execute":
-                return await self.execute_command(params)
+                return await self.execute_command(params, websocket)
             elif action == "createSession":
-                return await self.create_session(params)
+                return await self.create_session(params, websocket)
             elif action == "getSessions":
                 return await self.get_sessions(params)
             elif action == "closeSession":
-                return await self.close_session(params)
+                return await self.close_session(params, websocket)
             elif action == "sendInput":
-                return await self.send_input(params)
+                return await self.send_input(params, websocket)
             elif action == "getCurrentDirectory":
                 return await self.get_current_directory(params)
             elif action == "resize":
@@ -187,7 +251,7 @@ class TerminalPlugin:
                 "locale": self.i18n.get_frontend_locale()
             }
             
-    async def execute_command(self, params: dict) -> dict:
+    async def execute_command(self, params: dict, websocket: WebSocketServerProtocol) -> dict:
         """执行命令"""
         command = params.get("command")
         if not command:
@@ -196,11 +260,31 @@ class TerminalPlugin:
                 "success": False,
                 "error": self.i18n.t("error.command_required"),
                 "errorKey": "error.command_required",
-                "locale": self.i18n.get_frontend_locale()
+                "locale": self.i18n.get_frontend_locale(),
+                "requiredPermission": None
             }
+        
+        # 检查是否需要权限
+        if self.is_dangerous_command(command):
+            granted = await self.request_permission(
+                websocket,
+                "terminal.execute",
+                "execute_command",
+                {"command": command}
+            )
+            
+            if not granted:
+                return {
+                    "type": "plugin_response",
+                    "success": False,
+                    "error": self.i18n.t("error.permission_denied"),
+                    "errorKey": "error.permission_denied",
+                    "locale": self.i18n.get_frontend_locale(),
+                    "requiredPermission": "terminal.execute"
+                }
             
         cwd = params.get("cwd", os.getcwd())
-        timeout = params.get("timeout", 30)
+        timeout = self.get_config("commandTimeout", params.get("timeout", 30))
         
         try:
             result = subprocess.run(
@@ -222,7 +306,8 @@ class TerminalPlugin:
                     "exitCode": result.returncode,
                     "command": command
                 },
-                "locale": self.i18n.get_frontend_locale()
+                "locale": self.i18n.get_frontend_locale(),
+                "requiredPermission": "terminal.execute" if self.is_dangerous_command(command) else None
             }
         except subprocess.TimeoutExpired:
             return {
@@ -230,13 +315,44 @@ class TerminalPlugin:
                 "success": False,
                 "error": self.i18n.t("error.command_timeout", timeout=timeout),
                 "errorKey": "error.command_timeout",
-                "locale": self.i18n.get_frontend_locale()
+                "locale": self.i18n.get_frontend_locale(),
+                "requiredPermission": "terminal.execute" if self.is_dangerous_command(command) else None
             }
             
-    async def create_session(self, params: dict) -> dict:
+    async def create_session(self, params: dict, websocket: WebSocketServerProtocol) -> dict:
         """创建会话"""
-        shell = params.get("shell", "/bin/bash" if os.name != "nt" else "cmd.exe")
-        cwd = params.get("cwd", os.getcwd())
+        # 请求 session.create 权限
+        granted = await self.request_permission(
+            websocket,
+            "terminal.session",
+            "create_session",
+            {"shell": params.get("shell"), "cwd": params.get("cwd")}
+        )
+        
+        if not granted:
+            return {
+                "type": "plugin_response",
+                "success": False,
+                "error": self.i18n.t("error.permission_denied"),
+                "errorKey": "error.permission_denied",
+                "locale": self.i18n.get_frontend_locale(),
+                "requiredPermission": "terminal.session"
+            }
+        
+        # 检查会话数量限制
+        max_sessions = self.get_config("maxSessionCount", 5)
+        if len(self.sessions) >= max_sessions:
+            return {
+                "type": "plugin_response",
+                "success": False,
+                "error": f"已达到最大会话数量限制 ({max_sessions})",
+                "errorKey": "error.max_sessions_reached",
+                "locale": self.i18n.get_frontend_locale(),
+                "requiredPermission": "terminal.session"
+            }
+        
+        shell = params.get("shell", self.get_config("defaultShell", "/bin/bash" if os.name != "nt" else "cmd.exe"))
+        cwd = params.get("cwd", self.get_config("workingDirectory", os.getcwd()))
         session_id = str(uuid.uuid4())
         
         session = TerminalSession(session_id, shell, cwd)
@@ -252,7 +368,8 @@ class TerminalPlugin:
                 "shell": shell,
                 "cwd": cwd
             },
-            "locale": self.i18n.get_frontend_locale()
+            "locale": self.i18n.get_frontend_locale(),
+            "requiredPermission": "terminal.session"
         }
         
     async def get_sessions(self, params: dict) -> dict:
@@ -277,7 +394,7 @@ class TerminalPlugin:
             "locale": self.i18n.get_frontend_locale()
         }
         
-    async def close_session(self, params: dict) -> dict:
+    async def close_session(self, params: dict, websocket: WebSocketServerProtocol) -> dict:
         """关闭会话"""
         session_id = params.get("sessionId")
         if not session_id:
@@ -286,7 +403,8 @@ class TerminalPlugin:
                 "success": False,
                 "error": self.i18n.t("error.session_id_required"),
                 "errorKey": "error.session_id_required",
-                "locale": self.i18n.get_frontend_locale()
+                "locale": self.i18n.get_frontend_locale(),
+                "requiredPermission": None
             }
             
         session = self.sessions.get(session_id)
@@ -296,7 +414,26 @@ class TerminalPlugin:
                 "success": False,
                 "error": self.i18n.t("error.session_not_found"),
                 "errorKey": "error.session_not_found",
-                "locale": self.i18n.get_frontend_locale()
+                "locale": self.i18n.get_frontend_locale(),
+                "requiredPermission": None
+            }
+        
+        # 请求关闭会话权限
+        granted = await self.request_permission(
+            websocket,
+            "terminal.session",
+            "close_session",
+            {"sessionId": session_id}
+        )
+        
+        if not granted:
+            return {
+                "type": "plugin_response",
+                "success": False,
+                "error": self.i18n.t("error.permission_denied"),
+                "errorKey": "error.permission_denied",
+                "locale": self.i18n.get_frontend_locale(),
+                "requiredPermission": "terminal.session"
             }
             
         session.terminate()
@@ -309,10 +446,11 @@ class TerminalPlugin:
             "data": {
                 "sessionId": session_id
             },
-            "locale": self.i18n.get_frontend_locale()
+            "locale": self.i18n.get_frontend_locale(),
+            "requiredPermission": "terminal.session"
         }
         
-    async def send_input(self, params: dict) -> dict:
+    async def send_input(self, params: dict, websocket: WebSocketServerProtocol) -> dict:
         """发送输入到会话"""
         session_id = params.get("sessionId")
         data = params.get("data")
@@ -323,7 +461,8 @@ class TerminalPlugin:
                 "success": False,
                 "error": self.i18n.t("error.input_required"),
                 "errorKey": "error.input_required",
-                "locale": self.i18n.get_frontend_locale()
+                "locale": self.i18n.get_frontend_locale(),
+                "requiredPermission": None
             }
             
         session = self.sessions.get(session_id)
@@ -333,7 +472,8 @@ class TerminalPlugin:
                 "success": False,
                 "error": self.i18n.t("error.session_not_found"),
                 "errorKey": "error.session_not_found",
-                "locale": self.i18n.get_frontend_locale()
+                "locale": self.i18n.get_frontend_locale(),
+                "requiredPermission": None
             }
             
         success = session.send_input(data)
@@ -345,7 +485,8 @@ class TerminalPlugin:
             "data": {
                 "sessionId": session_id
             },
-            "locale": self.i18n.get_frontend_locale()
+            "locale": self.i18n.get_frontend_locale(),
+            "requiredPermission": "terminal.session"
         }
         
     async def get_current_directory(self, params: dict) -> dict:

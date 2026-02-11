@@ -88,7 +88,7 @@ class ThemeManager implements IThemeManager {
       document.body.classList.remove('dark-theme');
     }
 
-    console.log('应用主题:', this.currentTheme, '→', effectiveTheme);
+    window.logger.info('应用主题:', this.currentTheme, '→', effectiveTheme);
   }
 }
 

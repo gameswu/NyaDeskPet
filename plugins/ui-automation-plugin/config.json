@@ -1,0 +1,126 @@
+{
+  "clickDelay": {
+    "type": "int",
+    "description": "点击操作延迟（毫秒）",
+    "hint": "点击后等待的时间，用于模拟人类操作",
+    "default": 100,
+    "i18n": {
+      "zh-CN": {
+        "description": "鼠标点击后的等待时间（毫秒）",
+        "hint": "较短的延迟可能被识别为自动化操作"
+      },
+      "en-US": {
+        "description": "Delay after mouse click (milliseconds)",
+        "hint": "Short delays may be detected as automation"
+      }
+    }
+  },
+  "typeSpeed": {
+    "type": "int",
+    "description": "打字速度（字符/秒）",
+    "default": 50,
+    "i18n": {
+      "zh-CN": {
+        "description": "模拟打字的速度（每秒字符数）",
+        "hint": "建议设置为30-80之间以模拟真实打字"
+      },
+      "en-US": {
+        "description": "Simulated typing speed (characters per second)",
+        "hint": "Recommended 30-80 for realistic typing simulation"
+      }
+    }
+  },
+  "screenshotFormat": {
+    "type": "string",
+    "description": "截图格式",
+    "default": "png",
+    "options": ["png", "jpeg", "bmp"],
+    "i18n": {
+      "zh-CN": {
+        "description": "保存截图的文件格式",
+        "hint": "PNG格式质量最高但文件较大",
+        "options": ["PNG（推荐）", "JPEG", "BMP"]
+      },
+      "en-US": {
+        "description": "Screenshot file format",
+        "hint": "PNG has highest quality but larger file size",
+        "options": ["PNG (Recommended)", "JPEG", "BMP"]
+      }
+    }
+  },
+  "screenshotQuality": {
+    "type": "int",
+    "description": "JPEG截图质量（1-100）",
+    "default": 90,
+    "i18n": {
+      "zh-CN": {
+        "description": "JPEG格式截图的压缩质量",
+        "hint": "仅在选择JPEG格式时有效，值越高质量越好"
+      },
+      "en-US": {
+        "description": "JPEG screenshot compression quality",
+        "hint": "Only effective for JPEG format, higher is better"
+      }
+    }
+  },
+  "enableSafeMode": {
+    "type": "bool",
+    "description": "启用安全模式",
+    "default": true,
+    "obvious_hint": true,
+    "i18n": {
+      "zh-CN": {
+        "description": "限制对系统关键区域的操作",
+        "hint": "安全模式会阻止对系统设置、密码输入等敏感区域的操作"
+      },
+      "en-US": {
+        "description": "Restrict operations on critical system areas",
+        "hint": "Safe mode blocks operations on system settings, password inputs, etc."
+      }
+    }
+  },
+  "allowedApplications": {
+    "type": "list",
+    "description": "允许自动化的应用程序列表",
+    "default": [],
+    "i18n": {
+      "zh-CN": {
+        "description": "白名单：只能对这些应用执行自动化操作（为空表示不限制）",
+        "hint": "填写应用的进程名称，如 Chrome, Safari"
+      },
+      "en-US": {
+        "description": "Whitelist: Only these apps can be automated (empty means no restriction)",
+        "hint": "Enter process names like Chrome, Safari"
+      }
+    }
+  },
+  "windowDetection": {
+    "type": "object",
+    "description": "窗口检测设置",
+    "items": {
+      "enableSmartDetection": {
+        "type": "bool",
+        "description": "启用智能窗口检测",
+        "default": true
+      },
+      "detectInterval": {
+        "type": "int",
+        "description": "检测间隔（毫秒）",
+        "default": 500
+      },
+      "includeMinimized": {
+        "type": "bool",
+        "description": "包含最小化窗口",
+        "default": false
+      }
+    },
+    "i18n": {
+      "zh-CN": {
+        "description": "窗口识别和追踪的相关设置"
+      },
+      "en-US": {
+        "description": "Window detection and tracking settings"
+      }
+    }
+  }
+}

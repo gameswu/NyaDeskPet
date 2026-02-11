@@ -36,7 +36,7 @@ class MicrophoneManager implements IMicrophoneManager {
    * 注意：不在这里枚举设备，只在真正需要使用时才请求权限
    */
   public async initialize(): Promise<void> {
-    console.log('麦克风管理器初始化（延迟加载设备）');
+    window.logger.info('麦克风管理器初始化（延迟加载设备）');
     // 不在初始化时枚举设备，避免过早请求权限
     
     // 从设置中加载配置
@@ -57,11 +57,11 @@ class MicrophoneManager implements IMicrophoneManager {
       const devices = await navigator.mediaDevices.enumerateDevices();
       this.devices = devices.filter(device => device.kind === 'audioinput');
       
-      console.log(`发现 ${this.devices.length} 个麦克风设备:`, this.devices);
+      window.logger.info(`发现 ${this.devices.length} 个麦克风设备:`, this.devices);
       
       return this.devices;
     } catch (error) {
-      console.error('枚举麦克风设备失败:', error);
+      window.logger.error('枚举麦克风设备失败:', error);
       return [];
     }
   }
@@ -107,9 +107,9 @@ class MicrophoneManager implements IMicrophoneManager {
       // 开始音量检测循环
       this.startVolumeDetection();
 
-      console.log('麦克风监听已启动:', deviceId || '默认设备');
+      window.logger.info('麦克风监听已启动:', deviceId || '默认设备');
     } catch (error) {
-      console.error('启动麦克风监听失败:', error);
+      window.logger.error('启动麦克风监听失败:', error);
       this.isListening = false;
       throw error;
     }
@@ -143,7 +143,7 @@ class MicrophoneManager implements IMicrophoneManager {
       this.silenceTimer = null;
     }
 
-    console.log('麦克风监听已停止');
+    window.logger.info('麦克风监听已停止');
   }
 
   /**
@@ -194,7 +194,7 @@ class MicrophoneManager implements IMicrophoneManager {
    * 开始说话回调
    */
   private onSpeechStart(): void {
-    console.log('检测到说话开始');
+    window.logger.info('检测到说话开始');
     this.startRecording();
   }
 
@@ -202,7 +202,7 @@ class MicrophoneManager implements IMicrophoneManager {
    * 结束说话回调
    */
   private onSpeechEnd(): void {
-    console.log('检测到说话结束');
+    window.logger.info('检测到说话结束');
     this.isSpeaking = false;
     this.stopRecording();
   }
@@ -231,9 +231,9 @@ class MicrophoneManager implements IMicrophoneManager {
 
       this.mediaRecorder.start();
       this.isRecording = true;
-      console.log('开始录音');
+      window.logger.info('开始录音');
     } catch (error) {
-      console.error('启动录音失败:', error);
+      window.logger.error('启动录音失败:', error);
     }
   }
 
@@ -244,7 +244,7 @@ class MicrophoneManager implements IMicrophoneManager {
     if (this.mediaRecorder && this.isRecording) {
       this.mediaRecorder.stop();
       this.isRecording = false;
-      console.log('停止录音');
+      window.logger.info('停止录音');
     }
   }
 
@@ -257,7 +257,7 @@ class MicrophoneManager implements IMicrophoneManager {
     }
 
     const audioBlob = new Blob(this.recordedChunks, { type: 'audio/webm' });
-    console.log('录音完成，大小:', audioBlob.size, 'bytes');
+    window.logger.info('录音完成，大小:', audioBlob.size, 'bytes');
 
     // 调用 ASR 识别
     const recognizedText = await this.performASR(audioBlob);
@@ -291,11 +291,11 @@ class MicrophoneManager implements IMicrophoneManager {
       if (result.success && result.text) {
         return result.text;
       } else {
-        console.error('[MicrophoneManager] ASR 识别失败:', result.error);
+        window.logger.error('[MicrophoneManager] ASR 识别失败:', result.error);
         return null;
       }
     } catch (error) {
-      console.error('[MicrophoneManager] ASR 识别异常:', error);
+      window.logger.error('[MicrophoneManager] ASR 识别异常:', error);
       return null;
     }
   }
@@ -312,7 +312,7 @@ class MicrophoneManager implements IMicrophoneManager {
    */
   public setVolumeThreshold(threshold: number): void {
     this.volumeThreshold = Math.max(0, Math.min(100, threshold));
-    console.log('音量阈值已设置为:', this.volumeThreshold);
+    window.logger.info('音量阈值已设置为:', this.volumeThreshold);
   }
 
   /**
@@ -327,7 +327,7 @@ class MicrophoneManager implements IMicrophoneManager {
    */
   public setBackgroundMode(enabled: boolean): void {
     this.backgroundModeEnabled = enabled;
-    console.log('背景模式已', enabled ? '启用' : '禁用');
+    window.logger.info('背景模式已', enabled ? '启用' : '禁用');
   }
 
   /**

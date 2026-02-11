@@ -39,7 +39,7 @@ class SettingsManager implements ISettingsManager {
    * 初始化设置管理器
    */
   public initialize(): void {
-    console.log('设置管理器初始化');
+    window.logger.info('设置管理器初始化');
     this.settings = this.loadSettings();
   }
 
@@ -54,7 +54,7 @@ class SettingsManager implements ISettingsManager {
         return { ...this.defaultSettings, ...parsed };
       }
     } catch (error) {
-      console.error('加载设置失败:', error);
+      window.logger.error('加载设置失败:', error);
     }
     return { ...this.defaultSettings };
   }
@@ -65,9 +65,9 @@ class SettingsManager implements ISettingsManager {
   private saveSettings(): void {
     try {
       localStorage.setItem(this.storageKey, JSON.stringify(this.settings));
-      console.log('设置已保存');
+      window.logger.info('设置已保存');
     } catch (error) {
-      console.error('保存设置失败:', error);
+      window.logger.error('保存设置失败:', error);
     }
   }
 
@@ -182,7 +182,7 @@ class SettingsManager implements ISettingsManager {
       this.saveSettings();
       return true;
     } catch (error) {
-      console.error('导入设置失败:', error);
+      window.logger.error('导入设置失败:', error);
       return false;
     }
   }
@@ -213,7 +213,7 @@ class SettingsManager implements ISettingsManager {
     
     this.settings.tapConfigs[modelPath] = config;
     this.saveSettings();
-    console.log('触碰配置已保存:', modelPath);
+    window.logger.info('触碰配置已保存:', modelPath);
   }
 
   /**

@@ -230,7 +230,7 @@ function createTray(): void {
           trayIcon = nativeImage.createEmpty();
         }
       } else {
-        console.warn('托盘图标未找到，使用默认图标');
+        logger.warn('托盘图标未找到，使用默认图标');
         // 创建一个简单的16x16图标
         trayIcon = nativeImage.createFromDataURL('data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAYAAAAf8/9hAAAABHNCSVQICAgIfAhkiAAAAAlwSFlzAAAAdgAAAHYBTnsmCAAAABl0RVh0U29mdHdhcmUAd3d3Lmlua3NjYXBlLm9yZ5vuPBoAAAEPSURBVDiNpdMxSgNBFAbgb3azye4uCaQQFEEQxEIQFKysbGzsLLyBN/AGXsAzWNhYWVnZ2FhYWAgWgqAQBEVBSLJZdnfGYneDhIjgwDDMzPv+eW+Gf6SUUkop/dcYM8YMY8wYY8YYM8YYM8b8i4gQESEiQkSEiAgRESIiRESIiPiXiIiIiIiIiIiIiIiIiIiIiPhXRERERERERERERERERERExL9ERERERERERERERERERMRfRURERERERERERERERET8q4iIiIiIiIiIiIiIiIiIiH+JiIiIiIiIiIiIiIiIiIiI+FeIiIiIiIiIiIiIiIiIiIh/hYiIiIiIiIiIiIiIiIiI+FdYa621dsv2AIkRHvLqZH0AAAAASUVORK5CYII=');
       }
@@ -244,7 +244,7 @@ function createTray(): void {
       
       trayIcon = nativeImage.createFromPath(iconPath);
       if (trayIcon.isEmpty()) {
-        console.warn('托盘图标未找到，尝试使用备用图标');
+        logger.warn('托盘图标未找到，尝试使用备用图标');
         // 尝试使用应用图标作为备用
         const fallbackPath = process.platform === 'win32'
           ? path.join(__dirname, '../assets/icon.ico')
@@ -252,7 +252,7 @@ function createTray(): void {
         trayIcon = nativeImage.createFromPath(fallbackPath);
         
         if (trayIcon.isEmpty()) {
-          console.warn('备用图标也未找到，使用默认图标');
+          logger.warn('备用图标也未找到，使用默认图标');
           // 使用一个简单的占位图标
           trayIcon = nativeImage.createFromDataURL('data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAYAAAAf8/9hAAAABHNCSVQICAgIfAhkiAAAAAlwSFlzAAAAdgAAAHYBTnsmCAAAABl0RVh0U29mdHdhcmUAd3d3Lmlua3NjYXBlLm9yZ5vuPBoAAAEPSURBVDiNpdMxSgNBFAbgb3azye4uCaQQFEEQxEIQFKysbGzsLLyBN/AGXsAzWNhYWVnZ2FhYWAgWgqAQBEVBSLJZdnfGYneDhIjgwDDMzPv+eW+Gf6SUUkop/dcYM8YMY8wYY8YYM8YYM8b8i4gQESEiQkSEiAgRESIiRESIiPiXiIiIiIiIiIiIiIiIiIiIiPhXRERERERERERERERERERExL9ERERERERERERERERERMRfRURERERERERERERERET8q4iIiIiIiIiIiIiIiIiIiH+JiIiIiIiIiIiIiIiIiIiI+FeIiIiIiIiIiIiIiIiIiIh/hYiIiIiIiIiIiIiIiIiI+FdYa621dsv2AIkRHvLqZH0AAAAASUVORK5CYII=');
         }
@@ -268,7 +268,7 @@ function createTray(): void {
       }
     }
   } catch (error) {
-    console.error('创建托盘图标失败:', error);
+    logger.error('创建托盘图标失败:', error);
     trayIcon = nativeImage.createEmpty();
   }
 
@@ -395,7 +395,7 @@ ipcMain.on('ui-state-changed', (_event, state: { uiVisible?: boolean; chatOpen?:
 // 从渲染进程接收消息并转发到后端
 ipcMain.handle('send-message', async (_event: IpcMainInvokeEvent, message: unknown) => {
   // 这里可以添加额外的主进程逻辑
-  console.log('Received message from renderer:', message);
+  logger.info('Received message from renderer:', message);
   return { success: true, message: 'Message forwarded' };
 });
 
@@ -573,7 +573,7 @@ ipcMain.handle('asr-recognize', async (_event: IpcMainInvokeEvent, audioData: st
         `ffmpeg -i "${tempWebMPath}" -ar 16000 -ac 1 -sample_fmt s16 "${tempWavPath}"`,
         (error: any) => {
           if (error) {
-            console.error('[ASR] FFmpeg 转换失败:', error);
+            logger.error('[ASR] FFmpeg 转换失败:', error);
             reject(error);
           } else {
             resolve();
@@ -596,7 +596,7 @@ ipcMain.handle('asr-recognize', async (_event: IpcMainInvokeEvent, audioData: st
       fs.unlinkSync(tempWebMPath);
       fs.unlinkSync(tempWavPath);
     } catch (e) {
-      console.error('[ASR] 清理临时文件失败:', e);
+      logger.error('[ASR] 清理临时文件失败:', e);
     }
 
     if (result) {
@@ -605,7 +605,7 @@ ipcMain.handle('asr-recognize', async (_event: IpcMainInvokeEvent, audioData: st
       return { success: false, error: '识别失败' };
     }
   } catch (error: any) {
-    console.error('[ASR] 识别错误:', error);
+    logger.error('[ASR] 识别错误:', error);
     return { success: false, error: error.message };
   }
 });
@@ -713,6 +713,20 @@ ipcMain.handle('plugin:read-manifest', async (_event: IpcMainInvokeEvent, plugin
     const content = fs.readFileSync(manifestPath, 'utf-8');
     const manifest = JSON.parse(content);
     
+    // 尝试读取config.json（如果存在）
+    const configPath = path.join(appPath, 'plugins', pluginName, 'config.json');
+    if (fs.existsSync(configPath)) {
+      try {
+        const configContent = fs.readFileSync(configPath, 'utf-8');
+        const configSchema = JSON.parse(configContent);
+        manifest.config = configSchema;
+        logger.debug(`读取插件配置Schema: ${pluginName}`);
+      } catch (configError) {
+        logger.warn(`读取插件配置Schema失败 (${pluginName}):`, configError);
+        // 配置文件读取失败不影响清单加载
+      }
+    }
+    
     logger.debug(`读取插件清单: ${pluginName}`);
     return { success: true, manifest };
   } catch (error) {
@@ -796,8 +810,8 @@ ipcMain.handle('plugin:start', async (_event: IpcMainInvokeEvent, args: { name: 
       args: execArgs, 
       cwd: pluginPath 
     });
-    console.log(`[Plugin] 启动 ${name}: ${execCommand} ${execArgs.join(' ')}`);
-    console.log(`[Plugin] 工作目录: ${pluginPath}`);
+    logger.info(`[Plugin] 启动 ${name}: ${execCommand} ${execArgs.join(' ')}`);
+    logger.info(`[Plugin] 工作目录: ${pluginPath}`);
     
     // 直接执行命令，不使用shell
     const childProcess = spawn(execCommand, execArgs, {
@@ -818,13 +832,13 @@ ipcMain.handle('plugin:start', async (_event: IpcMainInvokeEvent, args: { name: 
     childProcess.stdout?.on('data', (data) => {
       const output = data.toString().trim();
       logger.info(`[Plugin:${name}] ${output}`);
-      console.log(`[Plugin:${name}] ${output}`);
+      logger.info(`[Plugin:${name}] ${output}`);
     });
 
     childProcess.stderr?.on('data', (data) => {
       const output = data.toString().trim();
       logger.warn(`[Plugin:${name}] ${output}`);
-      console.error(`[Plugin:${name}] ${output}`);
+      logger.error(`[Plugin:${name}] ${output}`);
     });
 
     // 监听进程退出
@@ -888,4 +902,147 @@ app.on('before-quit', () => {
     }
   });
   pluginProcesses.clear();
+});
+
+/**
+ * 插件数据目录管理
+ */
+
+// 获取插件数据目录路径
+function getPluginDataDirectory(pluginId: string): string {
+  const userDataPath = app.getPath('userData');
+  return path.join(userDataPath, 'plugins', pluginId);
+}
+
+// 确保插件数据目录存在
+function ensurePluginDataDirectory(pluginId: string): string {
+  const dataDir = getPluginDataDirectory(pluginId);
+  if (!fs.existsSync(dataDir)) {
+    fs.mkdirSync(dataDir, { recursive: true });
+    logger.info(`创建插件数据目录: ${dataDir}`);
+  }
+  return dataDir;
+}
+
+// 打开插件目录
+ipcMain.handle('plugin:open-directory', async (_event: IpcMainInvokeEvent, args: { name: string }) => {
+  try {
+    const appPath = app.isPackaged ? process.resourcesPath : app.getAppPath();
+    const pluginPath = path.join(appPath, 'plugins', args.name);
+    
+    if (fs.existsSync(pluginPath)) {
+      await shell.openPath(pluginPath);
+      return { success: true };
+    } else {
+      return { success: false, error: '插件目录不存在' };
+    }
+  } catch (error) {
+    logger.error(`打开插件目录失败:`, error);
+    return { success: false, error: (error as Error).message };
+  }
+});
+
+// 打开插件数据目录
+ipcMain.handle('plugin:open-data-directory', async (_event: IpcMainInvokeEvent, args: { name: string }) => {
+  try {
+    // 使用插件的 id 而不是 name
+    const dataDir = ensurePluginDataDirectory(args.name);
+    await shell.openPath(dataDir);
+    return { success: true };
+  } catch (error) {
+    logger.error(`打开插件数据目录失败:`, error);
+    return { success: false, error: (error as Error).message };
+  }
+});
+
+// 清除插件数据
+ipcMain.handle('plugin:clear-data', async (_event: IpcMainInvokeEvent, args: { name: string }) => {
+  try {
+    const dataDir = getPluginDataDirectory(args.name);
+    
+    if (fs.existsSync(dataDir)) {
+      // 递归删除目录
+      fs.rmSync(dataDir, { recursive: true, force: true });
+      logger.info(`已清除插件数据: ${dataDir}`);
+      
+      // 重新创建空目录
+      ensurePluginDataDirectory(args.name);
+      
+      return { success: true };
+    } else {
+      return { success: true }; // 目录不存在，视为已清除
+    }
+  } catch (error) {
+    logger.error(`清除插件数据失败:`, error);
+    return { success: false, error: (error as Error).message };
+  }
+});
+// 获取插件配置
+ipcMain.handle('plugin:get-config', async (_event: IpcMainInvokeEvent, args: { pluginId: string }) => {
+  try {
+    const dataDir = ensurePluginDataDirectory(args.pluginId);
+    const configPath = path.join(dataDir, 'config.json');
+    
+    if (fs.existsSync(configPath)) {
+      const configData = fs.readFileSync(configPath, 'utf-8');
+      const config = JSON.parse(configData);
+      return { success: true, config };
+    } else {
+      return { success: true, config: {} };  // 配置文件不存在，返回空对象
+    }
+  } catch (error) {
+    logger.error(`读取插件配置失败:`, error);
+    return { success: false, error: (error as Error).message, config: {} };
+  }
+});
+
+// 保存插件配置
+ipcMain.handle('plugin:save-config', async (_event: IpcMainInvokeEvent, args: { pluginId: string; config: any }) => {
+  try {
+    const dataDir = ensurePluginDataDirectory(args.pluginId);
+    const configPath = path.join(dataDir, 'config.json');
+    
+    fs.writeFileSync(configPath, JSON.stringify(args.config, null, 2), 'utf-8');
+    logger.info(`保存插件配置: ${configPath}`);
+    
+    return { success: true };
+  } catch (error) {
+    logger.error(`保存插件配置失败:`, error);
+    return { success: false, error: (error as Error).message };
+  }
+});
+
+// 获取插件权限授权记录
+ipcMain.handle('plugin:get-permissions', async (_event: IpcMainInvokeEvent) => {
+  try {
+    const userDataPath = app.getPath('userData');
+    const permissionsPath = path.join(userDataPath, 'plugin-permissions.json');
+    
+    if (fs.existsSync(permissionsPath)) {
+      const data = fs.readFileSync(permissionsPath, 'utf-8');
+      const permissions = JSON.parse(data);
+      return { success: true, permissions };
+    } else {
+      return { success: true, permissions: [] };
+    }
+  } catch (error) {
+    logger.error(`读取权限记录失败:`, error);
+    return { success: false, error: (error as Error).message, permissions: [] };
+  }
+});
+
+// 保存插件权限授权记录
+ipcMain.handle('plugin:save-permissions', async (_event: IpcMainInvokeEvent, args: { permissions: any[] }) => {
+  try {
+    const userDataPath = app.getPath('userData');
+    const permissionsPath = path.join(userDataPath, 'plugin-permissions.json');
+    
+    fs.writeFileSync(permissionsPath, JSON.stringify(args.permissions, null, 2), 'utf-8');
+    logger.info(`保存权限记录: ${permissionsPath}`);
+    
+    return { success: true };
+  } catch (error) {
+    logger.error(`保存权限记录失败:`, error);
+    return { success: false, error: (error as Error).message };
+  }
 });

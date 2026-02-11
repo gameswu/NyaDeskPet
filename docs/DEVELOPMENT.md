@@ -70,6 +70,94 @@ npm run version major                # 主版本号+1（如 1.0.0 -> 2.0.0）
    git push
    ```
 
+## 开发辅助脚本
+
+项目提供了多个辅助脚本来提升开发效率和代码质量。
+
+### 国际化检查
+
+**命令**：`npm run check-i18n`
+
+**功能**：
+- 检查所有语言文件的键是否一致
+- 检测缺失的翻译键
+- 检测多余的翻译键
+- 生成详细的比对报告
+
+**使用场景**：
+- 添加新的翻译键后验证
+- 定期检查国际化文件完整性
+- CI/CD 流程中的自动化检查
+
+**示例输出**：
+```
+🔍 检查国际化文件一致性...
+
+✅ 所有语言文件的键完全一致！
+📊 共有 111 个翻译键
+```
+
+### 日志系统迁移
+
+**命令**：
+- 预览模式：`npm run migrate-logger:preview`
+- 执行模式：`npm run migrate-logger`
+
+**功能**：
+- 自动扫描所有 TypeScript 文件
+- 将 `console.log/error/warn/info/debug` 替换为 `logger` 调用
+- 自动识别渲染进程（`window.logger`）和主进程（`logger`）
+- 保留 logger.ts 自身的 console 调用
+- 生成详细的统计报告
+
+**使用场景**：
+- 项目初期统一日志系统
+- 新增模块后批量迁移日志
+- 代码重构时统一日志规范
+
+**示例输出**：
+```
+🔍 开始扫描项目文件...
+
+找到 18 个文件需要扫描
+
+正在处理...
+
+✓ renderer/js/audio-player.ts (17 处替换)
+✓ renderer/js/backend-client.ts (17 处替换)
+✓ src/main.ts (12 处替换)
+
+============================================================
+📊 统计信息
+============================================================
+总文件数: 18
+修改文件数: 16
+总替换数: 167
+
+按级别分类:
+  console.log   → logger.info:  85
+  console.info  → logger.info:  0
+  console.warn  → logger.warn:  18
+  console.error → logger.error: 64
+  console.debug → logger.debug: 0
+============================================================
+
+✅ 迁移完成！
+   请运行 npm run compile 检查是否有编译错误
+```
+
+**注意事项**：
+- 预览模式不会修改文件，用于查看将要进行的更改
+- 执行模式会实际修改文件，建议先提交当前更改
+- 迁移后务必运行 `npm run compile` 检查编译错误
+- 对于缺少 logger 导入的文件，需要手动添加
+
+**排除规则**：
+- `renderer/js/logger.ts`：渲染进程 logger 自身
+- `src/logger.ts`：主进程 logger 自身
+
+这些文件中的 console 调用会被保留，因为它们是日志系统初始化时的必要输出。
+
 ## 架构设计
 
 ### 核心架构图
@@ -144,6 +232,163 @@ NyaDeskPet/
 ```
 
 ## 核心模块
+
+### 插件系统架构
+
+**插件连接器** (plugin-connector.ts)：
+- 扫描和加载插件元数据（`metadata.json`）
+- 启动/停止插件进程
+- 管理 WebSocket 连接
+- 处理配置请求和权限请求
+- 自动重连机制
+
+**插件配置管理器** (plugin-config-manager.ts)：
+- 读取和保存插件配置
+- 配置默认值合并
+- 配置持久化到 `userData/plugins/{id}/config.json`
+
+**插件配置 UI** (plugin-config-ui.ts)：
+- 动态渲染配置表单（9 种配置类型）
+- 配置验证和错误提示
+- Tooltip 提示系统
+- 响应式配置对话框
+
+**插件权限管理器** (plugin-permission-manager.ts)：
+- 权限审批对话框（5 级危险度）
+- 权限记录管理
+- 记住选择功能
+- 权限持久化到 `userData/plugin-permissions.json`
+
+**插件文件结构**：
+```
+plugins/
+├── terminal-plugin/
+│   ├── metadata.json          # 插件元信息（必需）
+│   ├── config.json            # 配置 Schema 定义（可选）
+│   ├── main.py               # 插件主程序
+│   ├── i18n.py               # 国际化支持
+│   └── requirements.txt      # Python 依赖
+└── ui-automation-plugin/
+    └── ...
+```
+
+**metadata.json 格式**：
+```json
+{
+  "id": "terminal",
+  "name": "terminal",
+  "version": "1.0.0",
+  "url": "ws://localhost:8765",
+  "autoStart": false,
+  "command": {
+    "darwin": ["venv/bin/python3", "main.py"],
+    "win32": ["venv\\Scripts\\python.exe", "main.py"],
+    "linux": ["venv/bin/python3", "main.py"]
+  },
+  "workingDirectory": "plugins/terminal-plugin",
+  "permissions": [
+    {
+      "id": "terminal.execute",
+      "dangerLevel": "high",
+      "i18n": {
+        "zh-CN": {"name": "执行命令", "description": "执行系统命令"},
+        "en-US": {"name": "Execute Command", "description": "Execute system commands"}
+      }
+    }
+  ],
+  "i18n": {
+    "zh-CN": {
+      "displayName": "终端控制",
+      "description": "执行系统命令、管理Shell会话"
+    }
+  }
+}
+```
+
+**config.json 格式**：
+```json
+[
+  {
+    "key": "commandTimeout",
+    "type": "int",
+    "default": 30,
+    "min": 1,
+    "max": 300,
+    "i18n": {
+      "zh-CN": {
+        "label": "命令超时（秒）",
+        "hint": "命令执行的最大等待时间"
+      }
+    }
+  },
+  {
+    "key": "dangerousCommands",
+    "type": "list",
+    "default": ["rm -rf", "del /f", "format"],
+    "i18n": {
+      "zh-CN": {
+        "label": "危险命令列表",
+        "hint": "包含这些关键字的命令需要权限确认"
+      }
+    }
+  }
+]
+```
+
+**插件开发流程**：
+
+1. **配置读取**：
+   ```python
+   # 插件启动时请求配置
+   await websocket.send(json.dumps({
+       "action": "getConfig",
+       "pluginId": "terminal"
+   }))
+   
+   # 接收配置
+   if data.get("type") == "plugin_config":
+       self.config = data.get("config", {})
+   
+   # 使用配置
+   timeout = self.config.get("commandTimeout", 30)
+   ```
+
+2. **权限请求**：
+   ```python
+   # 请求权限
+   async def request_permission(self, websocket, permission_id, operation, details):
+       request_id = str(uuid.uuid4())
+       await websocket.send(json.dumps({
+           "type": "permission_request",
+           "requestId": request_id,
+           "permissionId": permission_id,
+           "operation": operation,
+           "details": details
+       }))
+       # 等待响应
+       return await self.wait_for_response(request_id)
+   
+   # 使用权限
+   if self.is_dangerous_command(command):
+       granted = await self.request_permission(
+           websocket, "terminal.execute", "execute_command", {"command": command}
+       )
+       if not granted:
+           return {"success": False, "error": "权限被拒绝"}
+   ```
+
+3. **响应格式**：
+   ```python
+   # 所有响应必须包含 requiredPermission 字段
+   return {
+       "type": "plugin_response",
+       "success": True,
+       "action": "execute",
+       "data": {...},
+       "locale": "zh-CN",
+       "requiredPermission": "terminal.execute"  # 操作所需权限
+   }
+   ```
 
 ### 设置管理器 (settings-manager.ts)
 
@@ -315,13 +560,13 @@ WebSocket 和 HTTP 双协议支持：
 
 ### 核心功能迭代计划
 
-- [x] 实现 Live2D 视线跟随鼠标（已完成）
-- [x] Live2D 模型窗口大小自适应（已完成）
-- [x] 系统托盘支持和快速交互菜单（已完成）
-- [x] 对话界面和多模态输入支持（v1.2）
-- [x] 现代化UI布局和拖动控制（v1.2）
-- [x] 语音输入识别功能（v1.6，Sherpa-ONNX）
-- [x] 视频输入和视觉识别功能（v1.6，摄像头捕获）
+- [x] 实现 Live2D 视线跟随鼠标
+- [x] Live2D 模型窗口大小自适应
+- [x] 系统托盘支持和快速交互菜单
+- [x] 对话界面和多模态输入支持
+- [x] 现代化UI布局和拖动控制
+- [x] 语音输入识别功能
+- [x] 视频输入和视觉识别功能
 - [ ] 增加自定义快捷键
 - [ ] 优化模型切换时的内存释放
 - [ ] 增加开机自启动配置项

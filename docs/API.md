@@ -117,6 +117,32 @@
 - `name`: 桌宠名称
 - `personality`: 人设描述，后端可根据此调整 AI 对话风格
 
+**文件上传**
+
+用户上传文件时发送，包含文件的完整信息：
+```json
+{
+  "type": "file_upload",
+  "data": {
+    "fileName": "example.jpg",
+    "fileType": "image/jpeg",
+    "fileSize": 102400,
+    "fileData": "base64_encoded_file_content",
+    "timestamp": 1234567890
+  }
+}
+```
+
+**文件上传说明**：
+- `fileName`: 文件名称（包含扩展名）
+- `fileType`: MIME类型（如 image/jpeg、application/pdf）
+- `fileSize`: 文件大小（字节）
+- `fileData`: Base64编码的文件内容
+- `timestamp`: 上传时间戳
+- 前端限制：支持100MB以内的文件上传
+- 后端应根据fileType判断文件类型并进行相应处理
+- 建议：对于大文件，后端应考虑异步处理以避免超时
+
 ### 后端 → 前端消息
 
 **对话消息**
@@ -356,9 +382,154 @@ ws://backend-url/ws
 
 前端收到 `model_update` 消息后，应清除对应模型缓存并重新下载。
 
+### 插件 → 前端消息
+
+**请求配置**：
+```json
+{
+  "action": "getConfig",
+  "pluginId": "terminal"
+}
+```
+
+**配置响应**：
+```json
+{
+  "type": "plugin_config",
+  "config": {
+    "commandTimeout": 30,
+    "maxSessionCount": 5,
+    "defaultShell": "/bin/bash"
+  }
+}
+```
+
+**权限请求**：
+```json
+{
+  "type": "permission_request",
+  "requestId": "uuid-here",
+  "permissionId": "terminal.execute",
+  "operation": "execute_command",
+  "details": {
+    "command": "rm -rf /"
+  }
+}
+```
+
+**权限响应**：
+```json
+{
+  "type": "permission_response",
+  "requestId": "uuid-here",
+  "granted": true
+}
+```
+
+**插件响应（包含权限信息）**：
+```json
+{
+  "type": "plugin_response",
+  "success": true,
+  "action": "execute",
+  "data": { ... },
+  "locale": "zh-CN",
+  "requiredPermission": "terminal.execute"
+}
+```
+
+**字段说明**：
+- `requiredPermission`: 该操作需要的权限 ID，用于前端记录和管理
+- 失败时如果是权限被拒绝，`success` 为 `false`，`errorKey` 为 `"error.permission_denied"`
+
+### 前端 → 插件消息
+
+**请求配置**：
+前端接收到插件的 `getConfig` 请求后，返回对应的配置数据。
+
+**权限确认**：
+前端接收到插件的 `permission_request` 后，显示确认对话框，用户确认后返回 `permission_response`。
+
+## 配置和权限流程
+
+### 配置同步流程
+
+```
+插件启动
+  ↓
+发送 getConfig 请求
+  ↓
+前端读取配置文件 (userData/plugins/{id}/config.json)
+  ↓
+返回 plugin_config 消息
+  ↓
+插件应用配置
+```
+
+### 权限审批流程
+
+```
+插件准备执行操作
+  ↓
+检查是否需要权限
+  ↓
+发送 permission_request
+  ↓
+前端检查权限记录
+  ↓
+（如需）显示确认对话框
+  ↓
+返回 permission_response
+  ↓
+插件根据结果执行或拒绝操作
+```
+
 ## 外置插件协议
 
 NyaDeskPet 支持通过 WebSocket 连接外置插件（如终端控制、UI自动化等）。
+
+### 插件架构
+
+**设计原则**：
+- 插件独立运行，作为独立进程
+- 前端主动连接插件的 WebSocket 服务
+- 通过元信息文件（`metadata.json`）配置插件
+
+**元信息配置**（`plugins/*/metadata.json`）：
+```json
+{
+  "id": "terminal",
+  "name": "terminal",
+  "version": "1.0.0",
+  "url": "ws://localhost:8765",
+  "autoStart": false,
+  "command": {
+    "darwin": ["venv/bin/python3", "main.py"],
+    "win32": ["venv\\Scripts\\python.exe", "main.py"],
+    "linux": ["venv/bin/python3", "main.py"]
+  },
+  "workingDirectory": "plugins/terminal-plugin",
+  "i18n": {
+    "zh-CN": {
+      "displayName": "终端控制",
+      "description": "执行系统命令、管理Shell会话"
+    }
+  }
+}
+```
+
+**字段说明**：
+- `command`: 插件启动命令数组，按平台区分
+- `workingDirectory`: 插件工作目录（相对于应用根目录）
+- `autoStart`: 是否随应用自动启动
+- `url`: WebSocket 连接地址
+
+**启动流程**：
+1. 用户在插件管理面板点击「启动」
+2. 前端通过 IPC 请求主进程启动插件进程
+3. 主进程使用 `child_process.spawn` 执行 `command` 中的命令
+4. 等待 3 秒后前端尝试连接 `url` 指定的 WebSocket
+5. 连接成功后插件状态变为「已连接」
 
 ### 插件连接
 

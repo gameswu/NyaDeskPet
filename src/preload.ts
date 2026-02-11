@@ -159,6 +159,19 @@ const electronAPI = {
     ipcRenderer.on('toggle-ui', () => callback());
   },
   
+  // 插件目录管理
+  openPluginDirectory: (pluginName: string) => {
+    return ipcRenderer.invoke('plugin:open-directory', { name: pluginName });
+  },
+  
+  openPluginDataDirectory: (pluginName: string) => {
+    return ipcRenderer.invoke('plugin:open-data-directory', { name: pluginName });
+  },
+  
+  clearPluginData: (pluginName: string) => {
+    return ipcRenderer.invoke('plugin:clear-data', { name: pluginName });
+  },
+  
   // 通用 IPC 调用（用于插件管理等扩展功能）
   invoke: (channel: string, ...args: any[]) => {
     return ipcRenderer.invoke(channel, ...args);
