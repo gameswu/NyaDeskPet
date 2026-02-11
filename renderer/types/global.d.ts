@@ -63,6 +63,15 @@ export interface ElectronAPI {
   onOpenChat: (callback: () => void) => void;
   onToggleUI: (callback: () => void) => void;
   
+  // 内置 Agent 管理
+  agentStart: () => Promise<{ success: boolean; running?: boolean; port?: number; host?: string; error?: string }>;
+  agentStop: () => Promise<{ success: boolean; error?: string }>;
+  agentGetStatus: () => Promise<AgentServerStatus>;
+  agentGetUrl: () => Promise<{ wsUrl: string; httpUrl: string }>;
+  onOpenAgent: (callback: () => void) => void;
+  onAgentStatusChanged: (callback: (status: AgentServerStatus) => void) => void;
+  notifyBackendModeChanged: (mode: 'builtin' | 'custom') => void;
+  
   // 通用 IPC 调用（用于插件管理等扩展功能）
   invoke: (channel: string, ...args: any[]) => Promise<any>;
   
@@ -617,6 +626,7 @@ export type ThemeMode = 'light' | 'dark' | 'system';
 
 export interface AppSettings {
   modelPath: string;
+  backendMode: 'builtin' | 'custom';
   backendUrl: string;
   wsUrl: string;
   autoConnect: boolean;
@@ -707,7 +717,14 @@ export interface ThemeManager {
   getEffectiveTheme(): 'light' | 'dark';
 }
 
-// ============ 安全模块接口 ============
+// ============ 内置 Agent 服务器状态 ============
+export interface AgentServerStatus {
+  running: boolean;
+  port: number;
+  host: string;
+  connectedClients: number;
+  startTime: number | null;
+}
 
 // ============ 摄像头管理器接口 ============
 export interface CameraManager {

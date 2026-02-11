@@ -107,6 +107,10 @@ body {
   color: #333;
 }
 
+.top-bar-btn.hidden {
+  display: none;
+}
+
 #btn-close:hover {
   background: #f44336;
   color: white;
@@ -780,6 +784,158 @@ body {
   font-size: 14px;
   margin-bottom: 20px;
   line-height: 1.5;
+}
+
+/* Agent 管理面板 */
+.agent-panel {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background: rgba(0, 0, 0, 0.7);
+  display: none;
+  align-items: center;
+  justify-content: center;
+  z-index: 9999;
+  -webkit-app-region: no-drag;
+}
+
+.agent-panel.show {
+  display: flex;
+}
+
+.agent-content {
+  background: white;
+  border-radius: 12px;
+  width: 90%;
+  max-width: 500px;
+  max-height: 90%;
+  display: flex;
+  flex-direction: column;
+  box-shadow: 0 10px 40px rgba(0, 0, 0, 0.3);
+  animation: slideIn 0.3s ease-out;
+}
+
+.agent-header {
+  padding: 20px;
+  border-bottom: 1px solid #eee;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.agent-header h2 {
+  margin: 0;
+  font-size: 20px;
+  color: #333;
+  display: flex;
+  align-items: center;
+}
+
+.agent-body {
+  flex: 1;
+  overflow-y: auto;
+  padding: 20px;
+}
+
+.agent-section {
+  margin-bottom: 24px;
+}
+
+.agent-section h3 {
+  margin: 0 0 12px 0;
+  font-size: 15px;
+  color: #555;
+}
+
+.agent-status-card {
+  background: #f8f9fa;
+  border: 1px solid #e9ecef;
+  border-radius: 10px;
+  padding: 16px;
+  margin-bottom: 16px;
+}
+
+.agent-status-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 8px 0;
+}
+
+.agent-status-row:not(:last-child) {
+  border-bottom: 1px solid #e9ecef;
+}
+
+.agent-status-label {
+  font-size: 13px;
+  color: #666;
+  font-weight: 500;
+}
+
+.agent-status-value {
+  font-size: 13px;
+  color: #333;
+  font-family: 'SF Mono', 'Consolas', monospace;
+}
+
+.agent-status-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 3px 10px;
+  border-radius: 12px;
+  font-size: 12px;
+  font-weight: 500;
+}
+
+.agent-status-badge.running {
+  background: #d4edda;
+  color: #155724;
+}
+
+.agent-status-badge.running svg {
+  color: #28a745;
+}
+
+.agent-status-badge.stopped {
+  background: #f8d7da;
+  color: #721c24;
+}
+
+.agent-status-badge.stopped svg {
+  color: #dc3545;
+}
+
+.agent-actions {
+  display: flex;
+  gap: 12px;
+}
+
+.agent-actions button {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 10px 16px;
+  border-radius: 8px;
+  font-size: 14px;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.agent-actions button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.agent-description {
+  color: #666;
+  font-size: 13px;
+  line-height: 1.6;
+  margin: 0;
 }
 
 .settings-content {
@@ -1471,6 +1627,62 @@ body.dark-theme {
 }
 
 .dark-theme .plugins-description {
+  color: #999;
+}
+
+/* Agent 面板 - 暗黑主题 */
+.dark-theme .agent-panel {
+  background: rgba(30, 30, 30, 0.95);
+}
+
+.dark-theme .agent-content {
+  background: rgba(40, 40, 40, 0.95);
+}
+
+.dark-theme .agent-header {
+  border-bottom-color: rgba(255, 255, 255, 0.1);
+}
+
+.dark-theme .agent-header h2 {
+  color: #e0e0e0;
+}
+
+.dark-theme .agent-body {
+  background: #2a2a2a;
+}
+
+.dark-theme .agent-section h3 {
+  color: #bbb;
+}
+
+.dark-theme .agent-status-card {
+  background: #333;
+  border-color: #444;
+}
+
+.dark-theme .agent-status-row:not(:last-child) {
+  border-bottom-color: #444;
+}
+
+.dark-theme .agent-status-label {
+  color: #999;
+}
+
+.dark-theme .agent-status-value {
+  color: #d4d4d4;
+}
+
+.dark-theme .agent-status-badge.running {
+  background: rgba(40, 167, 69, 0.2);
+  color: #6fcf97;
+}
+
+.dark-theme .agent-status-badge.stopped {
+  background: rgba(220, 53, 69, 0.2);
+  color: #f5a6ad;
+}
+
+.dark-theme .agent-description {
   color: #999;
 }
 

@@ -159,6 +159,28 @@ async function initializeApp(): Promise<void> {
     });
 
     // 8. 初始化后端连接
+    // 如果使用内置后端模式，先启动 Agent 服务器
+    if (settings.backendMode === 'builtin') {
+      window.logger.info('启动内置 Agent 服务器...');
+      try {
+        const agentResult = await window.electronAPI.agentStart();
+        if (agentResult.success) {
+          window.logger.info('内置 Agent 已启动');
+          // 获取内置 Agent 的 URL 并更新 backendClient
+          const urls = await window.electronAPI.agentGetUrl();
+          window.backendClient.wsUrl = urls.wsUrl;
+          window.backendClient.httpUrl = urls.httpUrl;
+        } else {
+          window.logger.error('启动内置 Agent 失败:', agentResult.error);
+        }
+      } catch (error) {
+        window.logger.error('启动内置 Agent 异常:', error);
+      }
+    }
+
+    // 更新顶栏 Agent 按钮可见性
+    updateAgentButtonVisibility();
+
     if (settings.autoConnect) {
       window.logger.info('连接后端服务器...');
       await window.backendClient.initialize();
@@ -321,6 +343,14 @@ function setupWindowControls(): void {
     });
   }
 
+  // Agent 管理按钮
+  const btnAgent = document.getElementById('btn-agent');
+  if (btnAgent) {
+    btnAgent.addEventListener('click', () => {
+      showAgentPanel();
+    });
+  }
+
   // UI切换按钮
   const btnToggleUI = document.getElementById('btn-toggle-ui');
   if (btnToggleUI) {
@@ -356,6 +386,151 @@ function hidePluginsPanel(): void {
   const pluginsPanel = document.getElementById('plugins-panel');
   if (pluginsPanel) {
     pluginsPanel.classList.remove('show');
+  }
+}
+
+// ==================== Agent 管理面板 ====================
+
+/** Agent 状态刷新定时器 */
+let agentStatusTimer: number | null = null;
+
+/**
+ * 显示 Agent 管理面板
+ */
+function showAgentPanel(): void {
+  const agentPanel = document.getElementById('agent-panel');
+  if (!agentPanel) return;
+
+  agentPanel.classList.add('show');
+
+  // 设置关闭按钮事件
+  const btnClose = document.getElementById('btn-close-agent');
+  if (btnClose) {
+    btnClose.onclick = hideAgentPanel;
+  }
+
+  // 点击背景关闭
+  agentPanel.onclick = (e) => {
+    if (e.target === agentPanel) {
+      hideAgentPanel();
+    }
+  };
+
+  // 绑定启动/停止按钮
+  const btnStart = document.getElementById('btn-agent-start');
+  const btnStop = document.getElementById('btn-agent-stop');
+
+  if (btnStart) {
+    btnStart.onclick = async () => {
+      btnStart.setAttribute('disabled', 'true');
+      const result = await window.electronAPI.agentStart();
+      if (result.success) {
+        window.logger.info('内置 Agent 已启动');
+      } else {
+        window.logger.error('启动内置 Agent 失败:', result.error);
+        btnStart.removeAttribute('disabled');
+      }
+      refreshAgentStatus();
+    };
+  }
+
+  if (btnStop) {
+    btnStop.onclick = async () => {
+      btnStop.setAttribute('disabled', 'true');
+      const result = await window.electronAPI.agentStop();
+      if (result.success) {
+        window.logger.info('内置 Agent 已停止');
+      } else {
+        window.logger.error('停止内置 Agent 失败:', result.error);
+      }
+      refreshAgentStatus();
+    };
+  }
+
+  // 立即刷新一次状态
+  refreshAgentStatus();
+
+  // 定时刷新状态
+  if (agentStatusTimer) clearInterval(agentStatusTimer);
+  agentStatusTimer = window.setInterval(refreshAgentStatus, 3000);
+}
+
+/**
+ * 隐藏 Agent 管理面板
+ */
+function hideAgentPanel(): void {
+  const agentPanel = document.getElementById('agent-panel');
+  if (agentPanel) {
+    agentPanel.classList.remove('show');
+  }
+  if (agentStatusTimer) {
+    clearInterval(agentStatusTimer);
+    agentStatusTimer = null;
+  }
+}
+
+/**
+ * 刷新 Agent 状态显示
+ */
+async function refreshAgentStatus(): Promise<void> {
+  try {
+    const status = await window.electronAPI.agentGetStatus();
+    updateAgentStatusUI(status);
+  } catch (error) {
+    window.logger.error('获取 Agent 状态失败:', error);
+  }
+}
+
+/**
+ * 更新 Agent 状态 UI
+ */
+function updateAgentStatusUI(status: any): void {
+  const badge = document.getElementById('agent-status-badge');
+  const statusText = document.getElementById('agent-status-text');
+  const addressEl = document.getElementById('agent-address');
+  const clientsEl = document.getElementById('agent-clients');
+  const uptimeEl = document.getElementById('agent-uptime');
+  const btnStart = document.getElementById('btn-agent-start') as HTMLButtonElement;
+  const btnStop = document.getElementById('btn-agent-stop') as HTMLButtonElement;
+
+  if (status.running) {
+    badge?.classList.remove('stopped');
+    badge?.classList.add('running');
+    if (statusText) statusText.textContent = window.i18nManager.t('agent.running');
+    if (addressEl) addressEl.textContent = `ws://${status.host}:${status.port}`;
+    if (clientsEl) clientsEl.textContent = String(status.connectedClients);
+    if (uptimeEl && status.startTime) {
+      const elapsed = Math.floor((Date.now() - status.startTime) / 1000);
+      const mins = Math.floor(elapsed / 60);
+      const secs = elapsed % 60;
+      uptimeEl.textContent = `${mins}m ${secs}s`;
+    }
+    if (btnStart) btnStart.setAttribute('disabled', 'true');
+    if (btnStop) btnStop.removeAttribute('disabled');
+  } else {
+    badge?.classList.remove('running');
+    badge?.classList.add('stopped');
+    if (statusText) statusText.textContent = window.i18nManager.t('agent.stopped');
+    if (addressEl) addressEl.textContent = '-';
+    if (clientsEl) clientsEl.textContent = '0';
+    if (uptimeEl) uptimeEl.textContent = '-';
+    if (btnStart) btnStart.removeAttribute('disabled');
+    if (btnStop) btnStop.setAttribute('disabled', 'true');
+  }
+}
+
+/**
+ * 更新顶栏 Agent 按钮可见性
+ */
+function updateAgentButtonVisibility(): void {
+  const btnAgent = document.getElementById('btn-agent');
+  if (!btnAgent) return;
+
+  const settings = window.settingsManager.getSettings();
+  if (settings.backendMode === 'builtin') {
+    btnAgent.classList.remove('hidden');
+  } else {
+    btnAgent.classList.add('hidden');
   }
 }
 
@@ -652,6 +827,16 @@ function initializeChatWindow(): void {
 }
 
 /**
+ * 更新自定义后端链接字段的显示状态
+ */
+function updateCustomBackendFieldsVisibility(mode: 'builtin' | 'custom'): void {
+  const customFields = document.getElementById('custom-backend-fields');
+  if (customFields) {
+    customFields.style.display = mode === 'custom' ? 'block' : 'none';
+  }
+}
+
+/**
  * 显示设置面板
  */
 function showSettingsPanel(): void {
@@ -662,9 +847,13 @@ function showSettingsPanel(): void {
   const settings = window.settingsManager.getSettings();
   
   (document.getElementById('setting-model-path') as HTMLInputElement).value = settings.modelPath;
+  (document.getElementById('setting-backend-mode') as HTMLSelectElement).value = settings.backendMode || 'builtin';
   (document.getElementById('setting-backend-url') as HTMLInputElement).value = settings.backendUrl;
   (document.getElementById('setting-websocket-url') as HTMLInputElement).value = settings.wsUrl;
   (document.getElementById('setting-auto-connect') as HTMLInputElement).checked = settings.autoConnect;
+
+  // 根据后端模式显示/隐藏自定义链接字段
+  updateCustomBackendFieldsVisibility(settings.backendMode || 'builtin');
   (document.getElementById('setting-volume') as HTMLInputElement).value = String(settings.volume);
   (document.getElementById('volume-value') as HTMLSpanElement).textContent = Math.round(settings.volume * 100) + '%';
   (document.getElementById('setting-update-source') as HTMLInputElement).value = settings.updateSource;
@@ -720,6 +909,7 @@ function hideSettingsPanel(): void {
  */
 async function saveSettings(): Promise<void> {
   const modelPath = (document.getElementById('setting-model-path') as HTMLInputElement).value;
+  const backendMode = (document.getElementById('setting-backend-mode') as HTMLSelectElement).value as 'builtin' | 'custom';
   const backendUrl = (document.getElementById('setting-backend-url') as HTMLInputElement).value;
   const wsUrl = (document.getElementById('setting-websocket-url') as HTMLInputElement).value;
   const autoConnect = (document.getElementById('setting-auto-connect') as HTMLInputElement).checked;
@@ -753,6 +943,7 @@ async function saveSettings(): Promise<void> {
   // 更新设置
   window.settingsManager.updateSettings({
     modelPath,
+    backendMode,
     backendUrl,
     wsUrl,
     autoConnect,
@@ -791,6 +982,7 @@ async function saveSettings(): Promise<void> {
 
   window.logger.info('用户设置已保存', {
     modelPath,
+    backendMode,
     backendUrl,
     wsUrl,
     autoConnect,
@@ -815,6 +1007,10 @@ async function saveSettings(): Promise<void> {
   
   // 保存触碰配置
   saveTapConfigFromUI();
+  
+  // 更新 Agent 按钮可见性并通知主进程
+  updateAgentButtonVisibility();
+  window.electronAPI.notifyBackendModeChanged(backendMode);
   
   // 提示用户重启应用
   if (confirm(window.i18nManager.t('messages.reloadConfirm'))) {
@@ -947,6 +1143,15 @@ function initializeSettingsPanel(): void {
     languageSelect.addEventListener('change', async (e: Event) => {
       const newLocale = (e.target as HTMLSelectElement).value;
       await window.i18nManager.setLocale(newLocale);
+    });
+  }
+
+  // 后端模式切换 - 实时显示/隐藏自定义链接字段
+  const backendModeSelect = document.getElementById('setting-backend-mode') as HTMLSelectElement;
+  if (backendModeSelect) {
+    backendModeSelect.addEventListener('change', (e: Event) => {
+      const mode = (e.target as HTMLSelectElement).value as 'builtin' | 'custom';
+      updateCustomBackendFieldsVisibility(mode);
     });
   }
 
@@ -1416,6 +1621,21 @@ window.addEventListener('DOMContentLoaded', () => {
     window.electronAPI.onToggleUI(() => {
       window.logger.info('收到主进程切换UI请求');
       toggleUI();
+    });
+  }
+
+  // 监听来自主进程的打开 Agent 管理请求
+  if (window.electronAPI.onOpenAgent) {
+    window.electronAPI.onOpenAgent(() => {
+      window.logger.info('收到主进程打开 Agent 管理请求');
+      showAgentPanel();
+    });
+  }
+
+  // 监听 Agent 状态变化
+  if (window.electronAPI.onAgentStatusChanged) {
+    window.electronAPI.onAgentStatusChanged((status: any) => {
+      updateAgentStatusUI(status);
     });
   }
 });

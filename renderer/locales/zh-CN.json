@@ -5,6 +5,7 @@
   "topBar": {
     "disconnected": "未连接",
     "plugins": "插件管理",
+    "agent": "Agent 管理",
     "settings": "设置",
     "minimize": "最小化",
     "close": "关闭"
@@ -45,6 +46,9 @@
     },
     "backend": {
       "title": "后端连接",
+      "mode": "后端模式",
+      "modeBuiltin": "内置 Agent",
+      "modeCustom": "自定义链接",
       "autoConnect": "启动时自动连接后端",
       "httpUrl": "HTTP 地址",
       "httpPlaceholder": "http://localhost:8000",
@@ -154,6 +158,20 @@
       "approve": "允许",
       "deny": "拒绝"
     }
+  },
+  "agent": {
+    "title": "Agent 管理",
+    "close": "关闭",
+    "status": "状态",
+    "running": "运行中",
+    "stopped": "已停止",
+    "address": "地址",
+    "clients": "连接数",
+    "uptime": "运行时间",
+    "start": "启动",
+    "stop": "停止",
+    "info": "说明",
+    "description": "内置 Agent 是一个运行在本地的轻量级后端服务，提供基础的对话和交互功能框架。你可以通过扩展 Agent Handler 来集成 LLM 等 AI 服务。"
   }
 }
 

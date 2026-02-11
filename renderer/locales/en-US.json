@@ -5,6 +5,7 @@
   "topBar": {
     "disconnected": "Disconnected",
     "plugins": "Plugins",
+    "agent": "Agent Management",
     "settings": "Settings",
     "minimize": "Minimize",
     "close": "Close"
@@ -45,6 +46,9 @@
     },
     "backend": {
       "title": "Backend Connection",
+      "mode": "Backend Mode",
+      "modeBuiltin": "Built-in Agent",
+      "modeCustom": "Custom URL",
       "autoConnect": "Auto-connect on startup",
       "httpUrl": "HTTP URL",
       "httpPlaceholder": "http://localhost:8000",
@@ -153,6 +157,18 @@
       "warning": "⚠️ This permission may affect system security, please authorize carefully",
       "approve": "Allow",
       "deny": "Deny"
-    }
-  }
+    }  },
+  "agent": {
+    "title": "Agent Management",
+    "close": "Close",
+    "status": "Status",
+    "running": "Running",
+    "stopped": "Stopped",
+    "address": "Address",
+    "clients": "Connections",
+    "uptime": "Uptime",
+    "start": "Start",
+    "stop": "Stop",
+    "info": "Info",
+    "description": "Built-in Agent is a lightweight local backend service providing basic dialogue and interaction framework. You can extend the Agent Handler to integrate LLM and other AI services."  }
 }

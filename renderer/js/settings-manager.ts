@@ -10,6 +10,7 @@ class SettingsManager implements ISettingsManager {
   private settings: AppSettings;
   private defaultSettings: AppSettings = {
     modelPath: '../models/live2d/mao_pro_zh/runtime/mao_pro.model3.json',
+    backendMode: 'builtin',
     backendUrl: 'http://localhost:8000',
     wsUrl: 'ws://localhost:8000/ws',
     autoConnect: true,

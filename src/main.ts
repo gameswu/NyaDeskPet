@@ -6,6 +6,7 @@ import * as os from 'os';
 import { spawn, ChildProcess } from 'child_process';
 import asrService from './asr-service';
 import { logger } from './logger';
+import { AgentServer } from './agent-server';
 
 // 在最开始设置动态库路径，确保 Electron 启动时就能找到 sherpa-onnx 库
 const platform = process.platform;
@@ -54,6 +55,10 @@ const pluginProcesses: Map<string, ChildProcess> = new Map();
 // UI状态追踪
 let isUIVisible: boolean = true;
 let isChatOpen: boolean = false;
+
+// 内置 Agent 服务器
+const agentServer = new AgentServer({ port: 8765 });
+let backendMode: 'builtin' | 'custom' = 'builtin';
 
 function createWindow(): void {
   const { width, height } = screen.getPrimaryDisplay().workAreaSize;
@@ -180,6 +185,15 @@ function updateTrayMenu(): void {
         }
       }
     },
+    ...(backendMode === 'builtin' ? [{
+      label: 'Agent 管理',
+      click: () => {
+        if (mainWindow) {
+          mainWindow.show();
+          mainWindow.webContents.send('open-agent');
+        }
+      }
+    }] : []),
     { type: 'separator' },
     {
       label: '退出',
@@ -389,6 +403,12 @@ ipcMain.on('ui-state-changed', (_event, state: { uiVisible?: boolean; chatOpen?:
   if (state.chatOpen !== undefined) {
     isChatOpen = state.chatOpen;
   }
+  updateTrayMenu();
+});
+
+// 接收后端模式变更通知
+ipcMain.on('backend-mode-changed', (_event, mode: 'builtin' | 'custom') => {
+  backendMode = mode;
   updateTrayMenu();
 });
 
@@ -923,8 +943,8 @@ ipcMain.handle('plugin:stop', async (_event: IpcMainInvokeEvent, args: { name: s
   }
 });
 
-// 应用退出时清理所有插件进程
-app.on('before-quit', () => {
+// 应用退出时清理所有插件进程和内置 Agent
+app.on('before-quit', async () => {
   logger.info('应用退出，清理插件进程');
   pluginProcesses.forEach((process, name) => {
     if (process && !process.killed) {
@@ -933,6 +953,12 @@ app.on('before-quit', () => {
     }
   });
   pluginProcesses.clear();
+
+  // 停止内置 Agent 服务器
+  if (agentServer.isRunning()) {
+    logger.info('停止内置 Agent 服务器');
+    await agentServer.stop();
+  }
 });
 
 /**
@@ -1076,4 +1102,58 @@ ipcMain.handle('plugin:save-permissions', async (_event: IpcMainInvokeEvent, arg
     logger.error(`保存权限记录失败:`, error);
     return { success: false, error: (error as Error).message };
   }
+});
+
+// ==================== 内置 Agent 服务器 IPC 处理器 ====================
+
+/**
+ * 启动内置 Agent 服务器
+ */
+ipcMain.handle('agent:start', async () => {
+  try {
+    if (agentServer.isRunning()) {
+      return { success: true, ...agentServer.getStatus() };
+    }
+    const result = await agentServer.start();
+    if (result) {
+      // 通知渲染进程更新状态
+      mainWindow?.webContents.send('agent-status-changed', agentServer.getStatus());
+      return { success: true, ...agentServer.getStatus() };
+    }
+    return { success: false, error: '启动失败' };
+  } catch (error) {
+    logger.error('[Agent] 启动失败:', error);
+    return { success: false, error: (error as Error).message };
+  }
+});
+
+/**
+ * 停止内置 Agent 服务器
+ */
+ipcMain.handle('agent:stop', async () => {
+  try {
+    await agentServer.stop();
+    mainWindow?.webContents.send('agent-status-changed', agentServer.getStatus());
+    return { success: true };
+  } catch (error) {
+    logger.error('[Agent] 停止失败:', error);
+    return { success: false, error: (error as Error).message };
+  }
+});
+
+/**
+ * 获取内置 Agent 服务器状态
+ */
+ipcMain.handle('agent:status', () => {
+  return agentServer.getStatus();
+});
+
+/**
+ * 获取内置 Agent 的 WebSocket URL
+ */
+ipcMain.handle('agent:get-url', () => {
+  return {
+    wsUrl: agentServer.getWsUrl(),
+    httpUrl: `http://127.0.0.1:${agentServer.getPort()}`
+  };
 });

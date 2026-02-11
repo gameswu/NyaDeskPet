@@ -85,6 +85,15 @@ export interface ElectronAPI {
   onOpenChat: (callback: () => void) => void;
   onToggleUI: (callback: () => void) => void;
   
+  // 内置 Agent 管理
+  agentStart: () => Promise<any>;
+  agentStop: () => Promise<any>;
+  agentGetStatus: () => Promise<any>;
+  agentGetUrl: () => Promise<{ wsUrl: string; httpUrl: string }>;
+  onOpenAgent: (callback: () => void) => void;
+  onAgentStatusChanged: (callback: (status: any) => void) => void;
+  notifyBackendModeChanged: (mode: 'builtin' | 'custom') => void;
+  
   // 插件管理
   invoke: (channel: string, ...args: any[]) => Promise<any>;
 }
@@ -165,6 +174,24 @@ const electronAPI = {
 
   onToggleUI: (callback: () => void) => {
     ipcRenderer.on('toggle-ui', () => callback());
+  },
+  
+  // 内置 Agent 管理
+  agentStart: () => ipcRenderer.invoke('agent:start'),
+  agentStop: () => ipcRenderer.invoke('agent:stop'),
+  agentGetStatus: () => ipcRenderer.invoke('agent:status'),
+  agentGetUrl: () => ipcRenderer.invoke('agent:get-url'),
+  
+  onOpenAgent: (callback: () => void) => {
+    ipcRenderer.on('open-agent', () => callback());
+  },
+  
+  onAgentStatusChanged: (callback: (status: any) => void) => {
+    ipcRenderer.on('agent-status-changed', (_event: IpcRendererEvent, status: any) => callback(status));
+  },
+  
+  notifyBackendModeChanged: (mode: 'builtin' | 'custom') => {
+    ipcRenderer.send('backend-mode-changed', mode);
   },
   
   // 插件目录管理

@@ -14,6 +14,9 @@
       <span id="status-text" class="status-text" data-i18n="topBar.disconnected">未连接</span>
     </div>
     <div class="controls-section">
+      <button id="btn-agent" class="top-bar-btn hidden" data-i18n-title="topBar.agent">
+        <i data-lucide="bot"></i>
+      </button>
       <button id="btn-plugins" class="top-bar-btn" data-i18n-title="topBar.plugins">
         <i data-lucide="puzzle"></i>
       </button>
@@ -196,18 +199,27 @@
           <div class="settings-section">
             <h3 data-i18n="settings.backend.title">后端连接</h3>
             <div class="setting-item">
+              <label for="setting-backend-mode" data-i18n="settings.backend.mode">后端模式</label>
+              <select id="setting-backend-mode">
+                <option value="builtin" data-i18n="settings.backend.modeBuiltin">内置 Agent</option>
+                <option value="custom" data-i18n="settings.backend.modeCustom">自定义链接</option>
+              </select>
+            </div>
+            <div class="setting-item">
               <label>
                 <input type="checkbox" id="setting-auto-connect">
                 <span data-i18n="settings.backend.autoConnect">启动时自动连接后端</span>
               </label>
             </div>
-            <div class="setting-item">
-              <label for="setting-backend-url" data-i18n="settings.backend.httpUrl">HTTP 地址</label>
-              <input type="text" id="setting-backend-url" data-i18n-placeholder="settings.backend.httpPlaceholder" placeholder="http://localhost:8000">
-            </div>
-            <div class="setting-item">
-              <label for="setting-websocket-url" data-i18n="settings.backend.wsUrl">WebSocket 地址</label>
-              <input type="text" id="setting-websocket-url" data-i18n-placeholder="settings.backend.wsPlaceholder" placeholder="ws://localhost:8000/ws">
+            <div id="custom-backend-fields">
+              <div class="setting-item">
+                <label for="setting-backend-url" data-i18n="settings.backend.httpUrl">HTTP 地址</label>
+                <input type="text" id="setting-backend-url" data-i18n-placeholder="settings.backend.httpPlaceholder" placeholder="http://localhost:8000">
+              </div>
+              <div class="setting-item">
+                <label for="setting-websocket-url" data-i18n="settings.backend.wsUrl">WebSocket 地址</label>
+                <input type="text" id="setting-websocket-url" data-i18n-placeholder="settings.backend.wsPlaceholder" placeholder="ws://localhost:8000/ws">
+              </div>
             </div>
           </div>
           
@@ -447,6 +459,65 @@
               暂无已安装的插件
             </div>
           </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Agent 管理面板 -->
+  <div id="agent-panel" class="agent-panel">
+    <div class="agent-content">
+      <div class="agent-header">
+        <h2>
+          <i data-lucide="bot" style="width: 20px; height: 20px; display: inline-block; vertical-align: middle; margin-right: 8px;"></i>
+          <span data-i18n="agent.title">Agent 管理</span>
+        </h2>
+        <button id="btn-close-agent" class="btn-icon" data-i18n-title="agent.close">
+          <i data-lucide="x"></i>
+        </button>
+      </div>
+      
+      <div class="agent-body">
+        <div class="agent-section">
+          <div class="agent-status-card">
+            <div class="agent-status-row">
+              <span class="agent-status-label" data-i18n="agent.status">状态</span>
+              <span id="agent-status-badge" class="agent-status-badge stopped">
+                <i data-lucide="circle" style="width: 10px; height: 10px;"></i>
+                <span id="agent-status-text" data-i18n="agent.stopped">已停止</span>
+              </span>
+            </div>
+            <div class="agent-status-row">
+              <span class="agent-status-label" data-i18n="agent.address">地址</span>
+              <span id="agent-address" class="agent-status-value">ws://127.0.0.1:8765</span>
+            </div>
+            <div class="agent-status-row">
+              <span class="agent-status-label" data-i18n="agent.clients">连接数</span>
+              <span id="agent-clients" class="agent-status-value">0</span>
+            </div>
+            <div class="agent-status-row">
+              <span class="agent-status-label" data-i18n="agent.uptime">运行时间</span>
+              <span id="agent-uptime" class="agent-status-value">-</span>
+            </div>
+          </div>
+          
+          <div class="agent-actions">
+            <button id="btn-agent-start" class="btn-primary">
+              <i data-lucide="play" style="width: 14px; height: 14px;"></i>
+              <span data-i18n="agent.start">启动</span>
+            </button>
+            <button id="btn-agent-stop" class="btn-secondary" disabled>
+              <i data-lucide="square" style="width: 14px; height: 14px;"></i>
+              <span data-i18n="agent.stop">停止</span>
+            </button>
+          </div>
+        </div>
+        
+        <div class="agent-section">
+          <h3 data-i18n="agent.info">说明</h3>
+          <p class="agent-description" data-i18n="agent.description">
+            内置 Agent 是一个运行在本地的轻量级后端服务，提供基础的对话和交互功能框架。你可以通过扩展 Agent Handler 来集成 LLM 等 AI 服务。
+          </p>
         </div>
       </div>
     </div>

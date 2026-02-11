@@ -44,8 +44,25 @@ class BackendClient implements IBackendClient {
     // 从设置管理器更新URL
     if (window.settingsManager) {
       const settings = window.settingsManager.getSettings();
-      this.httpUrl = settings.backendUrl;
-      this.wsUrl = settings.wsUrl;
+      
+      if (settings.backendMode === 'builtin') {
+        // 内置后端模式：使用内置 Agent 的 URL
+        try {
+          const urls = await window.electronAPI.agentGetUrl();
+          this.httpUrl = urls.httpUrl;
+          this.wsUrl = urls.wsUrl;
+          window.logger.info('[BackendClient] 使用内置 Agent:', this.wsUrl);
+        } catch (error) {
+          window.logger.error('[BackendClient] 获取内置 Agent URL 失败，使用默认配置:', error);
+          this.httpUrl = settings.backendUrl;
+          this.wsUrl = settings.wsUrl;
+        }
+      } else {
+        // 自定义链接模式：使用用户配置的 URL
+        this.httpUrl = settings.backendUrl;
+        this.wsUrl = settings.wsUrl;
+        window.logger.info('[BackendClient] 使用自定义链接:', this.wsUrl);
+      }
     }
     
     await this.connectWebSocket();
