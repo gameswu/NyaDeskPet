@@ -8,8 +8,9 @@
 - `docs/API.md`：API 接口规范与通信协议
 - `docs/USAGE.md`：用户指南、安装说明、打包与故障排除
 - `docs/DEVELOPMENT.md`：架构设计、核心逻辑深度解析
+- `docs/PLUGINS.md`：插件开发指南
 
-**文档原则**：严禁在 `docs/` 目录下创建新文档。所有更新必须在上述三个现有文档（或 README.md）中进行修改和扩展。
+**文档原则**：严禁在 `docs/` 目录下创建新文档。所有更新必须在上述四个现有文档（或 README.md）中进行修改和扩展。
 
 ## 项目概述
 
@@ -148,7 +149,7 @@
 
 **内置插件**：
 - 终端控制插件（`terminal-plugin`）
-- UI 自动化插件（`ui-automation-plugin`)
+- UI 自动化插件（`ui-automation-plugin`）
 
 ## 快速开始
 
@@ -205,7 +206,7 @@ assets/           - 资源文件
 - **live2d**：动作/表情/参数控制
 - **sync_command**：组合指令（同时执行多个动作）
 
-**详细协议**：见 [docs/API.md](../docs/API.md)
+**详细协议**：见 `docs/API.md`
 
 ## 开发注意事项
 

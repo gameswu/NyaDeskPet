@@ -64,6 +64,69 @@ class Live2DManager implements ILive2DManager {
   }
 
   /**
+   * 销毁当前模型并释放所有相关资源
+   */
+  private async destroyCurrentModel(): Promise<void> {
+    if (!this.model) return;
+
+    window.logger?.info('Live2D开始释放模型资源');
+
+    try {
+      // 停止所有动画和音频
+      this.stopLipSync();
+      if (this.eyeTrackingTimer) {
+        clearInterval(this.eyeTrackingTimer);
+        this.eyeTrackingTimer = null;
+      }
+
+      // 从舞台移除
+      if (this.app && this.model) {
+        this.app.stage.removeChild(this.model as any);
+      }
+
+      // 获取内部模型引用
+      const internalModel = (this.model as any).internalModel;
+      
+      // 销毁所有纹理
+      if (internalModel && internalModel.textures) {
+        for (const texture of internalModel.textures) {
+          if (texture && typeof texture.destroy === 'function') {
+            texture.destroy(true); // true 表示同时销毁 BaseTexture
+          }
+        }
+        window.logger?.debug('Live2D已销毁纹理资源');
+      }
+
+      // 销毁模型本身
+      if (typeof (this.model as any).destroy === 'function') {
+        (this.model as any).destroy({
+          children: true,    // 销毁所有子元素
+          texture: true,     // 销毁纹理
+          baseTexture: true  // 销毁基础纹理
+        });
+      }
+
+      // 清空引用
+      this.model = null;
+      this.currentMotion = null;
+      this.currentExpression = null;
+      this.originalModelBounds = null;
+      this.lipSyncEnabled = false;
+      this.isPlayingMotion = false;
+
+      window.logger?.info('Live2D模型资源释放完成');
+
+      // 建议垃圾回收（仅在开发环境）
+      if (typeof (window as any).gc === 'function') {
+        (window as any).gc();
+        window.logger?.debug('Live2D已触发垃圾回收');
+      }
+    } catch (error) {
+      window.logger?.error('Live2D释放模型资源失败', { error });
+    }
+  }
+
+  /**
    * 初始化 Live2D
    */
   public async initialize(): Promise<boolean> {
@@ -109,11 +172,8 @@ class Live2DManager implements ILive2DManager {
 
       window.logger?.info('Live2D开始加载模型', { modelPath });
       
-      // 清除旧模型
-      if (this.model && this.app) {
-        this.app.stage.removeChild(this.model as any);
-        (this.model as any).destroy?.();
-      }
+      // 清除旧模型和释放资源
+      await this.destroyCurrentModel();
       
       // 使用 pixi-live2d-display 加载模型（通过全局 PIXI.live2d）
       const Live2DModel = (window.PIXI as any).live2d.Live2DModel;

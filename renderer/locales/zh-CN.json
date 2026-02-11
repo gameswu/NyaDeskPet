@@ -79,6 +79,9 @@
       "showSubtitle": "显示对话字幕",
       "enableEyeTracking": "启用视线跟随"
     },
+    "general": {
+      "autoLaunch": "开机自启动"
+    },
     "about": {
       "title": "关于",
       "version": "版本",

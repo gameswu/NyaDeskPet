@@ -52,6 +52,10 @@ export interface ElectronAPI {
   loggerOpenDirectory: () => Promise<{ success: boolean }>;
   loggerLog: (level: string, message: string, data?: any) => void;
   
+  // 开机自启动
+  setAutoLaunch: (enable: boolean) => Promise<{ success: boolean }>;
+  getAutoLaunch: () => Promise<{ enabled: boolean }>;
+  
   // 终端插件
   terminalExecute: (options: any) => Promise<any>;
   terminalGetSessions: () => Promise<any[]>;
@@ -129,6 +133,10 @@ const electronAPI = {
   loggerLog: (level: string, message: string, data?: any) => {
     ipcRenderer.send('logger-log', level, message, data);
   },
+  
+  // 开机自启动
+  setAutoLaunch: (enable: boolean) => ipcRenderer.invoke('set-auto-launch', enable),
+  getAutoLaunch: () => ipcRenderer.invoke('get-auto-launch'),
   
   // 监听来自主进程的消息
   onBackendMessage: (callback: (data: unknown) => void) => {

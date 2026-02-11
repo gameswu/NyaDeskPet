@@ -79,6 +79,9 @@
       "showSubtitle": "Show Dialogue Subtitles",
       "enableEyeTracking": "Enable Eye Tracking"
     },
+    "general": {
+      "autoLaunch": "Launch on Startup"
+    },
     "about": {
       "title": "About",
       "version": "Version",

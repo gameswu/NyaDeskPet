@@ -26,6 +26,7 @@ class SettingsManager implements ISettingsManager {
     micVolumeThreshold: 30,
     micAutoSend: true,
     enableEyeTracking: true,
+    autoLaunch: false,
     logEnabled: false,
     logLevels: ['warn', 'error', 'critical'],
     logRetentionDays: 7

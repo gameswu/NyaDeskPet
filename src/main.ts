@@ -699,6 +699,37 @@ ipcMain.on('logger-log', (_event, level: string, message: string, data?: any) =>
 });
 
 /**
+ * 设置开机自启动
+ */
+ipcMain.handle('set-auto-launch', (_event: IpcMainInvokeEvent, enable: boolean) => {
+  try {
+    app.setLoginItemSettings({
+      openAtLogin: enable,
+      openAsHidden: false,
+      args: []
+    });
+    logger.info('开机自启动设置已更新', { enable });
+    return { success: true };
+  } catch (error) {
+    logger.error('设置开机自启动失败', { error });
+    return { success: false, error: String(error) };
+  }
+});
+
+/**
+ * 获取开机自启动状态
+ */
+ipcMain.handle('get-auto-launch', () => {
+  try {
+    const settings = app.getLoginItemSettings();
+    return { enabled: settings.openAtLogin };
+  } catch (error) {
+    logger.error('获取开机自启动状态失败', { error });
+    return { enabled: false };
+  }
+});
+
+/**
  * 插件管理 - 读取插件清单
  */
 ipcMain.handle('plugin:read-manifest', async (_event: IpcMainInvokeEvent, pluginName: string) => {

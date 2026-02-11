@@ -50,6 +50,10 @@ export interface ElectronAPI {
   loggerOpenDirectory: () => Promise<{ success: boolean }>;
   loggerLog: (level: string, message: string, data?: any) => void;
   
+  // 开机自启动
+  setAutoLaunch: (enable: boolean) => Promise<{ success: boolean }>;
+  getAutoLaunch: () => Promise<{ enabled: boolean }>;
+  
   // 监听来自主进程的消息
   onBackendMessage: (callback: (data: unknown) => void) => void;
   onVoicePlay: (callback: (data: unknown) => void) => void;
@@ -559,9 +563,12 @@ export interface AppSettings {
   micBackgroundMode: boolean;
   micVolumeThreshold: number;
   micAutoSend: boolean;
-  enableEyeTracking: boolean;  logEnabled: boolean;
+  enableEyeTracking: boolean;
+  autoLaunch: boolean;
+  logEnabled: boolean;
   logLevels: string[];
-  logRetentionDays: number;}
+  logRetentionDays: number;
+}
 
 // 触碰配置类型
 export interface TapConfig {

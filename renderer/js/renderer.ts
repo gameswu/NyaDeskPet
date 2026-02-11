@@ -680,6 +680,13 @@ function showSettingsPanel(): void {
   (document.getElementById('mic-threshold-value') as HTMLSpanElement).textContent = String(settings.micVolumeThreshold || 30);
   (document.getElementById('setting-mic-auto-send') as HTMLInputElement).checked = settings.micAutoSend !== false;
 
+  // 加载开机自启动状态（从主进程获取）
+  window.electronAPI.getAutoLaunch().then(result => {
+    (document.getElementById('setting-auto-launch') as HTMLInputElement).checked = result.enabled;
+  }).catch(error => {
+    window.logger.error('获取开机自启动状态失败', { error });
+  });
+
   // 加载日志配置
   (document.getElementById('setting-log-enabled') as HTMLInputElement).checked = settings.logEnabled || false;
   (document.getElementById('setting-log-retention-days') as HTMLInputElement).value = String(settings.logRetentionDays || 7);
@@ -728,6 +735,7 @@ async function saveSettings(): Promise<void> {
   const micBackgroundMode = (document.getElementById('setting-mic-background-mode') as HTMLInputElement).checked;
   const micVolumeThreshold = parseFloat((document.getElementById('setting-mic-threshold') as HTMLInputElement).value);
   const micAutoSend = (document.getElementById('setting-mic-auto-send') as HTMLInputElement).checked;
+  const autoLaunch = (document.getElementById('setting-auto-launch') as HTMLInputElement).checked;
 
   // 获取日志配置
   const logEnabled = (document.getElementById('setting-log-enabled') as HTMLInputElement).checked;
@@ -762,7 +770,15 @@ async function saveSettings(): Promise<void> {
     customPersonality,
     micBackgroundMode,
     micVolumeThreshold,
-    micAutoSend
+    micAutoSend,
+    autoLaunch
+  });
+
+  // 同步开机自启动到主进程
+  window.electronAPI.setAutoLaunch(autoLaunch).then(result => {
+    if (!result.success) {
+      window.logger.error('设置开机自启动失败');
+    }
   });
 
   // 验证设置
