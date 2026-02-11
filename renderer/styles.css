@@ -833,6 +833,68 @@ body {
   align-items: center;
 }
 
+/* Agent 标签页 */
+.agent-tabs {
+  display: flex;
+  border-bottom: 2px solid #e0e0e0;
+  background: #f8f9fa;
+  padding: 0 20px;
+  flex-shrink: 0;
+  overflow-x: auto;
+  overflow-y: hidden;
+  scrollbar-width: thin;
+}
+
+.agent-tabs::-webkit-scrollbar {
+  height: 4px;
+}
+
+.agent-tabs::-webkit-scrollbar-thumb {
+  background: #ccc;
+  border-radius: 2px;
+}
+
+.agent-tab {
+  flex: 0 0 auto;
+  padding: 12px 16px;
+  background: none;
+  border: none;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  font-size: 14px;
+  color: #666;
+  border-bottom: 2px solid transparent;
+  margin-bottom: -2px;
+  transition: all 0.2s;
+  white-space: nowrap;
+}
+
+.agent-tab:hover {
+  color: #333;
+  background: rgba(0, 0, 0, 0.03);
+}
+
+.agent-tab.active {
+  color: #4CAF50;
+  border-bottom-color: #4CAF50;
+  background: white;
+}
+
+.agent-tab i {
+  display: inline-block;
+}
+
+.agent-tab-content {
+  display: none;
+}
+
+.agent-tab-content.active {
+  display: block;
+}
+
 .agent-body {
   flex: 1;
   overflow-y: auto;
@@ -843,10 +905,213 @@ body {
   margin-bottom: 24px;
 }
 
-.agent-section h3 {
+/* Agent 插件卡片 */
+.agent-plugins-description {
+  color: #666;
+  font-size: 13px;
   margin: 0 0 12px 0;
-  font-size: 15px;
+  line-height: 1.5;
+}
+
+.agent-plugins-actions {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 16px;
+}
+
+.agent-plugin-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.agent-plugin-empty {
+  text-align: center;
+  color: #999;
+  font-size: 13px;
+  padding: 32px 0;
+}
+
+.agent-plugin-card {
+  background: #f8f9fa;
+  border: 1px solid #e9ecef;
+  border-radius: 10px;
+  padding: 14px;
+  transition: border-color 0.2s, background 0.2s;
+}
+
+.agent-plugin-card:hover {
+  border-color: #ccc;
+}
+
+.agent-plugin-card-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  margin-bottom: 8px;
+}
+
+.agent-plugin-info {
+  flex: 1;
+  min-width: 0;
+}
+
+.agent-plugin-name {
+  font-size: 14px;
+  font-weight: 600;
+  color: #333;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.agent-plugin-version {
+  font-size: 11px;
+  color: #999;
+  font-weight: 400;
+  background: #eee;
+  padding: 1px 6px;
+  border-radius: 4px;
+}
+
+.agent-plugin-status-badge {
+  font-size: 11px;
+  padding: 2px 8px;
+  border-radius: 10px;
+  font-weight: 500;
+}
+
+.agent-plugin-status-badge.loaded {
+  background: rgba(255, 193, 7, 0.15);
+  color: #f39c12;
+}
+
+.agent-plugin-status-badge.active {
+  background: rgba(40, 167, 69, 0.15);
+  color: #28a745;
+}
+
+.agent-plugin-status-badge.error {
+  background: rgba(220, 53, 69, 0.15);
+  color: #dc3545;
+}
+
+.agent-plugin-status-badge.disabled {
+  background: rgba(108, 117, 125, 0.15);
+  color: #6c757d;
+}
+
+.agent-plugin-author {
+  font-size: 12px;
+  color: #888;
+  margin-top: 2px;
+}
+
+.agent-plugin-desc {
+  font-size: 12px;
+  color: #666;
+  line-height: 1.4;
+  margin-bottom: 10px;
+}
+
+.agent-plugin-meta {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  font-size: 11px;
+  color: #999;
+  margin-bottom: 10px;
+}
+
+.agent-plugin-tool-count {
+  display: flex;
+  align-items: center;
+  gap: 3px;
+}
+
+.agent-plugin-card-actions {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.agent-plugin-card-actions .btn-small {
+  font-size: 12px;
+  padding: 4px 10px;
+}
+
+.agent-plugin-error-msg {
+  font-size: 11px;
+  color: #dc3545;
+  margin-top: 6px;
+  padding: 6px 8px;
+  background: rgba(220, 53, 69, 0.08);
+  border-radius: 4px;
+  word-break: break-all;
+}
+
+/* 插件配置弹窗 */
+.agent-plugin-config-dialog {
+  background: #fff;
+  border: 1px solid #ddd;
+  border-radius: 10px;
+  padding: 16px;
+  margin-top: 12px;
+  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.1);
+}
+
+.agent-plugin-config-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 12px;
+}
+
+.agent-plugin-config-header h4 {
+  margin: 0;
+  font-size: 14px;
+  color: #333;
+}
+
+.agent-plugin-config-body .config-field {
+  margin-bottom: 12px;
+}
+
+.agent-plugin-config-body .config-field label {
+  display: block;
+  font-size: 13px;
+  font-weight: 500;
   color: #555;
+  margin-bottom: 4px;
+}
+
+.agent-plugin-config-body .config-field .config-hint {
+  font-size: 11px;
+  color: #999;
+  margin-top: 2px;
+}
+
+.agent-plugin-config-body .config-field input,
+.agent-plugin-config-body .config-field select {
+  width: 100%;
+  padding: 6px 10px;
+  border: 1px solid #ddd;
+  border-radius: 6px;
+  font-size: 13px;
+  box-sizing: border-box;
+}
+
+.agent-plugin-config-body .config-field input:focus,
+.agent-plugin-config-body .config-field select:focus {
+  outline: none;
+  border-color: #4CAF50;
+  box-shadow: 0 0 0 2px rgba(76, 175, 80, 0.15);
+}
+
+.agent-plugin-config-footer {
+  margin-top: 12px;
+  text-align: right;
 }
 
 .agent-status-card {
@@ -936,6 +1201,529 @@ body {
   font-size: 13px;
   line-height: 1.6;
   margin: 0;
+}
+
+/* Agent Provider 区域 */
+.agent-provider-card {
+  background: #f8f9fa;
+  border: 1px solid #e9ecef;
+  border-radius: 10px;
+  padding: 16px;
+}
+
+.agent-provider-select-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 12px;
+}
+
+.agent-provider-select-row label {
+  font-size: 13px;
+  color: #555;
+  font-weight: 500;
+}
+
+.agent-provider-select-row select {
+  flex: 1;
+  max-width: 200px;
+  padding: 6px 10px;
+  border: 1px solid #ddd;
+  border-radius: 6px;
+  font-size: 13px;
+  background: white;
+  color: #333;
+}
+
+.agent-provider-config {
+  border-top: 1px solid #e9ecef;
+  padding-top: 12px;
+  margin-top: 4px;
+}
+
+.agent-provider-config:empty {
+  display: none;
+}
+
+.agent-provider-config .provider-field {
+  margin-bottom: 10px;
+}
+
+.agent-provider-config .provider-field label {
+  display: block;
+  font-size: 12px;
+  color: #666;
+  margin-bottom: 4px;
+  font-weight: 500;
+}
+
+.agent-provider-config .provider-field input,
+.agent-provider-config .provider-field select {
+  width: 100%;
+  padding: 7px 10px;
+  border: 1px solid #ddd;
+  border-radius: 6px;
+  font-size: 13px;
+  background: white;
+  color: #333;
+  box-sizing: border-box;
+}
+
+.agent-provider-config .provider-field input:focus,
+.agent-provider-config .provider-field select:focus {
+  outline: none;
+  border-color: #4a9eff;
+  box-shadow: 0 0 0 2px rgba(74, 158, 255, 0.15);
+}
+
+.agent-provider-config .provider-field .field-hint {
+  font-size: 11px;
+  color: #999;
+  margin-top: 3px;
+}
+
+.agent-provider-actions {
+  display: flex;
+  gap: 8px;
+  margin-top: 12px;
+  justify-content: flex-end;
+}
+
+.agent-provider-status {
+  margin-top: 10px;
+  padding: 8px 12px;
+  border-radius: 6px;
+  font-size: 12px;
+  line-height: 1.4;
+}
+
+.agent-provider-status.hidden {
+  display: none;
+}
+
+.agent-provider-status.success {
+  background: #d4edda;
+  color: #155724;
+  border: 1px solid #c3e6cb;
+}
+
+.agent-provider-status.error {
+  background: #f8d7da;
+  color: #721c24;
+  border: 1px solid #f5c6cb;
+}
+
+/* Agent Pipeline 阶段 */
+.agent-pipeline-stages {
+  display: flex;
+  align-items: center;
+  gap: 0;
+  flex-wrap: wrap;
+  margin-bottom: 8px;
+}
+
+.agent-pipeline-stage {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 6px 12px;
+  background: #e8f4fd;
+  border: 1px solid #b8daff;
+  border-radius: 16px;
+  font-size: 12px;
+  font-weight: 500;
+  color: #004085;
+}
+
+.agent-pipeline-arrow {
+  display: inline-flex;
+  align-items: center;
+  color: #999;
+  font-size: 14px;
+  padding: 0 4px;
+}
+
+/* Agent section h3 带图标 */
+.agent-section h3 {
+  margin: 0 0 12px 0;
+  font-size: 15px;
+  color: #555;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+/* ============ Function 工具区 ============ */
+
+.agent-tools-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 10px;
+}
+
+.agent-tools-stats {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  color: #666;
+}
+
+.agent-tools-count {
+  font-weight: 500;
+}
+
+.agent-tools-enabled-count {
+  color: #999;
+}
+
+.btn-icon-small {
+  background: none;
+  border: 1px solid #ddd;
+  border-radius: 6px;
+  padding: 4px 6px;
+  cursor: pointer;
+  color: #666;
+  display: flex;
+  align-items: center;
+  transition: all 0.2s;
+}
+
+.btn-icon-small:hover {
+  background: #f0f0f0;
+  border-color: #bbb;
+  color: #333;
+}
+
+.agent-tools-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  max-height: 300px;
+  overflow-y: auto;
+}
+
+.agent-tools-empty {
+  text-align: center;
+  padding: 20px;
+  color: #999;
+  font-size: 13px;
+  font-style: italic;
+}
+
+.agent-tool-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 12px;
+  background: #f8f9fa;
+  border: 1px solid #e9ecef;
+  border-radius: 8px;
+  transition: all 0.2s;
+}
+
+.agent-tool-item:hover {
+  border-color: #c8cfd6;
+  background: #f0f4f8;
+}
+
+.agent-tool-icon {
+  flex-shrink: 0;
+  width: 32px;
+  height: 32px;
+  border-radius: 6px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 14px;
+}
+
+.agent-tool-icon.function {
+  background: #e8f4fd;
+  color: #0066cc;
+}
+
+.agent-tool-icon.mcp {
+  background: #f0e8fd;
+  color: #6600cc;
+}
+
+.agent-tool-info {
+  flex: 1;
+  min-width: 0;
+}
+
+.agent-tool-name {
+  font-size: 13px;
+  font-weight: 600;
+  color: #333;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.agent-tool-source-badge {
+  font-size: 10px;
+  font-weight: 500;
+  padding: 1px 6px;
+  border-radius: 10px;
+  text-transform: uppercase;
+}
+
+.agent-tool-source-badge.function {
+  background: #e8f4fd;
+  color: #0066cc;
+}
+
+.agent-tool-source-badge.mcp {
+  background: #f0e8fd;
+  color: #6600cc;
+}
+
+.agent-tool-desc {
+  font-size: 11px;
+  color: #888;
+  margin-top: 2px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.agent-tool-toggle {
+  flex-shrink: 0;
+}
+
+/* 开关样式 */
+.toggle-switch {
+  position: relative;
+  display: inline-block;
+  width: 36px;
+  height: 20px;
+}
+
+.toggle-switch input {
+  opacity: 0;
+  width: 0;
+  height: 0;
+}
+
+.toggle-slider {
+  position: absolute;
+  cursor: pointer;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background-color: #ccc;
+  transition: 0.3s;
+  border-radius: 20px;
+}
+
+.toggle-slider:before {
+  position: absolute;
+  content: "";
+  height: 14px;
+  width: 14px;
+  left: 3px;
+  bottom: 3px;
+  background-color: white;
+  transition: 0.3s;
+  border-radius: 50%;
+}
+
+.toggle-switch input:checked + .toggle-slider {
+  background-color: #4a9eff;
+}
+
+.toggle-switch input:checked + .toggle-slider:before {
+  transform: translateX(16px);
+}
+
+/* ============ MCP 服务器区 ============ */
+
+.agent-mcp-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+
+.agent-mcp-empty {
+  text-align: center;
+  padding: 20px;
+  color: #999;
+  font-size: 13px;
+  font-style: italic;
+}
+
+.agent-mcp-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 12px;
+  background: #f8f9fa;
+  border: 1px solid #e9ecef;
+  border-radius: 8px;
+  transition: all 0.2s;
+}
+
+.agent-mcp-item:hover {
+  border-color: #c8cfd6;
+  background: #f0f4f8;
+}
+
+.agent-mcp-status-dot {
+  flex-shrink: 0;
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: #ccc;
+}
+
+.agent-mcp-status-dot.connected {
+  background: #28a745;
+  box-shadow: 0 0 6px rgba(40, 167, 69, 0.4);
+}
+
+.agent-mcp-status-dot.error {
+  background: #dc3545;
+}
+
+.agent-mcp-info {
+  flex: 1;
+  min-width: 0;
+}
+
+.agent-mcp-name {
+  font-size: 13px;
+  font-weight: 600;
+  color: #333;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.agent-mcp-transport-badge {
+  font-size: 10px;
+  font-weight: 500;
+  padding: 1px 6px;
+  border-radius: 10px;
+  background: #e9ecef;
+  color: #666;
+  text-transform: uppercase;
+}
+
+.agent-mcp-desc {
+  font-size: 11px;
+  color: #888;
+  margin-top: 2px;
+}
+
+.agent-mcp-tool-count {
+  font-size: 11px;
+  color: #4a9eff;
+  margin-top: 2px;
+}
+
+.agent-mcp-actions {
+  display: flex;
+  gap: 4px;
+  flex-shrink: 0;
+}
+
+.agent-mcp-actions .btn-icon-small {
+  padding: 4px;
+}
+
+.agent-mcp-actions .btn-icon-small.connect {
+  color: #28a745;
+  border-color: #28a745;
+}
+
+.agent-mcp-actions .btn-icon-small.connect:hover {
+  background: rgba(40, 167, 69, 0.1);
+}
+
+.agent-mcp-actions .btn-icon-small.disconnect {
+  color: #dc3545;
+  border-color: #dc3545;
+}
+
+.agent-mcp-actions .btn-icon-small.disconnect:hover {
+  background: rgba(220, 53, 69, 0.1);
+}
+
+.agent-mcp-actions .btn-icon-small.delete {
+  color: #999;
+}
+
+.agent-mcp-actions .btn-icon-small.delete:hover {
+  color: #dc3545;
+  border-color: #dc3545;
+  background: rgba(220, 53, 69, 0.1);
+}
+
+.agent-mcp-add-section {
+  margin-bottom: 10px;
+}
+
+.agent-mcp-form {
+  background: #f8f9fa;
+  border: 1px solid #e9ecef;
+  border-radius: 8px;
+  padding: 14px;
+  margin-top: 10px;
+}
+
+.agent-mcp-form.hidden {
+  display: none;
+}
+
+.agent-mcp-form-row {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin-bottom: 10px;
+}
+
+.agent-mcp-form-row.hidden {
+  display: none;
+}
+
+.agent-mcp-form-row label {
+  font-size: 12px;
+  font-weight: 500;
+  color: #555;
+}
+
+.agent-mcp-form-row input,
+.agent-mcp-form-row select {
+  padding: 7px 10px;
+  border: 1px solid #ddd;
+  border-radius: 6px;
+  font-size: 13px;
+  font-family: inherit;
+  transition: border-color 0.2s;
+}
+
+.agent-mcp-form-row input:focus,
+.agent-mcp-form-row select:focus {
+  outline: none;
+  border-color: #4a9eff;
+  box-shadow: 0 0 0 2px rgba(74, 158, 255, 0.15);
+}
+
+.agent-mcp-form-actions {
+  display: flex;
+  gap: 8px;
+  margin-top: 12px;
+}
+
+.agent-mcp-error {
+  font-size: 11px;
+  color: #dc3545;
+  margin-top: 2px;
 }
 
 .settings-content {
@@ -1651,6 +2439,27 @@ body.dark-theme {
   background: #2a2a2a;
 }
 
+/* Agent 标签页 - 暗黑主题 */
+.dark-theme .agent-tabs {
+  background: #222;
+  border-bottom-color: rgba(255, 255, 255, 0.1);
+}
+
+.dark-theme .agent-tab {
+  color: #999;
+}
+
+.dark-theme .agent-tab:hover {
+  color: #e0e0e0;
+  background: rgba(255, 255, 255, 0.05);
+}
+
+.dark-theme .agent-tab.active {
+  color: #66bb6a;
+  border-bottom-color: #66bb6a;
+  background: #2a2a2a;
+}
+
 .dark-theme .agent-section h3 {
   color: #bbb;
 }
@@ -1684,6 +2493,312 @@ body.dark-theme {
 
 .dark-theme .agent-description {
   color: #999;
+}
+
+.dark-theme .agent-provider-card {
+  background: #333;
+  border-color: #444;
+}
+
+.dark-theme .agent-provider-select-row label {
+  color: #bbb;
+}
+
+.dark-theme .agent-provider-select-row select {
+  background: #2a2a2a;
+  border-color: #555;
+  color: #d4d4d4;
+}
+
+.dark-theme .agent-provider-config {
+  border-top-color: #444;
+}
+
+.dark-theme .agent-provider-config .provider-field label {
+  color: #999;
+}
+
+.dark-theme .agent-provider-config .provider-field input,
+.dark-theme .agent-provider-config .provider-field select {
+  background: #2a2a2a;
+  border-color: #555;
+  color: #d4d4d4;
+}
+
+.dark-theme .agent-provider-config .provider-field input:focus,
+.dark-theme .agent-provider-config .provider-field select:focus {
+  border-color: #4a9eff;
+  box-shadow: 0 0 0 2px rgba(74, 158, 255, 0.2);
+}
+
+.dark-theme .agent-provider-config .provider-field .field-hint {
+  color: #777;
+}
+
+.dark-theme .agent-provider-status.success {
+  background: rgba(40, 167, 69, 0.15);
+  color: #6fcf97;
+  border-color: rgba(40, 167, 69, 0.3);
+}
+
+.dark-theme .agent-provider-status.error {
+  background: rgba(220, 53, 69, 0.15);
+  color: #f5a6ad;
+  border-color: rgba(220, 53, 69, 0.3);
+}
+
+.dark-theme .agent-pipeline-stage {
+  background: rgba(74, 158, 255, 0.15);
+  border-color: rgba(74, 158, 255, 0.3);
+  color: #7ab8ff;
+}
+
+.dark-theme .agent-pipeline-arrow {
+  color: #666;
+}
+
+/* Function 工具区 - 暗黑主题 */
+.dark-theme .agent-tools-stats {
+  color: #999;
+}
+
+.dark-theme .agent-tools-enabled-count {
+  color: #777;
+}
+
+.dark-theme .btn-icon-small {
+  border-color: #444;
+  color: #999;
+}
+
+.dark-theme .btn-icon-small:hover {
+  background: #333;
+  border-color: #555;
+  color: #e0e0e0;
+}
+
+.dark-theme .agent-tools-empty,
+.dark-theme .agent-mcp-empty {
+  color: #777;
+}
+
+.dark-theme .agent-tool-item {
+  background: #2a2a2a;
+  border-color: #3a3a3a;
+}
+
+.dark-theme .agent-tool-item:hover {
+  border-color: #4a4a4a;
+  background: #303030;
+}
+
+.dark-theme .agent-tool-icon.function {
+  background: rgba(0, 102, 204, 0.15);
+  color: #5dade2;
+}
+
+.dark-theme .agent-tool-icon.mcp {
+  background: rgba(102, 0, 204, 0.15);
+  color: #a87de8;
+}
+
+.dark-theme .agent-tool-name {
+  color: #e0e0e0;
+}
+
+.dark-theme .agent-tool-source-badge.function {
+  background: rgba(0, 102, 204, 0.2);
+  color: #5dade2;
+}
+
+.dark-theme .agent-tool-source-badge.mcp {
+  background: rgba(102, 0, 204, 0.2);
+  color: #a87de8;
+}
+
+.dark-theme .agent-tool-desc {
+  color: #777;
+}
+
+.dark-theme .toggle-slider {
+  background-color: #555;
+}
+
+.dark-theme .toggle-switch input:checked + .toggle-slider {
+  background-color: #4a9eff;
+}
+
+/* MCP 服务器区 - 暗黑主题 */
+.dark-theme .agent-mcp-item {
+  background: #2a2a2a;
+  border-color: #3a3a3a;
+}
+
+.dark-theme .agent-mcp-item:hover {
+  border-color: #4a4a4a;
+  background: #303030;
+}
+
+.dark-theme .agent-mcp-name {
+  color: #e0e0e0;
+}
+
+.dark-theme .agent-mcp-transport-badge {
+  background: #3a3a3a;
+  color: #999;
+}
+
+.dark-theme .agent-mcp-desc {
+  color: #777;
+}
+
+.dark-theme .agent-mcp-tool-count {
+  color: #5dade2;
+}
+
+.dark-theme .agent-mcp-form {
+  background: #2a2a2a;
+  border-color: #3a3a3a;
+}
+
+.dark-theme .agent-mcp-form-row label {
+  color: #bbb;
+}
+
+.dark-theme .agent-mcp-form-row input,
+.dark-theme .agent-mcp-form-row select {
+  background: #333;
+  border-color: #444;
+  color: #e0e0e0;
+}
+
+.dark-theme .agent-mcp-form-row input:focus,
+.dark-theme .agent-mcp-form-row select:focus {
+  border-color: #4a9eff;
+  box-shadow: 0 0 0 2px rgba(74, 158, 255, 0.2);
+}
+
+.dark-theme .agent-mcp-actions .btn-icon-small.connect {
+  color: #6fcf97;
+  border-color: #6fcf97;
+}
+
+.dark-theme .agent-mcp-actions .btn-icon-small.connect:hover {
+  background: rgba(40, 167, 69, 0.15);
+}
+
+.dark-theme .agent-mcp-actions .btn-icon-small.disconnect {
+  color: #f5a6ad;
+  border-color: #f5a6ad;
+}
+
+.dark-theme .agent-mcp-actions .btn-icon-small.disconnect:hover {
+  background: rgba(220, 53, 69, 0.15);
+}
+
+.dark-theme .agent-mcp-actions .btn-icon-small.delete {
+  color: #777;
+}
+
+.dark-theme .agent-mcp-actions .btn-icon-small.delete:hover {
+  color: #f5a6ad;
+  border-color: #f5a6ad;
+  background: rgba(220, 53, 69, 0.15);
+}
+
+.dark-theme .agent-mcp-error {
+  color: #f5a6ad;
+}
+
+/* Agent 插件卡片 - 暗黑主题 */
+.dark-theme .agent-plugins-description {
+  color: #999;
+}
+
+.dark-theme .agent-plugin-empty {
+  color: #777;
+}
+
+.dark-theme .agent-plugin-card {
+  background: #2a2a2a;
+  border-color: #3a3a3a;
+}
+
+.dark-theme .agent-plugin-card:hover {
+  border-color: #4a4a4a;
+  background: #303030;
+}
+
+.dark-theme .agent-plugin-name {
+  color: #e0e0e0;
+}
+
+.dark-theme .agent-plugin-version {
+  background: #3a3a3a;
+  color: #aaa;
+}
+
+.dark-theme .agent-plugin-status-badge.loaded {
+  background: rgba(255, 193, 7, 0.15);
+  color: #f5c842;
+}
+
+.dark-theme .agent-plugin-status-badge.active {
+  background: rgba(40, 167, 69, 0.2);
+  color: #6fcf97;
+}
+
+.dark-theme .agent-plugin-status-badge.error {
+  background: rgba(220, 53, 69, 0.2);
+  color: #f5a6ad;
+}
+
+.dark-theme .agent-plugin-author {
+  color: #777;
+}
+
+.dark-theme .agent-plugin-desc {
+  color: #999;
+}
+
+.dark-theme .agent-plugin-meta {
+  color: #666;
+}
+
+.dark-theme .agent-plugin-error-msg {
+  color: #f5a6ad;
+  background: rgba(220, 53, 69, 0.1);
+}
+
+.dark-theme .agent-plugin-config-dialog {
+  background: #2a2a2a;
+  border-color: #3a3a3a;
+  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.4);
+}
+
+.dark-theme .agent-plugin-config-header h4 {
+  color: #e0e0e0;
+}
+
+.dark-theme .agent-plugin-config-body .config-field label {
+  color: #bbb;
+}
+
+.dark-theme .agent-plugin-config-body .config-field input,
+.dark-theme .agent-plugin-config-body .config-field select {
+  background: #333;
+  border-color: #444;
+  color: #e0e0e0;
+}
+
+.dark-theme .agent-plugin-config-body .config-field input:focus,
+.dark-theme .agent-plugin-config-body .config-field select:focus {
+  border-color: #4a9eff;
+  box-shadow: 0 0 0 2px rgba(74, 158, 255, 0.2);
+}
+
+.dark-theme .agent-plugin-config-body .config-field .config-hint {
+  color: #777;
 }
 
 .dark-theme .settings-content {

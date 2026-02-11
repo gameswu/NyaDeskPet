@@ -207,7 +207,20 @@ graph TB
 NyaDeskPet/
 ├── src/                    # TypeScript 源码（主进程）
 │   ├── main.ts            # Electron 主进程，负责窗口管理和 IPC
-│   └── preload.ts         # 预加载脚本，安全的 IPC 桥接
+│   ├── preload.ts         # 预加载脚本，安全的 IPC 桥接
+│   └── agent/             # 内置 Agent 框架
+│       ├── index.ts       # 模块入口（barrel export）
+│       ├── provider.ts    # LLM Provider 抽象层与注册表
+│       ├── pipeline.ts    # 消息处理管线（Pipeline + Stage）
+│       ├── context.ts     # PipelineContext + 会话管理（SQLite 持久化）
+│       ├── handler.ts     # 业务逻辑处理器（含工具循环）
+│       ├── database.ts    # SQLite 数据库管理（对话/消息/工具持久化）
+│       ├── tools.ts       # 工具管理器（Function Calling 注册/执行）
+│       ├── mcp-client.ts  # MCP 客户端（服务器连接/工具发现）
+│       └── providers/     # LLM Provider 实现
+│           ├── index.ts   # Provider 统一导出
+│           ├── echo.ts    # Echo Provider（测试/兜底）
+│           └── openai.ts  # OpenAI 兼容 Provider
 ├── dist/                   # 编译后的 JS（主进程）
 ├── renderer/               # 渲染进程
 │   ├── index.html         # 主页面入口
@@ -232,6 +245,217 @@ NyaDeskPet/
 ```
 
 ## 核心模块
+
+### 内置 Agent 框架
+
+内置 Agent 框架参考 AstrBot 的架构设计，采用 **Provider + Pipeline + Context** 三层架构。
+
+#### 整体架构
+
+```
+前端消息 → AgentServer → PipelineContext → Pipeline → 回复
+                                            │
+                               ┌────────────┼────────────┐
+                               ↓            ↓            ↓
+                          PreProcess    Process      Respond
+                                         │
+                                    AgentHandler
+                                         │
+                                    LLMProvider
+```
+
+#### LLM Provider 层 (`src/agent/provider.ts`)
+
+**设计模式**：策略模式 + 注册表模式
+
+- `LLMProvider`：抽象基类，定义 `chat()` / `chatStream()` 接口
+- `providerRegistry`：全局注册表，通过 `registerProvider()` 注册实现
+- `EchoProvider`：内置回显 Provider，用于测试或无 LLM 时的兜底
+
+**扩展 LLM Provider**：
+```typescript
+import { LLMProvider, registerProvider, type LLMRequest, type LLMResponse, type ProviderMetadata } from './agent/provider';
+
+class MyProvider extends LLMProvider {
+  getMetadata(): ProviderMetadata {
+    return {
+      id: 'my-llm',
+      name: 'My LLM',
+      description: '自定义 LLM',
+      configSchema: [
+        { key: 'apiKey', label: 'API Key', type: 'password', required: true },
+        { key: 'model', label: '模型', type: 'string', default: 'gpt-4' }
+      ]
+    };
+  }
+
+  async chat(request: LLMRequest): Promise<LLMResponse> {
+    // 调用你的 LLM API
+    return { text: '回复内容', model: 'my-model' };
+  }
+}
+
+// 注册
+registerProvider(
+  new MyProvider({id: 'my-llm', name: 'My LLM'}).getMetadata(),
+  (config) => new MyProvider(config)
+);
+```
+
+#### 消息管线 (`src/agent/pipeline.ts`)
+
+**设计模式**：洋葱模型（参考 AstrBot 的 AsyncGenerator 管线）
+
+每条消息经过一系列 Stage 处理，每个 Stage 可在 `next()` 前后执行逻辑：
+
+| 阶段 | 职责 |
+|------|------|
+| `PreProcess` | 消息日志、时间戳标准化 |
+| `Process` | 核心逻辑：路由消息类型，调用 AgentHandler |
+| `Respond` | 将 `ctx.replies` 统一发送，处理错误兜底 |
+
+**插入自定义 Stage**：
+```typescript
+import { Stage, type PipelineContext } from './agent/index';
+
+class MyStage extends Stage {
+  readonly name = 'my-stage';
+  async process(ctx: PipelineContext, next: () => Promise<void>): Promise<void> {
+    // 前置逻辑
+    console.log('消息即将被处理:', ctx.message.type);
+    await next();
+    // 后置逻辑
+    console.log('回复数量:', ctx.replies.length);
+  }
+}
+
+// 在 Process 之前插入
+agentServer.insertStageBefore('process', new MyStage());
+```
+
+#### 会话管理 (`src/agent/context.ts`)
+
+**参考**：AstrBot 的 UMO + ConversationManager
+
+- `PipelineContext`：单次消息的上下文，贯穿整个管线
+  - `message`：原始消息
+  - `replies`：待发送回复缓冲
+  - `state`：Stage 间共享数据
+  - `abort()`：中止管线
+- `SessionManager`：管理多轮对话历史（SQLite 持久化）
+  - 每个 WebSocket 连接自动创建 Session（运行时状态在内存）
+  - 对话消息持久化到 SQLite 数据库（`appData/NyaDeskPet/data/agent.db`）
+  - 支持新建对话 (`newConversation`)、切换对话 (`switchConversation`)、对话列表 (`getConversationList`)
+  - 消息支持多种类型：text / image / file / tool_call / tool_result / system
+  - 自动为新对话生成标题（来自第一条用户消息）
+
+#### 数据持久化 (`src/agent/database.ts`)
+
+**SQLite 数据库层**，使用 `better-sqlite3`（同步 API，适合 Electron 主进程）。
+
+数据库位置：`appData/NyaDeskPet/data/agent.db`
+
+| 表名 | 用途 |
+|------|------|
+| `conversations` | 对话记录（id, session_id, title, 时间戳, metadata） |
+| `messages` | 消息记录（role, type, content, extra JSON, token_count） |
+| `tool_definitions` | 工具定义（name, parameters JSON Schema, source, mcp_server） |
+
+- WAL 模式提升并发性能
+- 外键约束（删除对话时级联删除消息）
+- 全局单例 `agentDb`，在 `app.whenReady()` 时初始化，退出时关闭
+
+#### 工具系统 (`src/agent/tools.ts`)
+
+**Function Calling + MCP 工具管理器**，参考 AstrBot 的 FunctionToolManager。
+
+- `ToolManager`：工具注册表 + 执行器
+  - `registerFunction(schema, handler)`：注册自定义工具
+  - `registerMCPTool(schema, server, handler)`：注册 MCP 工具
+  - `toOpenAITools()`：生成 OpenAI API 的 tools 参数
+  - `executeTool(toolCall, timeout)`：执行工具调用（带超时）
+  - `executeToolCalls(toolCalls)`：批量执行
+- 全局单例 `toolManager`
+- 工具定义持久化到 SQLite
+
+**注册自定义工具示例**：
+```typescript
+import { toolManager } from './agent/tools';
+
+toolManager.registerFunction(
+  {
+    name: 'get_weather',
+    description: '获取天气信息',
+    parameters: {
+      type: 'object',
+      properties: {
+        city: { type: 'string', description: '城市名' }
+      },
+      required: ['city']
+    }
+  },
+  async (args) => ({
+    toolCallId: '',
+    content: `${args.city}：晴天，25°C`,
+    success: true
+  })
+);
+```
+
+#### MCP 客户端 (`src/agent/mcp-client.ts`)
+
+**Model Context Protocol 客户端**，参考 AstrBot 的 MCPClient。
+
+- `MCPManager`：管理多个 MCP 服务器连接
+  - 支持 stdio 和 SSE 两种传输方式
+  - 自动发现服务器工具并注册到 ToolManager
+  - 断连自动重试（`callTool` 调用失败时重连）
+  - 配置持久化到 `appData/NyaDeskPet/data/mcp_servers.json`
+- 全局单例 `mcpManager`，在 `app.whenReady()` 时初始化
+
+**MCP 服务器配置格式**（`mcp_servers.json`）：
+```json
+[
+  {
+    "name": "my-mcp-server",
+    "transport": "stdio",
+    "command": {
+      "darwin": ["python3", "server.py"],
+      "linux": ["python3", "server.py"],
+      "win32": ["python", "server.py"]
+    },
+    "workingDirectory": "/path/to/server",
+    "autoStart": true,
+    "enabled": true
+  }
+]
+```
+
+#### 业务处理器 (`src/agent/handler.ts`)
+
+- `processUserInput(ctx)`：调用 LLM Provider，维护对话历史，**支持 Function Calling 工具循环**
+- `processTapEvent(ctx)`：触碰反应（有 LLM 时智能回复，无 LLM 时默认文案）
+- `processModelInfo(ctx)` / `processCharacterInfo(ctx)`：存储模型/角色状态
+- `setActiveProvider(id, config)`：动态切换 LLM Provider
+- `setToolCallingEnabled(enabled)`：启用/禁用工具调用
+
+**工具循环流程**（参考 AstrBot 的 ToolLoopAgentRunner）：
+```
+用户消息 → LLM 请求（含 tools 定义）
+            ↓
+         LLM 响应
+            ↓
+    ┌── 有 tool_calls? ──┐
+    │ 是                  │ 否
+    ↓                     ↓
+  执行工具             返回文本回复
+    ↓
+  追加结果到消息
+    ↓
+  重新发送给 LLM
+    ↓
+  （循环，最多 10 次）
+```
 
 ### 插件系统架构
 

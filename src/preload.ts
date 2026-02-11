@@ -94,6 +94,29 @@ export interface ElectronAPI {
   onAgentStatusChanged: (callback: (status: any) => void) => void;
   notifyBackendModeChanged: (mode: 'builtin' | 'custom') => void;
   
+  // 工具管理
+  agentGetTools: () => Promise<any[]>;
+  agentSetToolEnabled: (toolId: string, enabled: boolean) => Promise<{ success: boolean }>;
+  agentDeleteTool: (toolId: string) => Promise<{ success: boolean }>;
+  agentGetToolStats: () => Promise<{ total: number; enabled: number; function: number; mcp: number }>;
+  agentSetToolCallingEnabled: (enabled: boolean) => Promise<{ success: boolean }>;
+  
+  // MCP 管理
+  agentGetMCPServers: () => Promise<{ configs: any[]; statuses: any[] }>;
+  agentAddMCPServer: (config: any) => Promise<{ success: boolean; error?: string }>;
+  agentRemoveMCPServer: (name: string) => Promise<{ success: boolean; error?: string }>;
+  agentConnectMCPServer: (name: string) => Promise<{ success: boolean; error?: string }>;
+  agentDisconnectMCPServer: (name: string) => Promise<{ success: boolean; error?: string }>;
+  
+  // Agent 插件管理
+  agentGetPlugins: () => Promise<any[]>;
+  agentActivatePlugin: (name: string) => Promise<{ success: boolean; error?: string }>;
+  agentDeactivatePlugin: (name: string) => Promise<{ success: boolean; error?: string }>;
+  agentReloadPlugin: (name: string) => Promise<{ success: boolean; error?: string }>;
+  agentUninstallPlugin: (name: string) => Promise<{ success: boolean; error?: string }>;
+  agentSavePluginConfig: (name: string, config: any) => Promise<{ success: boolean; error?: string }>;
+  agentOpenPluginsDir: () => Promise<{ success: boolean }>;
+  
   // 插件管理
   invoke: (channel: string, ...args: any[]) => Promise<any>;
 }
@@ -181,6 +204,34 @@ const electronAPI = {
   agentStop: () => ipcRenderer.invoke('agent:stop'),
   agentGetStatus: () => ipcRenderer.invoke('agent:status'),
   agentGetUrl: () => ipcRenderer.invoke('agent:get-url'),
+  
+  agentGetProviders: () => ipcRenderer.invoke('agent:get-providers'),
+  agentSetProvider: (providerId: string, config: any) => ipcRenderer.invoke('agent:set-provider', providerId, config),
+  agentTestProvider: () => ipcRenderer.invoke('agent:test-provider'),
+  agentGetPipeline: () => ipcRenderer.invoke('agent:get-pipeline'),
+  
+  // 工具管理
+  agentGetTools: () => ipcRenderer.invoke('agent:get-tools'),
+  agentSetToolEnabled: (toolId: string, enabled: boolean) => ipcRenderer.invoke('agent:set-tool-enabled', toolId, enabled),
+  agentDeleteTool: (toolId: string) => ipcRenderer.invoke('agent:delete-tool', toolId),
+  agentGetToolStats: () => ipcRenderer.invoke('agent:get-tool-stats'),
+  agentSetToolCallingEnabled: (enabled: boolean) => ipcRenderer.invoke('agent:set-tool-calling-enabled', enabled),
+  
+  // MCP 管理
+  agentGetMCPServers: () => ipcRenderer.invoke('agent:get-mcp-servers'),
+  agentAddMCPServer: (config: any) => ipcRenderer.invoke('agent:add-mcp-server', config),
+  agentRemoveMCPServer: (name: string) => ipcRenderer.invoke('agent:remove-mcp-server', name),
+  agentConnectMCPServer: (name: string) => ipcRenderer.invoke('agent:connect-mcp-server', name),
+  agentDisconnectMCPServer: (name: string) => ipcRenderer.invoke('agent:disconnect-mcp-server', name),
+  
+  // Agent 插件管理
+  agentGetPlugins: () => ipcRenderer.invoke('agent:get-plugins'),
+  agentActivatePlugin: (name: string) => ipcRenderer.invoke('agent:activate-plugin', name),
+  agentDeactivatePlugin: (name: string) => ipcRenderer.invoke('agent:deactivate-plugin', name),
+  agentReloadPlugin: (name: string) => ipcRenderer.invoke('agent:reload-plugin', name),
+  agentUninstallPlugin: (name: string) => ipcRenderer.invoke('agent:uninstall-plugin', name),
+  agentSavePluginConfig: (name: string, config: any) => ipcRenderer.invoke('agent:save-plugin-config', name, config),
+  agentOpenPluginsDir: () => ipcRenderer.invoke('agent:open-plugins-dir'),
   
   onOpenAgent: (callback: () => void) => {
     ipcRenderer.on('open-agent', () => callback());

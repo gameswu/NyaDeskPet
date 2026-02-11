@@ -154,13 +154,19 @@
       "requesting": "Requesting Permission",
       "description": "Description",
       "action": "Action",
-      "warning": "⚠️ This permission may affect system security, please authorize carefully",
+      "warning": "This permission may affect system security, please authorize carefully",
       "approve": "Allow",
       "deny": "Deny"
     }  },
   "agent": {
     "title": "Agent Management",
     "close": "Close",
+    "tabs": {
+      "overview": "Overview",
+      "tools": "Tools",
+      "plugins": "Plugins"
+    },
+    "serverStatus": "Server Status",
     "status": "Status",
     "running": "Running",
     "stopped": "Stopped",
@@ -169,6 +175,62 @@
     "uptime": "Uptime",
     "start": "Start",
     "stop": "Stop",
-    "info": "Info",
-    "description": "Built-in Agent is a lightweight local backend service providing basic dialogue and interaction framework. You can extend the Agent Handler to integrate LLM and other AI services."  }
+    "provider": {
+      "title": "LLM Provider",
+      "select": "Select Provider",
+      "test": "Test Connection",
+      "save": "Apply",
+      "testing": "Testing...",
+      "testSuccess": "Connection successful",
+      "testFailed": "Connection failed",
+      "saved": "Provider switched",
+      "noConfig": "No configuration needed"
+    },
+    "tools": {
+      "title": "Function Tools",
+      "empty": "No tools registered",
+      "unit": "tools",
+      "enabled": "enabled"
+    },
+    "mcp": {
+      "title": "MCP Servers",
+      "noServers": "No MCP servers",
+      "add": "Add MCP Server",
+      "remove": "Remove",
+      "connect": "Connect",
+      "disconnect": "Disconnect",
+      "name": "Name",
+      "description": "Description",
+      "transport": "Transport",
+      "command": "Command",
+      "url": "URL",
+      "workingDir": "Working Directory",
+      "env": "Environment Variables (JSON)",
+      "save": "Save",
+      "cancel": "Cancel",
+      "nameRequired": "Server name is required",
+      "commandRequired": "Command is required for stdio transport",
+      "urlRequired": "URL is required for SSE transport",
+      "envInvalid": "Invalid JSON format for environment variables"
+    },
+    "agentPlugins": {
+      "description": "Manage Agent plugins to extend built-in Agent capabilities",
+      "empty": "No Agent plugins installed",
+      "refresh": "Refresh",
+      "openDir": "Open Plugin Directory",
+      "author": "Author",
+      "repo": "Repository",
+      "activate": "Activate",
+      "deactivate": "Deactivate",
+      "reload": "Reload",
+      "config": "Config",
+      "saveConfig": "Save Config",
+      "uninstall": "Uninstall",
+      "uninstallConfirm": "Are you sure you want to uninstall this plugin? This action cannot be undone.",
+      "statusLoaded": "Loaded",
+      "statusActive": "Active",
+      "statusError": "Error",
+      "statusDisabled": "Disabled"
+    }
+  }
 }

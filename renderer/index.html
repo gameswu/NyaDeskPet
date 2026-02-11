@@ -476,49 +476,231 @@
           <i data-lucide="x"></i>
         </button>
       </div>
+
+      <!-- Agent 标签页栏 -->
+      <div class="agent-tabs">
+        <button class="agent-tab active" data-agent-tab="overview">
+          <i data-lucide="layout-dashboard" style="width: 16px; height: 16px;"></i>
+          <span data-i18n="agent.tabs.overview">概览</span>
+        </button>
+        <button class="agent-tab" data-agent-tab="tools">
+          <i data-lucide="wrench" style="width: 16px; height: 16px;"></i>
+          <span data-i18n="agent.tabs.tools">工具</span>
+        </button>
+        <button class="agent-tab" data-agent-tab="plugins">
+          <i data-lucide="blocks" style="width: 16px; height: 16px;"></i>
+          <span data-i18n="agent.tabs.plugins">插件</span>
+        </button>
+      </div>
       
       <div class="agent-body">
-        <div class="agent-section">
-          <div class="agent-status-card">
-            <div class="agent-status-row">
-              <span class="agent-status-label" data-i18n="agent.status">状态</span>
-              <span id="agent-status-badge" class="agent-status-badge stopped">
-                <i data-lucide="circle" style="width: 10px; height: 10px;"></i>
-                <span id="agent-status-text" data-i18n="agent.stopped">已停止</span>
-              </span>
+
+        <!-- 概览标签页 -->
+        <div class="agent-tab-content active" data-agent-tab-content="overview">
+          <!-- 服务状态区 -->
+          <div class="agent-section">
+            <h3>
+              <i data-lucide="server" style="width: 15px; height: 15px;"></i>
+              <span data-i18n="agent.serverStatus">服务状态</span>
+            </h3>
+            <div class="agent-status-card">
+              <div class="agent-status-row">
+                <span class="agent-status-label" data-i18n="agent.status">状态</span>
+                <span id="agent-status-badge" class="agent-status-badge stopped">
+                  <i data-lucide="circle" style="width: 10px; height: 10px;"></i>
+                  <span id="agent-status-text" data-i18n="agent.stopped">已停止</span>
+                </span>
+              </div>
+              <div class="agent-status-row">
+                <span class="agent-status-label" data-i18n="agent.address">地址</span>
+                <span id="agent-address" class="agent-status-value">ws://127.0.0.1:8765</span>
+              </div>
+              <div class="agent-status-row">
+                <span class="agent-status-label" data-i18n="agent.clients">连接数</span>
+                <span id="agent-clients" class="agent-status-value">0</span>
+              </div>
+              <div class="agent-status-row">
+                <span class="agent-status-label" data-i18n="agent.uptime">运行时间</span>
+                <span id="agent-uptime" class="agent-status-value">-</span>
+              </div>
             </div>
-            <div class="agent-status-row">
-              <span class="agent-status-label" data-i18n="agent.address">地址</span>
-              <span id="agent-address" class="agent-status-value">ws://127.0.0.1:8765</span>
-            </div>
-            <div class="agent-status-row">
-              <span class="agent-status-label" data-i18n="agent.clients">连接数</span>
-              <span id="agent-clients" class="agent-status-value">0</span>
-            </div>
-            <div class="agent-status-row">
-              <span class="agent-status-label" data-i18n="agent.uptime">运行时间</span>
-              <span id="agent-uptime" class="agent-status-value">-</span>
+            
+            <div class="agent-actions">
+              <button id="btn-agent-start" class="btn-primary">
+                <i data-lucide="play" style="width: 14px; height: 14px;"></i>
+                <span data-i18n="agent.start">启动</span>
+              </button>
+              <button id="btn-agent-stop" class="btn-secondary" disabled>
+                <i data-lucide="square" style="width: 14px; height: 14px;"></i>
+                <span data-i18n="agent.stop">停止</span>
+              </button>
             </div>
           </div>
-          
-          <div class="agent-actions">
-            <button id="btn-agent-start" class="btn-primary">
-              <i data-lucide="play" style="width: 14px; height: 14px;"></i>
-              <span data-i18n="agent.start">启动</span>
-            </button>
-            <button id="btn-agent-stop" class="btn-secondary" disabled>
-              <i data-lucide="square" style="width: 14px; height: 14px;"></i>
-              <span data-i18n="agent.stop">停止</span>
-            </button>
+
+          <!-- LLM Provider 区 -->
+          <div class="agent-section">
+            <h3>
+              <i data-lucide="brain" style="width: 15px; height: 15px;"></i>
+              <span data-i18n="agent.provider.title">LLM Provider</span>
+            </h3>
+            <div class="agent-provider-card">
+              <div class="agent-provider-select-row">
+                <label for="agent-provider-select" data-i18n="agent.provider.select">选择 Provider</label>
+                <select id="agent-provider-select">
+                  <option value="echo">Echo (内置)</option>
+                </select>
+              </div>
+              <div id="agent-provider-config" class="agent-provider-config">
+                <!-- Provider 配置字段动态生成 -->
+              </div>
+              <div class="agent-provider-actions">
+                <button id="btn-provider-test" class="btn-small">
+                  <i data-lucide="zap" style="width: 14px; height: 14px;"></i>
+                  <span data-i18n="agent.provider.test">测试连接</span>
+                </button>
+                <button id="btn-provider-save" class="btn-small btn-primary">
+                  <i data-lucide="save" style="width: 14px; height: 14px;"></i>
+                  <span data-i18n="agent.provider.save">应用</span>
+                </button>
+              </div>
+              <div id="agent-provider-status" class="agent-provider-status hidden"></div>
+            </div>
           </div>
         </div>
-        
-        <div class="agent-section">
-          <h3 data-i18n="agent.info">说明</h3>
-          <p class="agent-description" data-i18n="agent.description">
-            内置 Agent 是一个运行在本地的轻量级后端服务，提供基础的对话和交互功能框架。你可以通过扩展 Agent Handler 来集成 LLM 等 AI 服务。
-          </p>
+
+        <!-- 工具标签页 -->
+        <div class="agent-tab-content" data-agent-tab-content="tools">
+          <!-- Function 工具区 -->
+          <div class="agent-section">
+            <h3>
+              <i data-lucide="wrench" style="width: 15px; height: 15px;"></i>
+              <span data-i18n="agent.tools.title">Function 工具</span>
+            </h3>
+            <div class="agent-tools-header">
+              <div class="agent-tools-stats">
+                <span id="agent-tools-count" class="agent-tools-count">0 个工具</span>
+                <span id="agent-tools-enabled-count" class="agent-tools-enabled-count">(0 已启用)</span>
+              </div>
+              <button id="btn-tools-refresh" class="btn-icon-small" title="刷新">
+                <i data-lucide="refresh-cw" style="width: 14px; height: 14px;"></i>
+              </button>
+            </div>
+            <div id="agent-tools-list" class="agent-tools-list">
+              <div class="agent-tools-empty" data-i18n="agent.tools.empty">
+                暂无已注册的工具
+              </div>
+            </div>
+          </div>
+
+          <!-- MCP 服务器区 -->
+          <div class="agent-section">
+            <h3>
+              <i data-lucide="plug" style="width: 15px; height: 15px;"></i>
+              <span data-i18n="agent.mcp.title">MCP 服务器</span>
+            </h3>
+            <div id="agent-mcp-list" class="agent-mcp-list">
+              <div class="agent-mcp-empty" data-i18n="agent.mcp.noServers">
+                暂无 MCP 服务器
+              </div>
+            </div>
+            <div class="agent-mcp-add-section">
+              <button id="btn-mcp-add" class="btn-small btn-primary">
+                <i data-lucide="plus" style="width: 14px; height: 14px;"></i>
+                <span data-i18n="agent.mcp.add">添加 MCP 服务器</span>
+              </button>
+            </div>
+
+            <!-- MCP 添加表单（默认隐藏） -->
+            <div id="agent-mcp-form" class="agent-mcp-form hidden">
+              <div class="agent-mcp-form-row">
+                <label data-i18n="agent.mcp.name">名称</label>
+                <input type="text" id="mcp-name" placeholder="my-mcp-server" />
+              </div>
+              <div class="agent-mcp-form-row">
+                <label data-i18n="agent.mcp.description">描述</label>
+                <input type="text" id="mcp-description" placeholder="可选描述" />
+              </div>
+              <div class="agent-mcp-form-row">
+                <label data-i18n="agent.mcp.transport">传输方式</label>
+                <select id="mcp-transport">
+                  <option value="stdio">stdio</option>
+                  <option value="sse">SSE</option>
+                </select>
+              </div>
+              <div class="agent-mcp-form-row" id="mcp-command-row">
+                <label data-i18n="agent.mcp.command">命令</label>
+                <input type="text" id="mcp-command" placeholder="npx -y @modelcontextprotocol/server" />
+              </div>
+              <div class="agent-mcp-form-row hidden" id="mcp-url-row">
+                <label data-i18n="agent.mcp.url">URL</label>
+                <input type="text" id="mcp-url" placeholder="http://localhost:3001/sse" />
+              </div>
+              <div class="agent-mcp-form-row">
+                <label data-i18n="agent.mcp.workingDir">工作目录</label>
+                <input type="text" id="mcp-working-dir" placeholder="可选，默认项目根目录" />
+              </div>
+              <div class="agent-mcp-form-row">
+                <label data-i18n="agent.mcp.env">环境变量 (JSON)</label>
+                <input type="text" id="mcp-env" placeholder='{"API_KEY": "xxx"}' />
+              </div>
+              <div class="agent-mcp-form-actions">
+                <button id="btn-mcp-save" class="btn-small btn-primary">
+                  <i data-lucide="save" style="width: 14px; height: 14px;"></i>
+                  <span data-i18n="agent.mcp.save">保存</span>
+                </button>
+                <button id="btn-mcp-cancel" class="btn-small">
+                  <i data-lucide="x" style="width: 14px; height: 14px;"></i>
+                  <span data-i18n="agent.mcp.cancel">取消</span>
+                </button>
+              </div>
+              <div id="agent-mcp-form-status" class="agent-provider-status hidden"></div>
+            </div>
+          </div>
         </div>
+
+        <!-- 插件标签页 -->
+        <div class="agent-tab-content" data-agent-tab-content="plugins">
+          <div class="agent-section">
+            <p class="agent-plugins-description" data-i18n="agent.agentPlugins.description">
+              管理 Agent 插件，扩展内置 Agent 的能力
+            </p>
+            <div class="agent-plugins-actions">
+              <button id="btn-agent-plugin-refresh" class="btn-small">
+                <i data-lucide="refresh-cw" style="width: 14px; height: 14px;"></i>
+                <span data-i18n="agent.agentPlugins.refresh">刷新</span>
+              </button>
+              <button id="btn-agent-plugin-open-dir" class="btn-small">
+                <i data-lucide="folder-open" style="width: 14px; height: 14px;"></i>
+                <span data-i18n="agent.agentPlugins.openDir">打开插件目录</span>
+              </button>
+            </div>
+          </div>
+          <div id="agent-plugin-list" class="agent-plugin-list">
+            <div class="agent-plugin-empty" data-i18n="agent.agentPlugins.empty">
+              暂无已安装的 Agent 插件
+            </div>
+          </div>
+
+          <!-- 插件配置弹窗（默认隐藏） -->
+          <div id="agent-plugin-config-dialog" class="agent-plugin-config-dialog hidden">
+            <div class="agent-plugin-config-header">
+              <h4 id="agent-plugin-config-title">插件配置</h4>
+              <button id="btn-close-plugin-config" class="btn-icon-small">
+                <i data-lucide="x" style="width: 14px; height: 14px;"></i>
+              </button>
+            </div>
+            <div id="agent-plugin-config-body" class="agent-plugin-config-body">
+              <!-- 配置字段动态生成 -->
+            </div>
+            <div class="agent-plugin-config-footer">
+              <button id="btn-plugin-config-save" class="btn-small btn-primary">
+                <i data-lucide="save" style="width: 14px; height: 14px;"></i>
+                <span data-i18n="agent.agentPlugins.saveConfig">保存配置</span>
+              </button>
+            </div>
+          </div>
+        </div>
+
       </div>
     </div>
   </div>

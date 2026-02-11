@@ -447,12 +447,888 @@ function showAgentPanel(): void {
     };
   }
 
+  // 初始化 Provider 选择器
+  initAgentProviderUI();
+
+  // 加载工具列表
+  initAgentToolsUI();
+
+  // 加载 MCP 服务器列表
+  initAgentMCPUI();
+
+  // 初始化 Agent 插件 UI
+  initAgentPluginUI();
+
+  // 初始化标签页切换
+  initAgentTabs();
+
   // 立即刷新一次状态
   refreshAgentStatus();
 
   // 定时刷新状态
   if (agentStatusTimer) clearInterval(agentStatusTimer);
   agentStatusTimer = window.setInterval(refreshAgentStatus, 3000);
+}
+
+/**
+ * 初始化 Provider 选择器 UI
+ */
+async function initAgentProviderUI(): Promise<void> {
+  try {
+    const info = await window.electronAPI.agentGetProviders();
+    const select = document.getElementById('agent-provider-select') as HTMLSelectElement;
+    if (!select) return;
+
+    // 填充 Provider 下拉列表
+    select.innerHTML = '';
+    for (const p of info.providers) {
+      const opt = document.createElement('option');
+      opt.value = p.id;
+      opt.textContent = p.name;
+      if (p.id === info.active.id) {
+        opt.selected = true;
+      }
+      select.appendChild(opt);
+    }
+
+    // 渲染当前 Provider 配置字段（带已保存的配置值）
+    const activeMetadata = info.providers.find(p => p.id === info.active.id);
+    renderProviderConfigFields(activeMetadata, info.active.config);
+
+    // 切换 Provider 时更新配置字段
+    select.onchange = () => {
+      const selectedMeta = info.providers.find(p => p.id === select.value);
+      // 切换时，如果是当前 active 的 provider 则带入已保存的配置，否则使用默认值
+      const savedConfig = (select.value === info.active.id) ? info.active.config : undefined;
+      renderProviderConfigFields(selectedMeta, savedConfig);
+      hideProviderStatus();
+    };
+
+    // 绑定测试按钮
+    const btnTest = document.getElementById('btn-provider-test');
+    if (btnTest) {
+      btnTest.onclick = async () => {
+        showProviderStatus(window.i18nManager.t('agent.provider.testing'), 'info');
+        const result = await window.electronAPI.agentTestProvider();
+        if (result.success) {
+          showProviderStatus(window.i18nManager.t('agent.provider.testSuccess'), 'success');
+        } else {
+          showProviderStatus(
+            `${window.i18nManager.t('agent.provider.testFailed')}: ${result.error || ''}`,
+            'error'
+          );
+        }
+      };
+    }
+
+    // 绑定应用按钮
+    const btnSave = document.getElementById('btn-provider-save');
+    if (btnSave) {
+      btnSave.onclick = async () => {
+        const providerId = select.value;
+        const config = collectProviderConfig(providerId);
+        const result = await window.electronAPI.agentSetProvider(providerId, config);
+        if (result.success) {
+          showProviderStatus(window.i18nManager.t('agent.provider.saved'), 'success');
+        }
+      };
+    }
+  } catch (error) {
+    window.logger.error('加载 Provider 列表失败:', error);
+  }
+}
+
+/**
+ * 渲染 Provider 配置字段
+ * @param metadata Provider 元信息
+ * @param savedConfig 已保存的配置值（可选）
+ */
+function renderProviderConfigFields(metadata: any, savedConfig?: Record<string, unknown>): void {
+  const container = document.getElementById('agent-provider-config');
+  if (!container) return;
+
+  container.innerHTML = '';
+
+  if (!metadata || !metadata.configSchema || metadata.configSchema.length === 0) {
+    const hint = document.createElement('p');
+    hint.className = 'field-hint';
+    hint.style.margin = '0';
+    hint.style.padding = '4px 0';
+    hint.textContent = window.i18nManager.t('agent.provider.noConfig');
+    container.appendChild(hint);
+    return;
+  }
+
+  for (const field of metadata.configSchema) {
+    const div = document.createElement('div');
+    div.className = 'provider-field';
+
+    const label = document.createElement('label');
+    label.textContent = field.label;
+    if (field.required) {
+      const asterisk = document.createElement('span');
+      asterisk.textContent = ' *';
+      asterisk.style.color = '#dc3545';
+      label.appendChild(asterisk);
+    }
+    div.appendChild(label);
+
+    // 获取值：优先使用已保存配置，其次使用默认值
+    const getValue = () => {
+      if (savedConfig && savedConfig[field.key] !== undefined) {
+        return savedConfig[field.key];
+      }
+      return field.default;
+    };
+
+    let input: HTMLInputElement | HTMLSelectElement;
+
+    if (field.type === 'select' && field.options) {
+      input = document.createElement('select');
+      const currentValue = getValue();
+      for (const opt of field.options) {
+        const option = document.createElement('option');
+        option.value = opt.value;
+        option.textContent = opt.label;
+        if (opt.value === currentValue) {
+          option.selected = true;
+        }
+        input.appendChild(option);
+      }
+    } else if (field.type === 'boolean') {
+      const checkbox = document.createElement('input');
+      checkbox.type = 'checkbox';
+      const val = getValue();
+      checkbox.checked = val === true || val === 'true';
+      checkbox.dataset.providerField = field.key;
+      div.appendChild(checkbox);
+      if (field.description) {
+        const hint = document.createElement('div');
+        hint.className = 'field-hint';
+        hint.textContent = field.description;
+        div.appendChild(hint);
+      }
+      container.appendChild(div);
+      continue;
+    } else {
+      input = document.createElement('input');
+      input.type = field.type === 'password' ? 'password' : field.type === 'number' ? 'number' : 'text';
+      if (field.placeholder) input.placeholder = field.placeholder;
+      const val = getValue();
+      if (val !== undefined && val !== null) {
+        input.value = String(val);
+      }
+    }
+
+    input.dataset.providerField = field.key;
+    div.appendChild(input);
+
+    if (field.description) {
+      const hint = document.createElement('div');
+      hint.className = 'field-hint';
+      hint.textContent = field.description;
+      div.appendChild(hint);
+    }
+
+    container.appendChild(div);
+  }
+}
+
+/**
+ * 收集 Provider 配置表单数据
+ */
+function collectProviderConfig(providerId: string): any {
+  const config: any = { id: providerId, name: providerId };
+  const container = document.getElementById('agent-provider-config');
+  if (!container) return config;
+
+  const fields = container.querySelectorAll('[data-provider-field]');
+  fields.forEach((el) => {
+    const key = (el as HTMLElement).dataset.providerField!;
+    if (el instanceof HTMLInputElement) {
+      if (el.type === 'checkbox') {
+        config[key] = el.checked;
+      } else if (el.type === 'number') {
+        config[key] = parseFloat(el.value) || 0;
+      } else {
+        config[key] = el.value;
+      }
+    } else if (el instanceof HTMLSelectElement) {
+      config[key] = el.value;
+    }
+  });
+
+  return config;
+}
+
+/**
+ * 显示 Provider 操作状态
+ */
+function showProviderStatus(message: string, type: 'success' | 'error' | 'info'): void {
+  const el = document.getElementById('agent-provider-status');
+  if (!el) return;
+  el.textContent = message;
+  el.className = `agent-provider-status ${type}`;
+  el.classList.remove('hidden');
+
+  // 成功和信息类消息 3 秒后自动隐藏
+  if (type === 'success' || type === 'info') {
+    setTimeout(() => hideProviderStatus(), 3000);
+  }
+}
+
+/**
+ * 隐藏 Provider 状态
+ */
+function hideProviderStatus(): void {
+  const el = document.getElementById('agent-provider-status');
+  if (el) {
+    el.classList.add('hidden');
+  }
+}
+
+// ==================== Function 工具管理 ====================
+
+/**
+ * 初始化工具管理 UI
+ */
+async function initAgentToolsUI(): Promise<void> {
+  // 绑定刷新按钮
+  const btnRefresh = document.getElementById('btn-tools-refresh');
+  if (btnRefresh) {
+    btnRefresh.onclick = () => refreshToolList();
+  }
+
+  await refreshToolList();
+}
+
+/**
+ * 刷新工具列表
+ */
+async function refreshToolList(): Promise<void> {
+  try {
+    const tools = await window.electronAPI.agentGetTools();
+    const container = document.getElementById('agent-tools-list');
+    const countEl = document.getElementById('agent-tools-count');
+    const enabledCountEl = document.getElementById('agent-tools-enabled-count');
+    if (!container) return;
+
+    const enabledCount = tools.filter((t: any) => t.enabled).length;
+    if (countEl) countEl.textContent = `${tools.length} ${window.i18nManager.t('agent.tools.unit')}`;
+    if (enabledCountEl) enabledCountEl.textContent = `(${enabledCount} ${window.i18nManager.t('agent.tools.enabled')})`;
+
+    if (tools.length === 0) {
+      container.innerHTML = `<div class="agent-tools-empty">${window.i18nManager.t('agent.tools.empty')}</div>`;
+      return;
+    }
+
+    container.innerHTML = '';
+    tools.forEach((tool: any) => {
+      const item = document.createElement('div');
+      item.className = 'agent-tool-item';
+
+      const sourceIcon = tool.source === 'mcp' ? '🔌' : '⚡';
+      const sourceLabel = tool.source === 'mcp' ? 'MCP' : 'Func';
+      const mcpInfo = tool.mcpServer ? ` · ${tool.mcpServer}` : '';
+
+      item.innerHTML = `
+        <div class="agent-tool-icon ${tool.source}">
+          ${sourceIcon}
+        </div>
+        <div class="agent-tool-info">
+          <div class="agent-tool-name">
+            ${escapeHtml(tool.name)}
+            <span class="agent-tool-source-badge ${tool.source}">${sourceLabel}${mcpInfo}</span>
+          </div>
+          <div class="agent-tool-desc" title="${escapeHtml(tool.description || '')}">${escapeHtml(tool.description || '')}</div>
+        </div>
+        <div class="agent-tool-toggle">
+          <label class="toggle-switch">
+            <input type="checkbox" ${tool.enabled ? 'checked' : ''} data-tool-id="${escapeHtml(tool.id)}" />
+            <span class="toggle-slider"></span>
+          </label>
+        </div>
+      `;
+
+      // 绑定开关事件
+      const checkbox = item.querySelector('input[type="checkbox"]') as HTMLInputElement;
+      if (checkbox) {
+        checkbox.addEventListener('change', async () => {
+          try {
+            await window.electronAPI.agentSetToolEnabled(tool.id, checkbox.checked);
+            // 更新计数
+            await refreshToolList();
+          } catch (error) {
+            window.logger.error('设置工具启用状态失败:', error);
+            checkbox.checked = !checkbox.checked; // 回滚
+          }
+        });
+      }
+
+      container.appendChild(item);
+    });
+
+    // 刷新 lucide 图标
+    if (window.lucide) {
+      window.lucide.createIcons();
+    }
+  } catch (error) {
+    window.logger.error('加载工具列表失败:', error);
+  }
+}
+
+/**
+ * HTML 转义
+ */
+function escapeHtml(text: string): string {
+  const div = document.createElement('div');
+  div.textContent = text;
+  return div.innerHTML;
+}
+
+// ==================== MCP 服务器管理 ====================
+
+/**
+ * 初始化 MCP 管理 UI
+ */
+async function initAgentMCPUI(): Promise<void> {
+  // 绑定添加按钮
+  const btnAdd = document.getElementById('btn-mcp-add');
+  if (btnAdd) {
+    btnAdd.onclick = () => showMCPForm();
+  }
+
+  // 绑定取消按钮
+  const btnCancel = document.getElementById('btn-mcp-cancel');
+  if (btnCancel) {
+    btnCancel.onclick = () => hideMCPForm();
+  }
+
+  // 绑定保存按钮
+  const btnSave = document.getElementById('btn-mcp-save');
+  if (btnSave) {
+    btnSave.onclick = () => saveMCPServer();
+  }
+
+  // 传输方式切换：stdio/sse
+  const transportSelect = document.getElementById('mcp-transport') as HTMLSelectElement;
+  if (transportSelect) {
+    transportSelect.addEventListener('change', () => {
+      const commandRow = document.getElementById('mcp-command-row');
+      const urlRow = document.getElementById('mcp-url-row');
+      if (transportSelect.value === 'stdio') {
+        commandRow?.classList.remove('hidden');
+        urlRow?.classList.add('hidden');
+      } else {
+        commandRow?.classList.add('hidden');
+        urlRow?.classList.remove('hidden');
+      }
+    });
+  }
+
+  await refreshMCPServers();
+}
+
+/**
+ * 刷新 MCP 服务器列表
+ */
+async function refreshMCPServers(): Promise<void> {
+  try {
+    const { configs, statuses } = await window.electronAPI.agentGetMCPServers();
+    const container = document.getElementById('agent-mcp-list');
+    if (!container) return;
+
+    if (configs.length === 0) {
+      container.innerHTML = `<div class="agent-mcp-empty">${window.i18nManager.t('agent.mcp.noServers')}</div>`;
+      return;
+    }
+
+    container.innerHTML = '';
+    configs.forEach((config: any) => {
+      const status = statuses.find((s: any) => s.name === config.name);
+      const isConnected = status?.connected ?? false;
+      const toolCount = status?.toolCount ?? 0;
+      const error = status?.error;
+
+      const item = document.createElement('div');
+      item.className = 'agent-mcp-item';
+
+      const statusClass = error ? 'error' : (isConnected ? 'connected' : '');
+
+      item.innerHTML = `
+        <div class="agent-mcp-status-dot ${statusClass}"></div>
+        <div class="agent-mcp-info">
+          <div class="agent-mcp-name">
+            ${escapeHtml(config.name)}
+            <span class="agent-mcp-transport-badge">${config.transport}</span>
+          </div>
+          ${config.description ? `<div class="agent-mcp-desc">${escapeHtml(config.description)}</div>` : ''}
+          ${isConnected ? `<div class="agent-mcp-tool-count">${toolCount} ${window.i18nManager.t('agent.tools.unit')}</div>` : ''}
+          ${error ? `<div class="agent-mcp-error">${escapeHtml(error)}</div>` : ''}
+        </div>
+        <div class="agent-mcp-actions">
+          ${isConnected
+            ? `<button class="btn-icon-small disconnect" title="${window.i18nManager.t('agent.mcp.disconnect')}" data-mcp-action="disconnect" data-mcp-name="${escapeHtml(config.name)}">
+                <i data-lucide="unplug" style="width: 14px; height: 14px;"></i>
+              </button>`
+            : `<button class="btn-icon-small connect" title="${window.i18nManager.t('agent.mcp.connect')}" data-mcp-action="connect" data-mcp-name="${escapeHtml(config.name)}">
+                <i data-lucide="plug" style="width: 14px; height: 14px;"></i>
+              </button>`
+          }
+          <button class="btn-icon-small delete" title="${window.i18nManager.t('agent.mcp.remove')}" data-mcp-action="delete" data-mcp-name="${escapeHtml(config.name)}">
+            <i data-lucide="trash-2" style="width: 14px; height: 14px;"></i>
+          </button>
+        </div>
+      `;
+
+      // 绑定事件
+      item.querySelectorAll('[data-mcp-action]').forEach((btn) => {
+        btn.addEventListener('click', async () => {
+          const action = btn.getAttribute('data-mcp-action');
+          const name = btn.getAttribute('data-mcp-name');
+          if (!name) return;
+
+          try {
+            if (action === 'connect') {
+              await window.electronAPI.agentConnectMCPServer(name);
+            } else if (action === 'disconnect') {
+              await window.electronAPI.agentDisconnectMCPServer(name);
+            } else if (action === 'delete') {
+              await window.electronAPI.agentDisconnectMCPServer(name);
+              await window.electronAPI.agentRemoveMCPServer(name);
+            }
+            await refreshMCPServers();
+            await refreshToolList(); // MCP 连接/断开会影响工具列表
+          } catch (error) {
+            window.logger.error(`MCP 操作 ${action} 失败:`, error);
+          }
+        });
+      });
+
+      container.appendChild(item);
+    });
+
+    // 刷新 lucide 图标
+    if (window.lucide) {
+      window.lucide.createIcons();
+    }
+  } catch (error) {
+    window.logger.error('加载 MCP 服务器列表失败:', error);
+  }
+}
+
+/**
+ * 显示 MCP 添加表单
+ */
+function showMCPForm(): void {
+  const form = document.getElementById('agent-mcp-form');
+  form?.classList.remove('hidden');
+
+  // 重置表单
+  (document.getElementById('mcp-name') as HTMLInputElement).value = '';
+  (document.getElementById('mcp-description') as HTMLInputElement).value = '';
+  (document.getElementById('mcp-transport') as HTMLSelectElement).value = 'stdio';
+  (document.getElementById('mcp-command') as HTMLInputElement).value = '';
+  (document.getElementById('mcp-url') as HTMLInputElement).value = '';
+  (document.getElementById('mcp-working-dir') as HTMLInputElement).value = '';
+  (document.getElementById('mcp-env') as HTMLInputElement).value = '';
+
+  // 默认显示 command 行
+  document.getElementById('mcp-command-row')?.classList.remove('hidden');
+  document.getElementById('mcp-url-row')?.classList.add('hidden');
+
+  // 隐藏状态
+  const statusEl = document.getElementById('agent-mcp-form-status');
+  statusEl?.classList.add('hidden');
+}
+
+/**
+ * 隐藏 MCP 添加表单
+ */
+function hideMCPForm(): void {
+  const form = document.getElementById('agent-mcp-form');
+  form?.classList.add('hidden');
+}
+
+/**
+ * 保存新 MCP 服务器
+ */
+async function saveMCPServer(): Promise<void> {
+  const name = (document.getElementById('mcp-name') as HTMLInputElement).value.trim();
+  const description = (document.getElementById('mcp-description') as HTMLInputElement).value.trim();
+  const transport = (document.getElementById('mcp-transport') as HTMLSelectElement).value as 'stdio' | 'sse';
+  const command = (document.getElementById('mcp-command') as HTMLInputElement).value.trim();
+  const url = (document.getElementById('mcp-url') as HTMLInputElement).value.trim();
+  const workingDir = (document.getElementById('mcp-working-dir') as HTMLInputElement).value.trim();
+  const envStr = (document.getElementById('mcp-env') as HTMLInputElement).value.trim();
+
+  // 验证
+  if (!name) {
+    showMCPFormStatus(window.i18nManager.t('agent.mcp.nameRequired'), 'error');
+    return;
+  }
+
+  if (transport === 'stdio' && !command) {
+    showMCPFormStatus(window.i18nManager.t('agent.mcp.commandRequired'), 'error');
+    return;
+  }
+
+  if (transport === 'sse' && !url) {
+    showMCPFormStatus(window.i18nManager.t('agent.mcp.urlRequired'), 'error');
+    return;
+  }
+
+  // 解析环境变量
+  let env: Record<string, string> | undefined;
+  if (envStr) {
+    try {
+      env = JSON.parse(envStr);
+    } catch {
+      showMCPFormStatus(window.i18nManager.t('agent.mcp.envInvalid'), 'error');
+      return;
+    }
+  }
+
+  const config: any = {
+    name,
+    transport,
+    ...(description && { description }),
+    ...(transport === 'stdio' && { command }),
+    ...(transport === 'sse' && { url }),
+    ...(workingDir && { workingDirectory: workingDir }),
+    ...(env && { env }),
+  };
+
+  try {
+    const result = await window.electronAPI.agentAddMCPServer(config);
+    if (result.success) {
+      hideMCPForm();
+      await refreshMCPServers();
+    } else {
+      showMCPFormStatus(result.error || 'Failed', 'error');
+    }
+  } catch (error) {
+    showMCPFormStatus(String(error), 'error');
+  }
+}
+
+/**
+ * 显示 MCP 表单状态消息
+ */
+function showMCPFormStatus(message: string, type: 'success' | 'error'): void {
+  const statusEl = document.getElementById('agent-mcp-form-status');
+  if (!statusEl) return;
+  statusEl.className = `agent-provider-status ${type}`;
+  statusEl.textContent = message;
+  statusEl.classList.remove('hidden');
+}
+
+// ==================== Agent 标签页管理 ====================
+
+/**
+ * 初始化 Agent 标签页切换
+ */
+function initAgentTabs(): void {
+  const tabs = document.querySelectorAll('.agent-tab');
+  tabs.forEach(tab => {
+    tab.addEventListener('click', (e: Event) => {
+      const target = e.currentTarget as HTMLElement;
+      const tabName = target.getAttribute('data-agent-tab');
+      if (!tabName) return;
+
+      // 移除所有激活状态
+      tabs.forEach(t => t.classList.remove('active'));
+      document.querySelectorAll('.agent-tab-content').forEach(content => {
+        content.classList.remove('active');
+      });
+
+      // 激活当前标签
+      target.classList.add('active');
+      const content = document.querySelector(`[data-agent-tab-content="${tabName}"]`);
+      if (content) {
+        content.classList.add('active');
+      }
+
+      // 如果是工具标签，刷新工具和 MCP 列表
+      if (tabName === 'tools') {
+        refreshToolList();
+        refreshMCPServers();
+      }
+
+      // 如果是插件标签，刷新插件列表
+      if (tabName === 'plugins') {
+        refreshAgentPlugins();
+      }
+    });
+  });
+}
+
+// ==================== Agent 插件管理 ====================
+
+/**
+ * 初始化 Agent 插件管理 UI
+ */
+function initAgentPluginUI(): void {
+  // 绑定刷新按钮
+  const btnRefresh = document.getElementById('btn-agent-plugin-refresh');
+  if (btnRefresh) {
+    btnRefresh.onclick = () => refreshAgentPlugins();
+  }
+
+  // 绑定打开插件目录按钮
+  const btnOpenDir = document.getElementById('btn-agent-plugin-open-dir');
+  if (btnOpenDir) {
+    btnOpenDir.onclick = async () => {
+      await window.electronAPI.agentOpenPluginsDir();
+    };
+  }
+
+  // 绑定配置弹窗关闭按钮
+  const btnCloseConfig = document.getElementById('btn-close-plugin-config');
+  if (btnCloseConfig) {
+    btnCloseConfig.onclick = () => hidePluginConfigDialog();
+  }
+}
+
+/**
+ * 刷新 Agent 插件列表
+ */
+async function refreshAgentPlugins(): Promise<void> {
+  try {
+    const plugins = await window.electronAPI.agentGetPlugins();
+    const container = document.getElementById('agent-plugin-list');
+    if (!container) return;
+
+    if (!plugins || plugins.length === 0) {
+      container.innerHTML = `<div class="agent-plugin-empty">${window.i18nManager.t('agent.agentPlugins.empty')}</div>`;
+      return;
+    }
+
+    container.innerHTML = '';
+    plugins.forEach((plugin: any) => {
+      const card = document.createElement('div');
+      card.className = 'agent-plugin-card';
+
+      const statusLabels: Record<string, string> = {
+        loaded: window.i18nManager.t('agent.agentPlugins.statusLoaded'),
+        active: window.i18nManager.t('agent.agentPlugins.statusActive'),
+        error: window.i18nManager.t('agent.agentPlugins.statusError'),
+        disabled: window.i18nManager.t('agent.agentPlugins.statusDisabled')
+      };
+      const statusLabel = statusLabels[plugin.status] || plugin.status;
+
+      card.innerHTML = `
+        <div class="agent-plugin-card-header">
+          <div class="agent-plugin-info">
+            <div class="agent-plugin-name">
+              ${escapeHtml(plugin.name)}
+              <span class="agent-plugin-version">v${escapeHtml(plugin.version)}</span>
+              <span class="agent-plugin-status-badge ${plugin.status}">${statusLabel}</span>
+            </div>
+            <div class="agent-plugin-author">${window.i18nManager.t('agent.agentPlugins.author')}: ${escapeHtml(plugin.author)}</div>
+          </div>
+        </div>
+        <div class="agent-plugin-desc">${escapeHtml(plugin.desc)}</div>
+        <div class="agent-plugin-meta">
+          <span class="agent-plugin-tool-count">
+            <i data-lucide="wrench" style="width: 12px; height: 12px;"></i>
+            ${plugin.toolCount} ${window.i18nManager.t('agent.tools.unit')}
+          </span>
+          ${plugin.repo ? `<a href="#" class="agent-plugin-repo" data-repo="${escapeHtml(plugin.repo)}">
+            <i data-lucide="external-link" style="width: 12px; height: 12px;"></i>
+            ${window.i18nManager.t('agent.agentPlugins.repo')}
+          </a>` : ''}
+        </div>
+        <div class="agent-plugin-card-actions">
+          ${plugin.status === 'active'
+            ? `<button class="btn-small btn-secondary" data-action="deactivate" data-plugin="${escapeHtml(plugin.name)}">
+                <i data-lucide="pause" style="width: 12px; height: 12px;"></i>
+                ${window.i18nManager.t('agent.agentPlugins.deactivate')}
+              </button>`
+            : `<button class="btn-small btn-primary" data-action="activate" data-plugin="${escapeHtml(plugin.name)}">
+                <i data-lucide="play" style="width: 12px; height: 12px;"></i>
+                ${window.i18nManager.t('agent.agentPlugins.activate')}
+              </button>`
+          }
+          <button class="btn-small" data-action="reload" data-plugin="${escapeHtml(plugin.name)}">
+            <i data-lucide="refresh-cw" style="width: 12px; height: 12px;"></i>
+            ${window.i18nManager.t('agent.agentPlugins.reload')}
+          </button>
+          ${plugin.configSchema ? `<button class="btn-small" data-action="config" data-plugin="${escapeHtml(plugin.name)}">
+            <i data-lucide="settings" style="width: 12px; height: 12px;"></i>
+            ${window.i18nManager.t('agent.agentPlugins.config')}
+          </button>` : ''}
+          <button class="btn-small btn-danger" data-action="uninstall" data-plugin="${escapeHtml(plugin.name)}">
+            <i data-lucide="trash-2" style="width: 12px; height: 12px;"></i>
+            ${window.i18nManager.t('agent.agentPlugins.uninstall')}
+          </button>
+        </div>
+        ${plugin.error ? `<div class="agent-plugin-error-msg">${escapeHtml(plugin.error)}</div>` : ''}
+      `;
+
+      // 绑定操作按钮事件
+      card.querySelectorAll('[data-action]').forEach((btn) => {
+        btn.addEventListener('click', async () => {
+          const action = btn.getAttribute('data-action');
+          const name = btn.getAttribute('data-plugin');
+          if (!name) return;
+
+          try {
+            if (action === 'activate') {
+              const result = await window.electronAPI.agentActivatePlugin(name);
+              if (!result.success) {
+                window.logger.error(`激活插件 ${name} 失败:`, result.error);
+              }
+            } else if (action === 'deactivate') {
+              const result = await window.electronAPI.agentDeactivatePlugin(name);
+              if (!result.success) {
+                window.logger.error(`停用插件 ${name} 失败:`, result.error);
+              }
+            } else if (action === 'reload') {
+              const result = await window.electronAPI.agentReloadPlugin(name);
+              if (!result.success) {
+                window.logger.error(`重载插件 ${name} 失败:`, result.error);
+              }
+            } else if (action === 'uninstall') {
+              if (confirm(window.i18nManager.t('agent.agentPlugins.uninstallConfirm'))) {
+                const result = await window.electronAPI.agentUninstallPlugin(name);
+                if (!result.success) {
+                  window.logger.error(`卸载插件 ${name} 失败:`, result.error);
+                }
+              }
+            } else if (action === 'config') {
+              showPluginConfigDialog(plugin);
+            }
+            await refreshAgentPlugins();
+            await refreshToolList();
+          } catch (error) {
+            window.logger.error(`Agent 插件操作 ${action} 失败:`, error);
+          }
+        });
+      });
+
+      // 绑定仓库链接
+      const repoLink = card.querySelector('.agent-plugin-repo');
+      if (repoLink) {
+        repoLink.addEventListener('click', (e) => {
+          e.preventDefault();
+          const repo = (repoLink as HTMLElement).dataset.repo;
+          if (repo) {
+            window.electronAPI.openExternal(repo);
+          }
+        });
+      }
+
+      container.appendChild(card);
+    });
+
+    // 刷新 lucide 图标
+    if (window.lucide) {
+      window.lucide.createIcons();
+    }
+  } catch (error) {
+    window.logger.error('加载 Agent 插件列表失败:', error);
+  }
+}
+
+/**
+ * 显示插件配置弹窗
+ */
+function showPluginConfigDialog(plugin: any): void {
+  const dialog = document.getElementById('agent-plugin-config-dialog');
+  const title = document.getElementById('agent-plugin-config-title');
+  const body = document.getElementById('agent-plugin-config-body');
+  if (!dialog || !title || !body) return;
+
+  title.textContent = `${plugin.name} - ${window.i18nManager.t('agent.agentPlugins.config')}`;
+  body.innerHTML = '';
+
+  if (!plugin.configSchema) return;
+
+  // 渲染配置字段
+  for (const [key, field] of Object.entries(plugin.configSchema as Record<string, any>)) {
+    const div = document.createElement('div');
+    div.className = 'config-field';
+
+    const label = document.createElement('label');
+    label.textContent = field.description || key;
+    div.appendChild(label);
+
+    const currentValue = plugin.config?.[key] ?? field.default;
+
+    if (field.type === 'boolean') {
+      const checkbox = document.createElement('input');
+      checkbox.type = 'checkbox';
+      checkbox.checked = !!currentValue;
+      checkbox.dataset.configKey = key;
+      div.appendChild(checkbox);
+    } else if (field.type === 'select' && field.options) {
+      const select = document.createElement('select');
+      select.dataset.configKey = key;
+      for (const opt of field.options) {
+        const option = document.createElement('option');
+        option.value = opt.value;
+        option.textContent = opt.label;
+        if (opt.value === String(currentValue)) option.selected = true;
+        select.appendChild(option);
+      }
+      div.appendChild(select);
+    } else if (field.type === 'number') {
+      const input = document.createElement('input');
+      input.type = 'number';
+      input.dataset.configKey = key;
+      if (currentValue !== undefined) input.value = String(currentValue);
+      div.appendChild(input);
+    } else {
+      const input = document.createElement('input');
+      input.type = 'text';
+      input.dataset.configKey = key;
+      if (currentValue !== undefined) input.value = String(currentValue);
+      div.appendChild(input);
+    }
+
+    body.appendChild(div);
+  }
+
+  // 绑定保存按钮
+  const btnSave = document.getElementById('btn-plugin-config-save');
+  if (btnSave) {
+    btnSave.onclick = async () => {
+      const config: Record<string, unknown> = {};
+      body.querySelectorAll('[data-config-key]').forEach((el) => {
+        const key = (el as HTMLElement).dataset.configKey!;
+        if (el instanceof HTMLInputElement) {
+          if (el.type === 'checkbox') config[key] = el.checked;
+          else if (el.type === 'number') config[key] = parseFloat(el.value) || 0;
+          else config[key] = el.value;
+        } else if (el instanceof HTMLSelectElement) {
+          config[key] = el.value;
+        }
+      });
+
+      try {
+        const result = await window.electronAPI.agentSavePluginConfig(plugin.name, config);
+        if (result.success) {
+          hidePluginConfigDialog();
+          await refreshAgentPlugins();
+        } else {
+          window.logger.error('保存插件配置失败:', result.error);
+        }
+      } catch (error) {
+        window.logger.error('保存插件配置失败:', error);
+      }
+    };
+  }
+
+  dialog.classList.remove('hidden');
+}
+
+/**
+ * 隐藏插件配置弹窗
+ */
+function hidePluginConfigDialog(): void {
+  const dialog = document.getElementById('agent-plugin-config-dialog');
+  if (dialog) dialog.classList.add('hidden');
 }
 
 /**

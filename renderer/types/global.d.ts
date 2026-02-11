@@ -68,9 +68,36 @@ export interface ElectronAPI {
   agentStop: () => Promise<{ success: boolean; error?: string }>;
   agentGetStatus: () => Promise<AgentServerStatus>;
   agentGetUrl: () => Promise<{ wsUrl: string; httpUrl: string }>;
+  agentGetProviders: () => Promise<AgentProvidersInfo>;
+  agentSetProvider: (providerId: string, config: any) => Promise<{ success: boolean }>;
+  agentTestProvider: () => Promise<{ success: boolean; error?: string }>;
+  agentGetPipeline: () => Promise<{ stages: string[] }>;
   onOpenAgent: (callback: () => void) => void;
   onAgentStatusChanged: (callback: (status: AgentServerStatus) => void) => void;
   notifyBackendModeChanged: (mode: 'builtin' | 'custom') => void;
+  
+  // 工具管理
+  agentGetTools: () => Promise<AgentToolInfo[]>;
+  agentSetToolEnabled: (toolId: string, enabled: boolean) => Promise<{ success: boolean }>;
+  agentDeleteTool: (toolId: string) => Promise<{ success: boolean }>;
+  agentGetToolStats: () => Promise<{ total: number; enabled: number; function: number; mcp: number }>;
+  agentSetToolCallingEnabled: (enabled: boolean) => Promise<{ success: boolean }>;
+  
+  // MCP 管理
+  agentGetMCPServers: () => Promise<{ configs: MCPServerInfo[]; statuses: MCPServerStatusInfo[] }>;
+  agentAddMCPServer: (config: MCPServerInfo) => Promise<{ success: boolean; error?: string }>;
+  agentRemoveMCPServer: (name: string) => Promise<{ success: boolean; error?: string }>;
+  agentConnectMCPServer: (name: string) => Promise<{ success: boolean; error?: string }>;
+  agentDisconnectMCPServer: (name: string) => Promise<{ success: boolean; error?: string }>;
+  
+  // Agent 插件管理
+  agentGetPlugins: () => Promise<AgentPluginInfo[]>;
+  agentActivatePlugin: (name: string) => Promise<{ success: boolean; error?: string }>;
+  agentDeactivatePlugin: (name: string) => Promise<{ success: boolean; error?: string }>;
+  agentReloadPlugin: (name: string) => Promise<{ success: boolean; error?: string }>;
+  agentUninstallPlugin: (name: string) => Promise<{ success: boolean; error?: string }>;
+  agentSavePluginConfig: (name: string, config: Record<string, unknown>) => Promise<{ success: boolean; error?: string }>;
+  agentOpenPluginsDir: () => Promise<{ success: boolean }>;
   
   // 通用 IPC 调用（用于插件管理等扩展功能）
   invoke: (channel: string, ...args: any[]) => Promise<any>;
@@ -724,6 +751,94 @@ export interface AgentServerStatus {
   host: string;
   connectedClients: number;
   startTime: number | null;
+}
+
+// Provider 配置字段描述
+export interface AgentProviderConfigField {
+  key: string;
+  label: string;
+  type: 'string' | 'password' | 'number' | 'select' | 'boolean';
+  required?: boolean;
+  default?: unknown;
+  placeholder?: string;
+  options?: Array<{ label: string; value: string }>;
+  description?: string;
+}
+
+// Provider 元信息
+export interface AgentProviderMetadata {
+  id: string;
+  name: string;
+  description: string;
+  configSchema: AgentProviderConfigField[];
+}
+
+// Provider 列表信息
+export interface AgentProvidersInfo {
+  providers: AgentProviderMetadata[];
+  active: {
+    id: string;
+    config: Record<string, unknown>;
+    metadata: AgentProviderMetadata | undefined;
+  };
+}
+
+// ============ 工具信息接口 ============
+export interface AgentToolInfo {
+  id: string;
+  name: string;
+  description: string;
+  parameters: Record<string, unknown>;
+  source: 'function' | 'mcp';
+  mcpServer?: string;
+  enabled: boolean;
+}
+
+// ============ MCP 服务器接口 ============
+export interface MCPServerInfo {
+  name: string;
+  transport: 'stdio' | 'sse';
+  command?: string;
+  url?: string;
+  env?: Record<string, string>;
+  workingDirectory?: string;
+  autoStart?: boolean;
+  enabled?: boolean;
+  description?: string;
+}
+
+export interface MCPServerStatusInfo {
+  name: string;
+  connected: boolean;
+  toolCount: number;
+  error?: string;
+  lastConnectedAt?: string;
+}
+
+// ============ Agent 插件接口 ============
+export type AgentPluginStatus = 'loaded' | 'active' | 'error' | 'disabled';
+
+export interface AgentPluginConfigField {
+  type: 'string' | 'number' | 'boolean' | 'select';
+  description: string;
+  default?: unknown;
+  options?: { value: string; label: string }[];
+}
+
+export type AgentPluginConfigSchema = Record<string, AgentPluginConfigField>;
+
+export interface AgentPluginInfo {
+  name: string;
+  author: string;
+  desc: string;
+  version: string;
+  repo?: string;
+  status: AgentPluginStatus;
+  error?: string;
+  configSchema?: AgentPluginConfigSchema;
+  config?: Record<string, unknown>;
+  toolCount: number;
+  dirName: string;
 }
 
 // ============ 摄像头管理器接口 ============

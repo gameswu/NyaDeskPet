@@ -1,21 +1,31 @@
 /**
- * 内置 Agent 服务器
+ * 内置 Agent 服务器（Pipeline 架构版）
  * 在主进程中运行的轻量级 WebSocket 服务器，实现与外部后端相同的通信协议
  * 
  * 职责：
  * - 启动/停止 WebSocket 服务
- * - 接收前端消息并转发给 AgentHandler
- * - 将 AgentHandler 的响应发送回前端
+ * - 接收前端消息，创建 PipelineContext，驱动 Pipeline 执行
+ * - 管理 WebSocket 连接与会话映射
  * 
- * 设计原则：
- * - 服务器仅负责通信传输，不包含业务逻辑
- * - 所有业务逻辑由 AgentHandler 处理
- * - 保持与外部后端协议完全一致
+ * 架构：
+ * 消息 → AgentServer → PipelineContext → Pipeline(Stage...) → 回复
+ *                                            ↑
+ *                                     AgentHandler (业务逻辑)
+ *                                     LLMProvider  (AI 接口)
  */
 
 import { WebSocketServer, WebSocket, RawData } from 'ws';
 import { logger } from './logger';
-import { AgentHandler } from './agent-handler';
+import {
+  AgentHandler,
+  Pipeline,
+  PreProcessStage,
+  ProcessStage,
+  RespondStage,
+  PipelineContext,
+  type IncomingMessage,
+  type Stage
+} from './agent/index';
 
 export interface AgentServerConfig {
   port: number;
@@ -34,16 +44,57 @@ export class AgentServer {
   private wss: WebSocketServer | null = null;
   private clients: Set<WebSocket> = new Set();
   private config: AgentServerConfig;
-  private handler: AgentHandler;
   private startTime: number | null = null;
+
+  /** 业务逻辑处理器 */
+  private handler: AgentHandler;
+
+  /** 消息处理管线 */
+  private pipeline: Pipeline;
+
+  /** WebSocket → sessionId 映射 */
+  private sessionMap: WeakMap<WebSocket, string> = new WeakMap();
+  private sessionCounter: number = 0;
 
   constructor(config: AgentServerConfig = { port: 8765 }) {
     this.config = {
       port: config.port,
       host: config.host || '127.0.0.1'
     };
-    this.handler = new AgentHandler(this);
+
+    // 初始化业务层
+    this.handler = new AgentHandler();
+
+    // 构建默认管线
+    this.pipeline = new Pipeline();
+    this.pipeline.addStage(new PreProcessStage());
+    this.pipeline.addStage(new ProcessStage(this.handler));
+    this.pipeline.addStage(new RespondStage());
   }
+
+  // ==================== 管线操作 ====================
+
+  /** 在管线中插入自定义 Stage（在指定阶段之前） */
+  public insertStageBefore(targetName: string, stage: Stage): boolean {
+    return this.pipeline.insertBefore(targetName, stage);
+  }
+
+  /** 在管线中插入自定义 Stage（在指定阶段之后） */
+  public insertStageAfter(targetName: string, stage: Stage): boolean {
+    return this.pipeline.insertAfter(targetName, stage);
+  }
+
+  /** 移除管线阶段 */
+  public removeStage(name: string): boolean {
+    return this.pipeline.removeStage(name);
+  }
+
+  /** 获取管线阶段名称 */
+  public getStageNames(): string[] {
+    return this.pipeline.getStageNames();
+  }
+
+  // ==================== 服务器生命周期 ====================
 
   /**
    * 启动 WebSocket 服务器
@@ -65,19 +116,27 @@ export class AgentServer {
         this.wss.on('listening', () => {
           this.startTime = Date.now();
           logger.info(`[AgentServer] 服务器已启动: ws://${this.config.host}:${this.config.port}`);
+          logger.info(`[AgentServer] 管线阶段: ${this.pipeline.getStageNames().join(' → ')}`);
           resolve(true);
         });
 
         this.wss.on('connection', (ws: WebSocket) => {
           this.clients.add(ws);
-          logger.info(`[AgentServer] 客户端已连接 (当前: ${this.clients.size})`);
+          const sessionId = `session_${++this.sessionCounter}_${Date.now()}`;
+          this.sessionMap.set(ws, sessionId);
+          this.handler.sessions.getOrCreateSession(sessionId);
+          logger.info(`[AgentServer] 客户端已连接 (会话: ${sessionId}, 当前: ${this.clients.size})`);
 
           ws.on('message', (data: RawData) => {
             this.handleMessage(ws, data);
           });
 
           ws.on('close', () => {
+            const sid = this.sessionMap.get(ws);
             this.clients.delete(ws);
+            if (sid) {
+              this.handler.sessions.removeSession(sid);
+            }
             logger.info(`[AgentServer] 客户端已断开 (当前: ${this.clients.size})`);
           });
 
@@ -126,26 +185,41 @@ export class AgentServer {
         }
         this.wss = null;
         this.startTime = null;
+        this.sessionCounter = 0;
         logger.info('[AgentServer] 服务器已停止');
         resolve();
       });
     });
   }
 
+  // ==================== 消息处理 ====================
+
   /**
-   * 处理收到的消息
+   * 处理收到的消息 — 创建 PipelineContext 并驱动管线执行
    */
-  private handleMessage(ws: WebSocket, rawData: RawData): void {
+  private async handleMessage(ws: WebSocket, rawData: RawData): Promise<void> {
     try {
-      const data = JSON.parse(rawData.toString());
-      logger.debug('[AgentServer] 收到消息:', data.type);
-      
-      // 委托给 AgentHandler 处理
-      this.handler.handleMessage(data, ws);
+      const message: IncomingMessage = JSON.parse(rawData.toString());
+      logger.debug('[AgentServer] 收到消息:', message.type);
+
+      const sessionId = this.sessionMap.get(ws) || 'unknown';
+
+      // 创建管线上下文
+      const ctx = new PipelineContext(
+        message,
+        ws,
+        sessionId,
+        this.sendTo.bind(this)
+      );
+
+      // 驱动管线执行
+      await this.pipeline.execute(ctx);
     } catch (error) {
-      logger.error('[AgentServer] 消息解析失败:', error);
+      logger.error('[AgentServer] 消息处理失败:', error);
     }
   }
+
+  // ==================== 消息发送 ====================
 
   /**
    * 向指定客户端发送消息
@@ -167,6 +241,8 @@ export class AgentServer {
       }
     });
   }
+
+  // ==================== 状态查询 ====================
 
   /**
    * 获取服务器状态

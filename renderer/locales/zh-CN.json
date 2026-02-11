@@ -154,7 +154,7 @@
       "requesting": "请求权限",
       "description": "说明",
       "action": "操作",
-      "warning": "⚠️ 此权限可能影响系统安全，请谨慎授权",
+      "warning": "此权限可能影响系统安全，请谨慎授权",
       "approve": "允许",
       "deny": "拒绝"
     }
@@ -162,6 +162,12 @@
   "agent": {
     "title": "Agent 管理",
     "close": "关闭",
+    "tabs": {
+      "overview": "概览",
+      "tools": "工具",
+      "plugins": "插件"
+    },
+    "serverStatus": "服务状态",
     "status": "状态",
     "running": "运行中",
     "stopped": "已停止",
@@ -170,8 +176,63 @@
     "uptime": "运行时间",
     "start": "启动",
     "stop": "停止",
-    "info": "说明",
-    "description": "内置 Agent 是一个运行在本地的轻量级后端服务，提供基础的对话和交互功能框架。你可以通过扩展 Agent Handler 来集成 LLM 等 AI 服务。"
+    "provider": {
+      "title": "LLM Provider",
+      "select": "选择 Provider",
+      "test": "测试连接",
+      "save": "应用",
+      "testing": "测试中...",
+      "testSuccess": "连接成功",
+      "testFailed": "连接失败",
+      "saved": "Provider 已切换",
+      "noConfig": "此 Provider 无需配置"
+    },
+    "tools": {
+      "title": "Function 工具",
+      "empty": "暂无已注册的工具",
+      "unit": "个工具",
+      "enabled": "已启用"
+    },
+    "mcp": {
+      "title": "MCP 服务器",
+      "noServers": "暂无 MCP 服务器",
+      "add": "添加 MCP 服务器",
+      "remove": "删除",
+      "connect": "连接",
+      "disconnect": "断开",
+      "name": "名称",
+      "description": "描述",
+      "transport": "传输方式",
+      "command": "命令",
+      "url": "URL",
+      "workingDir": "工作目录",
+      "env": "环境变量 (JSON)",
+      "save": "保存",
+      "cancel": "取消",
+      "nameRequired": "请输入服务器名称",
+      "commandRequired": "stdio 模式需要指定命令",
+      "urlRequired": "SSE 模式需要指定 URL",
+      "envInvalid": "环境变量 JSON 格式无效"
+    },
+    "agentPlugins": {
+      "description": "管理 Agent 插件，扩展内置 Agent 的能力",
+      "empty": "暂无已安装的 Agent 插件",
+      "refresh": "刷新",
+      "openDir": "打开插件目录",
+      "author": "作者",
+      "repo": "仓库",
+      "activate": "激活",
+      "deactivate": "停用",
+      "reload": "重载",
+      "config": "配置",
+      "saveConfig": "保存配置",
+      "uninstall": "卸载",
+      "uninstallConfirm": "确定要卸载此插件吗？此操作不可撤销。",
+      "statusLoaded": "已加载",
+      "statusActive": "运行中",
+      "statusError": "错误",
+      "statusDisabled": "已禁用"
+    }
   }
 }
 

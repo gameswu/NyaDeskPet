@@ -7,6 +7,10 @@ import { spawn, ChildProcess } from 'child_process';
 import asrService from './asr-service';
 import { logger } from './logger';
 import { AgentServer } from './agent-server';
+import { agentDb } from './agent/database';
+import { agentPluginManager } from './agent/agent-plugin';
+import { mcpManager } from './agent/mcp-client';
+import { toolManager } from './agent/tools';
 
 // GPU 优化：添加命令行开关以提高 Windows + NVIDIA 显卡的稳定性
 // 这些开关可以缓解 GPU 进程相关的错误（如 command_buffer_proxy_impl 错误）
@@ -326,11 +330,35 @@ function createTray(): void {
   });
 }
 
-app.whenReady().then(() => {
+app.whenReady().then(async () => {
   // 初始化日志系统（从本地存储加载配置将在渲染进程中处理）
   logger.initialize();
   logger.info('应用启动');
-  
+
+  // 初始化 SQLite 数据库
+  try {
+    agentDb.initialize();
+    logger.info('Agent 数据库已初始化');
+  } catch (error) {
+    logger.error('Agent 数据库初始化失败:', error);
+  }
+
+  // 初始化 MCP 管理器
+  try {
+    await mcpManager.initialize();
+    logger.info('MCP 管理器已初始化');
+  } catch (error) {
+    logger.error('MCP 管理器初始化失败:', error);
+  }
+
+  // 加载 Agent 插件
+  try {
+    await agentPluginManager.loadAll();
+    logger.info('Agent 插件管理器已初始化');
+  } catch (error) {
+    logger.error('Agent 插件管理器初始化失败:', error);
+  }
+
   createWindow();
   createTray();
 
@@ -978,6 +1006,30 @@ app.on('before-quit', async () => {
     logger.info('停止内置 Agent 服务器');
     await agentServer.stop();
   }
+
+  // 关闭 MCP 连接
+  try {
+    await mcpManager.terminate();
+    logger.info('MCP 管理器已关闭');
+  } catch (error) {
+    logger.error('MCP 管理器关闭失败:', error);
+  }
+
+  // 销毁 Agent 插件
+  try {
+    await agentPluginManager.destroyAll();
+    logger.info('Agent 插件管理器已关闭');
+  } catch (error) {
+    logger.error('Agent 插件管理器关闭失败:', error);
+  }
+
+  // 关闭数据库
+  try {
+    agentDb.close();
+    logger.info('Agent 数据库已关闭');
+  } catch (error) {
+    logger.error('Agent 数据库关闭失败:', error);
+  }
 });
 
 /**
@@ -1175,4 +1227,229 @@ ipcMain.handle('agent:get-url', () => {
     wsUrl: agentServer.getWsUrl(),
     httpUrl: `http://127.0.0.1:${agentServer.getPort()}`
   };
+});
+
+/**
+ * 获取所有可用的 LLM Provider 列表
+ */
+ipcMain.handle('agent:get-providers', () => {
+  const handler = agentServer.getHandler();
+  return {
+    providers: handler.getAvailableProviders(),
+    active: handler.getActiveProviderInfo()
+  };
+});
+
+/**
+ * 切换当前使用的 LLM Provider
+ */
+ipcMain.handle('agent:set-provider', async (_event, providerId: string, config: any) => {
+  const handler = agentServer.getHandler();
+  const success = await handler.setActiveProvider(providerId, config);
+  return { success };
+});
+
+/**
+ * 测试当前 Provider 连接
+ */
+ipcMain.handle('agent:test-provider', async () => {
+  const handler = agentServer.getHandler();
+  return handler.testProvider();
+});
+
+/**
+ * 获取管线阶段列表
+ */
+ipcMain.handle('agent:get-pipeline', () => {
+  return {
+    stages: agentServer.getStageNames()
+  };
+});
+
+// ==================== 工具管理 IPC ====================
+
+/**
+ * 获取所有工具列表
+ */
+ipcMain.handle('agent:get-tools', () => {
+  const tools = toolManager.getAllTools();
+  return tools.map(t => ({
+    id: t.id,
+    name: t.schema.name,
+    description: t.schema.description,
+    parameters: t.schema.parameters,
+    source: t.source,
+    mcpServer: t.mcpServer,
+    enabled: t.enabled
+  }));
+});
+
+/**
+ * 设置工具启用/禁用
+ */
+ipcMain.handle('agent:set-tool-enabled', (_event, toolId: string, enabled: boolean) => {
+  toolManager.setEnabled(toolId, enabled);
+  return { success: true };
+});
+
+/**
+ * 删除工具
+ */
+ipcMain.handle('agent:delete-tool', (_event, toolId: string) => {
+  toolManager.unregister(toolId);
+  return { success: true };
+});
+
+/**
+ * 获取工具统计
+ */
+ipcMain.handle('agent:get-tool-stats', () => {
+  return toolManager.getStats();
+});
+
+/**
+ * 设置是否启用 Function Calling
+ */
+ipcMain.handle('agent:set-tool-calling-enabled', (_event, enabled: boolean) => {
+  const handler = agentServer.getHandler();
+  handler.setToolCallingEnabled(enabled);
+  return { success: true };
+});
+
+// ==================== MCP 管理 IPC ====================
+
+/**
+ * 获取所有 MCP 服务器配置和状态
+ */
+ipcMain.handle('agent:get-mcp-servers', () => {
+  return {
+    configs: mcpManager.getConfigs(),
+    statuses: mcpManager.getServerStatuses()
+  };
+});
+
+/**
+ * 添加/更新 MCP 服务器配置
+ */
+ipcMain.handle('agent:add-mcp-server', (_event, config: any) => {
+  try {
+    mcpManager.addServerConfig(config);
+    return { success: true };
+  } catch (error) {
+    return { success: false, error: (error as Error).message };
+  }
+});
+
+/**
+ * 删除 MCP 服务器配置
+ */
+ipcMain.handle('agent:remove-mcp-server', async (_event, name: string) => {
+  try {
+    await mcpManager.removeServerConfig(name);
+    return { success: true };
+  } catch (error) {
+    return { success: false, error: (error as Error).message };
+  }
+});
+
+/**
+ * 连接 MCP 服务器
+ */
+ipcMain.handle('agent:connect-mcp-server', async (_event, name: string) => {
+  try {
+    await mcpManager.connectServer(name);
+    return { success: true };
+  } catch (error) {
+    return { success: false, error: (error as Error).message };
+  }
+});
+
+/**
+ * 断开 MCP 服务器
+ */
+ipcMain.handle('agent:disconnect-mcp-server', async (_event, name: string) => {
+  try {
+    await mcpManager.disconnectServer(name);
+    return { success: true };
+  } catch (error) {
+    return { success: false, error: (error as Error).message };
+  }
+});
+
+// ==================== Agent 插件管理 IPC ====================
+
+/**
+ * 获取所有 Agent 插件列表
+ */
+ipcMain.handle('agent:get-plugins', () => {
+  return agentPluginManager.getAllPlugins();
+});
+
+/**
+ * 激活插件
+ */
+ipcMain.handle('agent:activate-plugin', async (_event, name: string) => {
+  try {
+    await agentPluginManager.activatePlugin(name);
+    return { success: true };
+  } catch (error) {
+    return { success: false, error: (error as Error).message };
+  }
+});
+
+/**
+ * 停用插件
+ */
+ipcMain.handle('agent:deactivate-plugin', async (_event, name: string) => {
+  try {
+    await agentPluginManager.deactivatePlugin(name);
+    return { success: true };
+  } catch (error) {
+    return { success: false, error: (error as Error).message };
+  }
+});
+
+/**
+ * 重载插件
+ */
+ipcMain.handle('agent:reload-plugin', async (_event, name: string) => {
+  try {
+    await agentPluginManager.reloadPlugin(name);
+    return { success: true };
+  } catch (error) {
+    return { success: false, error: (error as Error).message };
+  }
+});
+
+/**
+ * 卸载插件
+ */
+ipcMain.handle('agent:uninstall-plugin', async (_event, name: string) => {
+  try {
+    await agentPluginManager.uninstallPlugin(name);
+    return { success: true };
+  } catch (error) {
+    return { success: false, error: (error as Error).message };
+  }
+});
+
+/**
+ * 保存插件配置
+ */
+ipcMain.handle('agent:save-plugin-config', (_event, name: string, config: Record<string, unknown>) => {
+  try {
+    agentPluginManager.savePluginConfig(name, config);
+    return { success: true };
+  } catch (error) {
+    return { success: false, error: (error as Error).message };
+  }
+});
+
+/**
+ * 打开插件目录
+ */
+ipcMain.handle('agent:open-plugins-dir', () => {
+  const pluginsDir = agentPluginManager.getPluginsDir();
+  shell.openPath(pluginsDir);
+  return { success: true };
 });
