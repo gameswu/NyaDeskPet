@@ -537,35 +537,24 @@
             </div>
           </div>
 
-          <!-- LLM Provider 区 -->
+          <!-- LLM Provider 实例区 -->
           <div class="agent-section">
             <h3>
               <i data-lucide="brain" style="width: 15px; height: 15px;"></i>
               <span data-i18n="agent.provider.title">LLM Provider</span>
             </h3>
-            <div class="agent-provider-card">
-              <div class="agent-provider-select-row">
-                <label for="agent-provider-select" data-i18n="agent.provider.select">选择 Provider</label>
-                <select id="agent-provider-select">
-                  <option value="echo">Echo (内置)</option>
-                </select>
-              </div>
-              <div id="agent-provider-config" class="agent-provider-config">
-                <!-- Provider 配置字段动态生成 -->
-              </div>
-              <div class="agent-provider-actions">
-                <button id="btn-provider-test" class="btn-small">
-                  <i data-lucide="zap" style="width: 14px; height: 14px;"></i>
-                  <span data-i18n="agent.provider.test">测试连接</span>
-                </button>
-                <button id="btn-provider-save" class="btn-small btn-primary">
-                  <i data-lucide="save" style="width: 14px; height: 14px;"></i>
-                  <span data-i18n="agent.provider.save">应用</span>
-                </button>
-              </div>
-              <div id="agent-provider-status" class="agent-provider-status hidden"></div>
+            <div class="agent-provider-list-header">
+              <button id="btn-add-provider" class="btn-small btn-primary">
+                <i data-lucide="plus" style="width: 14px; height: 14px;"></i>
+                <span data-i18n="agent.provider.add">添加 Provider</span>
+              </button>
+            </div>
+            <div id="agent-provider-list" class="agent-provider-list">
+              <!-- Provider 实例卡片动态生成 -->
             </div>
           </div>
+
+
         </div>
 
         <!-- 工具标签页 -->
@@ -768,6 +757,49 @@
   <script type="module" src="js/audio-player.js"></script>
   <script type="module" src="js/camera-manager.js"></script>
   <script type="module" src="js/microphone-manager.js"></script>
+  <!-- Provider 配置弹窗 -->
+  <div id="provider-dialog-overlay" class="provider-dialog-overlay hidden">
+    <div class="provider-dialog">
+      <div class="provider-dialog-header">
+        <h3 id="provider-dialog-title">
+          <i data-lucide="brain" style="width: 18px; height: 18px;"></i>
+          <span data-i18n="agent.provider.addTitle">添加 Provider</span>
+        </h3>
+        <button id="btn-close-provider-dialog" class="close-btn">
+          <i data-lucide="x" style="width: 18px; height: 18px;"></i>
+        </button>
+      </div>
+      <div class="provider-dialog-body">
+        <div class="provider-field">
+          <label data-i18n="agent.provider.type">Provider 类型</label>
+          <select id="provider-form-type">
+            <!-- 动态生成 -->
+          </select>
+        </div>
+        <div class="provider-field">
+          <label data-i18n="agent.provider.displayName">显示名称</label>
+          <input type="text" id="provider-form-name" data-i18n-placeholder="agent.provider.displayNamePlaceholder" placeholder="例如：我的 OpenAI">
+        </div>
+        <div id="provider-form-config" class="agent-provider-config">
+          <!-- Provider 配置字段动态生成 -->
+        </div>
+      </div>
+      <div class="provider-dialog-footer">
+        <div id="provider-dialog-status" class="agent-provider-status hidden"></div>
+        <div class="provider-dialog-footer-right">
+          <button id="btn-provider-dialog-cancel" class="provider-dialog-btn">
+            <i data-lucide="x" style="width: 14px; height: 14px;"></i>
+            <span data-i18n="agent.provider.cancel">取消</span>
+          </button>
+          <button id="btn-provider-dialog-save" class="provider-dialog-btn primary">
+            <i data-lucide="save" style="width: 14px; height: 14px;"></i>
+            <span data-i18n="agent.provider.save">保存</span>
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+
   <script type="module" src="js/renderer.js"></script>
 
   <!-- 初始化 Lucide Icons -->

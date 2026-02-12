@@ -206,8 +206,15 @@ const electronAPI = {
   agentGetUrl: () => ipcRenderer.invoke('agent:get-url'),
   
   agentGetProviders: () => ipcRenderer.invoke('agent:get-providers'),
-  agentSetProvider: (providerId: string, config: any) => ipcRenderer.invoke('agent:set-provider', providerId, config),
-  agentTestProvider: () => ipcRenderer.invoke('agent:test-provider'),
+  agentAddProviderInstance: (instanceConfig: any) => ipcRenderer.invoke('agent:add-provider-instance', instanceConfig),
+  agentRemoveProviderInstance: (instanceId: string) => ipcRenderer.invoke('agent:remove-provider-instance', instanceId),
+  agentUpdateProviderInstance: (instanceId: string, config: any) => ipcRenderer.invoke('agent:update-provider-instance', instanceId, config),
+  agentInitProviderInstance: (instanceId: string) => ipcRenderer.invoke('agent:init-provider-instance', instanceId),
+  agentTestProviderInstance: (instanceId: string) => ipcRenderer.invoke('agent:test-provider-instance', instanceId),
+  agentSetPrimaryProvider: (instanceId: string) => ipcRenderer.invoke('agent:set-primary-provider', instanceId),
+  agentDisconnectProviderInstance: (instanceId: string) => ipcRenderer.invoke('agent:disconnect-provider-instance', instanceId),
+  agentEnableProviderInstance: (instanceId: string) => ipcRenderer.invoke('agent:enable-provider-instance', instanceId),
+  agentDisableProviderInstance: (instanceId: string) => ipcRenderer.invoke('agent:disable-provider-instance', instanceId),
   agentGetPipeline: () => ipcRenderer.invoke('agent:get-pipeline'),
   
   // 工具管理

@@ -63,11 +63,44 @@ export interface TapEventData {
 /** 工具循环最大迭代次数，防止无限循环 */
 const MAX_TOOL_LOOP_ITERATIONS = 10;
 
+/** Provider 实例配置（持久化用） */
+export interface ProviderInstanceConfig {
+  /** 实例唯一 ID (uuid) */
+  instanceId: string;
+  /** Provider 类型 ID (如 'openai', 'echo') */
+  providerId: string;
+  /** 用户自定义的显示名称 */
+  displayName: string;
+  /** Provider 配置参数 */
+  config: ProviderConfig;
+  /** 是否启用（仅启用的实例才会尝试连接） */
+  enabled: boolean;
+}
+
+/** Provider 实例运行时状态 */
+export interface ProviderInstanceInfo {
+  instanceId: string;
+  providerId: string;
+  displayName: string;
+  config: ProviderConfig;
+  metadata: ProviderMetadata | undefined;
+  enabled: boolean;
+  status: 'idle' | 'connecting' | 'connected' | 'error';
+  error?: string;
+  isPrimary: boolean;
+}
+
 export class AgentHandler {
-  /** 当前激活的 LLM Provider */
-  private activeProvider: LLMProvider | null = null;
-  private activeProviderId: string = 'echo';
-  private activeProviderConfig: ProviderConfig = { id: 'echo', name: 'Echo' };
+  /** 所有 Provider 实例（instanceId → 运行时） */
+  private providerInstances: Map<string, {
+    config: ProviderInstanceConfig;
+    provider: LLMProvider | null;
+    status: 'idle' | 'connecting' | 'connected' | 'error';
+    error?: string;
+  }> = new Map();
+
+  /** 主 LLM 实例 ID */
+  private primaryInstanceId: string = '';
 
   /** 会话管理器 */
   public readonly sessions: SessionManager;
@@ -79,74 +112,417 @@ export class AgentHandler {
   /** 是否启用 Function Calling */
   private enableToolCalling: boolean = true;
 
+  /** 配置持久化文件路径 */
+  private configPath: string;
+
   constructor() {
     this.sessions = new SessionManager();
-    // 默认使用 Echo Provider（同步创建，不走 async initialize）
-    const echoProvider = providerRegistry.create('echo', this.activeProviderConfig);
-    if (echoProvider) {
-      this.activeProvider = echoProvider;
-    }
+    // 持久化路径
+    const { app } = require('electron');
+    this.configPath = require('path').join(app.getPath('userData'), 'data', 'providers.json');
+
+    // 加载持久化配置
+    this.loadConfig();
   }
 
-  // ==================== Provider 管理 ====================
+  // ==================== Provider 实例管理 ====================
 
-  /** 设置当前使用的 LLM Provider */
-  public async setActiveProvider(providerId: string, config: ProviderConfig): Promise<boolean> {
-    // 先销毁当前 Provider
-    if (this.activeProvider) {
-      try {
-        await this.activeProvider.terminate();
-      } catch (error) {
-        logger.warn(`[AgentHandler] 销毁旧 Provider 失败: ${(error as Error).message}`);
-      }
-    }
-
-    const provider = providerRegistry.create(providerId, config);
-    if (!provider) {
-      logger.error(`[AgentHandler] 无法创建 Provider: ${providerId}`);
+  /** 添加一个 Provider 实例 */
+  public async addProviderInstance(instanceConfig: ProviderInstanceConfig): Promise<boolean> {
+    // 验证 Provider 类型存在
+    if (!providerRegistry.has(instanceConfig.providerId)) {
+      logger.error(`[AgentHandler] Provider 类型不存在: ${instanceConfig.providerId}`);
       return false;
     }
 
-    // 初始化新 Provider
-    try {
-      await provider.initialize();
-    } catch (error) {
-      logger.error(`[AgentHandler] Provider 初始化失败: ${(error as Error).message}`);
-      return false;
+    // 确保 enabled 字段有默认值
+    if (instanceConfig.enabled === undefined) {
+      instanceConfig.enabled = true;
     }
 
-    this.activeProvider = provider;
-    this.activeProviderId = providerId;
-    this.activeProviderConfig = config;
-    logger.info(`[AgentHandler] 已切换 Provider: ${providerId}`);
+    this.providerInstances.set(instanceConfig.instanceId, {
+      config: instanceConfig,
+      provider: null,
+      status: 'idle'
+    });
+
+    // 如果是第一个实例，自动设为主 LLM
+    if (this.providerInstances.size === 1) {
+      this.primaryInstanceId = instanceConfig.instanceId;
+    }
+
+    this.saveConfig();
+    logger.info(`[AgentHandler] 添加 Provider 实例: ${instanceConfig.displayName} (${instanceConfig.providerId})`);
     return true;
   }
 
-  /** 获取当前 Provider 信息 */
-  public getActiveProviderInfo(): { id: string; config: ProviderConfig; metadata: ProviderMetadata | undefined } {
-    return {
-      id: this.activeProviderId,
-      config: this.activeProviderConfig,
-      metadata: providerRegistry.get(this.activeProviderId)
-    };
+  /** 移除一个 Provider 实例 */
+  public async removeProviderInstance(instanceId: string): Promise<boolean> {
+    const entry = this.providerInstances.get(instanceId);
+    if (!entry) return false;
+
+    // 先终止
+    if (entry.provider) {
+      try { await entry.provider.terminate(); } catch {}
+    }
+
+    this.providerInstances.delete(instanceId);
+
+    // 如果移除的是主 LLM，自动选择下一个
+    if (this.primaryInstanceId === instanceId) {
+      const firstKey = this.providerInstances.keys().next().value;
+      this.primaryInstanceId = firstKey || '';
+    }
+
+    this.saveConfig();
+    logger.info(`[AgentHandler] 移除 Provider 实例: ${instanceId}`);
+    return true;
   }
 
-  /** 获取所有可用 Provider */
+  /** 更新 Provider 实例配置 */
+  public async updateProviderInstance(instanceId: string, config: Partial<ProviderInstanceConfig>): Promise<boolean> {
+    const entry = this.providerInstances.get(instanceId);
+    if (!entry) return false;
+
+    // 如果更新了配置参数，需要重新初始化
+    if (config.config) {
+      entry.config.config = { ...entry.config.config, ...config.config };
+    }
+    if (config.displayName) {
+      entry.config.displayName = config.displayName;
+    }
+    if (config.providerId) {
+      entry.config.providerId = config.providerId;
+    }
+
+    // 如果已有实例在运行，销毁并重新创建
+    if (entry.provider) {
+      try { await entry.provider.terminate(); } catch {}
+      entry.provider = null;
+      entry.status = 'idle';
+    }
+
+    this.saveConfig();
+    return true;
+  }
+
+  /** 初始化（连接）一个 Provider 实例 */
+  public async initializeProviderInstance(instanceId: string): Promise<{ success: boolean; error?: string }> {
+    const entry = this.providerInstances.get(instanceId);
+    if (!entry) return { success: false, error: '实例不存在' };
+
+    try {
+      // 如果已有实例，先终止
+      if (entry.provider) {
+        await entry.provider.terminate();
+      }
+
+      entry.status = 'connecting';
+      entry.error = undefined;
+
+      const provider = providerRegistry.create(entry.config.providerId, entry.config.config);
+      if (!provider) {
+        throw new Error(`无法创建 Provider: ${entry.config.providerId}`);
+      }
+
+      await provider.initialize();
+      entry.provider = provider;
+      entry.status = 'connected';
+      entry.error = undefined;
+
+      logger.info(`[AgentHandler] Provider 实例已连接: ${entry.config.displayName}`);
+      return { success: true };
+    } catch (error) {
+      entry.status = 'error';
+      entry.error = (error as Error).message;
+      logger.error(`[AgentHandler] Provider 实例连接失败: ${(error as Error).message}`);
+      return { success: false, error: (error as Error).message };
+    }
+  }
+
+  /** 断开 Provider 实例连接 */
+  public async disconnectProviderInstance(instanceId: string): Promise<{ success: boolean; error?: string }> {
+    const entry = this.providerInstances.get(instanceId);
+    if (!entry) return { success: false, error: '实例不存在' };
+
+    try {
+      if (entry.provider) {
+        await entry.provider.terminate();
+        entry.provider = null;
+      }
+      entry.status = 'idle';
+      entry.error = undefined;
+      logger.info(`[AgentHandler] Provider 实例已断开: ${entry.config.displayName}`);
+      return { success: true };
+    } catch (error) {
+      entry.status = 'error';
+      entry.error = (error as Error).message;
+      logger.error(`[AgentHandler] Provider 实例断开失败: ${(error as Error).message}`);
+      return { success: false, error: (error as Error).message };
+    }
+  }
+
+  /** 启用 Provider 实例（启用后自动尝试连接） */
+  public async enableProviderInstance(instanceId: string): Promise<{ success: boolean; error?: string }> {
+    const entry = this.providerInstances.get(instanceId);
+    if (!entry) return { success: false, error: '实例不存在' };
+
+    entry.config.enabled = true;
+    this.saveConfig();
+    logger.info(`[AgentHandler] Provider 实例已启用: ${entry.config.displayName}`);
+
+    // 启用后自动尝试连接
+    return this.initializeProviderInstance(instanceId);
+  }
+
+  /** 禁用 Provider 实例（禁用后自动断开连接） */
+  public async disableProviderInstance(instanceId: string): Promise<{ success: boolean; error?: string }> {
+    const entry = this.providerInstances.get(instanceId);
+    if (!entry) return { success: false, error: '实例不存在' };
+
+    entry.config.enabled = false;
+
+    // 断开连接
+    if (entry.provider) {
+      try { await entry.provider.terminate(); } catch {}
+      entry.provider = null;
+    }
+    entry.status = 'idle';
+    entry.error = undefined;
+
+    this.saveConfig();
+    logger.info(`[AgentHandler] Provider 实例已禁用: ${entry.config.displayName}`);
+    return { success: true };
+  }
+
+  /** 设置主 LLM */
+  public setPrimaryProvider(instanceId: string): boolean {
+    if (!this.providerInstances.has(instanceId)) return false;
+    this.primaryInstanceId = instanceId;
+    this.saveConfig();
+    logger.info(`[AgentHandler] 已设置主 LLM: ${instanceId}`);
+    return true;
+  }
+
+  /** 获取主 LLM 的 Provider 实例 */
+  private getPrimaryProvider(): LLMProvider | null {
+    if (!this.primaryInstanceId) return null;
+    const entry = this.providerInstances.get(this.primaryInstanceId);
+    return entry?.provider || null;
+  }
+
+  /** 获取指定 Provider 实例 */
+  public getProviderInstance(instanceId: string): LLMProvider | null {
+    return this.providerInstances.get(instanceId)?.provider || null;
+  }
+
+  /** 获取主 LLM 的 instanceId */
+  public getPrimaryInstanceId(): string {
+    return this.primaryInstanceId;
+  }
+
+  /**
+   * 调用指定 Provider 实例进行 LLM 对话
+   * 供插件系统使用，支持 'primary' 作为 instanceId 自动选择主 LLM
+   */
+  public async callProvider(instanceId: string, request: LLMRequest): Promise<LLMResponse> {
+    const targetId = instanceId === 'primary' ? this.primaryInstanceId : instanceId;
+    if (!targetId) {
+      throw new Error('未配置主 LLM Provider');
+    }
+
+    const entry = this.providerInstances.get(targetId);
+    if (!entry) {
+      throw new Error(`Provider 实例不存在: ${targetId}`);
+    }
+
+    // 如果尚未初始化，先尝试初始化
+    if (!entry.provider) {
+      const initResult = await this.initializeProviderInstance(targetId);
+      if (!initResult.success) {
+        throw new Error(`Provider 初始化失败: ${initResult.error}`);
+      }
+    }
+
+    return entry.provider!.chat(request);
+  }
+
+  /**
+   * 获取所有 Provider 实例摘要（供插件使用）
+   */
+  public getProvidersSummary(): Array<{
+    instanceId: string;
+    providerId: string;
+    displayName: string;
+    enabled: boolean;
+    status: 'idle' | 'connecting' | 'connected' | 'error';
+    isPrimary: boolean;
+  }> {
+    const result: Array<{
+      instanceId: string;
+      providerId: string;
+      displayName: string;
+      enabled: boolean;
+      status: 'idle' | 'connecting' | 'connected' | 'error';
+      isPrimary: boolean;
+    }> = [];
+    for (const [instanceId, entry] of this.providerInstances) {
+      result.push({
+        instanceId,
+        providerId: entry.config.providerId,
+        displayName: entry.config.displayName,
+        enabled: entry.config.enabled !== false,
+        status: entry.status,
+        isPrimary: instanceId === this.primaryInstanceId
+      });
+    }
+    return result;
+  }
+
+  /** 测试指定 Provider 实例（不改变运行时状态） */
+  public async testProviderInstance(instanceId: string): Promise<{ success: boolean; error?: string; model?: string }> {
+    const entry = this.providerInstances.get(instanceId);
+    if (!entry) return { success: false, error: '实例不存在' };
+
+    // 如果已有活跃连接，直接用它测试
+    if (entry.provider) {
+      return entry.provider.test();
+    }
+
+    // 否则创建临时 Provider 进行测试，不修改实例状态
+    let tempProvider: LLMProvider | null = null;
+    try {
+      tempProvider = providerRegistry.create(entry.config.providerId, entry.config.config);
+      if (!tempProvider) {
+        return { success: false, error: `无法创建 Provider: ${entry.config.providerId}` };
+      }
+      await tempProvider.initialize();
+      const result = await tempProvider.test();
+      return result;
+    } catch (error) {
+      return { success: false, error: (error as Error).message };
+    } finally {
+      // 清理临时 Provider
+      if (tempProvider) {
+        try { await tempProvider.terminate(); } catch {}
+      }
+    }
+  }
+
+  /** 获取所有实例信息（供 UI 展示） */
+  public getAllProviderInstances(): ProviderInstanceInfo[] {
+    const result: ProviderInstanceInfo[] = [];
+    for (const [instanceId, entry] of this.providerInstances) {
+      result.push({
+        instanceId,
+        providerId: entry.config.providerId,
+        displayName: entry.config.displayName,
+        config: entry.config.config,
+        metadata: providerRegistry.get(entry.config.providerId),
+        enabled: entry.config.enabled !== false,
+        status: entry.status,
+        error: entry.error,
+        isPrimary: instanceId === this.primaryInstanceId
+      });
+    }
+    return result;
+  }
+
+  /** 获取所有可用 Provider 类型 */
   public getAvailableProviders(): ProviderMetadata[] {
     return providerRegistry.getAll();
-  }
-
-  /** 测试当前 Provider 连接 */
-  public async testProvider(): Promise<{ success: boolean; error?: string }> {
-    if (!this.activeProvider) {
-      return { success: false, error: '未配置 Provider' };
-    }
-    return this.activeProvider.test();
   }
 
   /** 设置是否启用 Function Calling */
   public setToolCallingEnabled(enabled: boolean): void {
     this.enableToolCalling = enabled;
+  }
+
+  // ==================== 自动连接 ====================
+
+  /** 自动连接所有已启用的 Provider 实例 */
+  private async autoConnectEnabled(): Promise<void> {
+    for (const [instanceId, entry] of this.providerInstances) {
+      if (entry.config.enabled) {
+        this.initializeProviderInstance(instanceId).catch(err => {
+          logger.warn(`[AgentHandler] 自动连接 Provider 失败 (${entry.config.displayName}): ${err}`);
+        });
+      }
+    }
+  }
+
+  // ==================== 持久化 ====================
+
+  private loadConfig(): void {
+    const fs = require('fs');
+    const path = require('path');
+    try {
+      // 确保目录存在
+      const dir = path.dirname(this.configPath);
+      if (!fs.existsSync(dir)) {
+        fs.mkdirSync(dir, { recursive: true });
+      }
+
+      if (fs.existsSync(this.configPath)) {
+        const data = JSON.parse(fs.readFileSync(this.configPath, 'utf-8'));
+        if (data.instances && Array.isArray(data.instances)) {
+          for (const inst of data.instances) {
+            // 兼容旧配置：如果没有 enabled 字段，默认为 true
+            if (inst.enabled === undefined) {
+              inst.enabled = true;
+            }
+            this.providerInstances.set(inst.instanceId, {
+              config: inst,
+              provider: null,
+              status: 'idle'
+            });
+          }
+        }
+        if (data.primaryInstanceId) {
+          this.primaryInstanceId = data.primaryInstanceId;
+        }
+        logger.info(`[AgentHandler] 已加载 ${this.providerInstances.size} 个 Provider 配置`);
+
+        // 自动连接已启用的 Provider 实例
+        this.autoConnectEnabled();
+      }
+    } catch (error) {
+      logger.warn(`[AgentHandler] 加载 Provider 配置失败: ${error}`);
+    }
+
+    // 如果没有任何实例，默认添加 Echo
+    if (this.providerInstances.size === 0) {
+      const echoId = 'echo-default';
+      this.providerInstances.set(echoId, {
+        config: {
+          instanceId: echoId,
+          providerId: 'echo',
+          displayName: 'Echo (内置)',
+          config: { id: 'echo', name: 'Echo' },
+          enabled: true
+        },
+        provider: null,
+        status: 'idle'
+      });
+      this.primaryInstanceId = echoId;
+    }
+  }
+
+  private saveConfig(): void {
+    const fs = require('fs');
+    try {
+      const instances: ProviderInstanceConfig[] = [];
+      for (const [, entry] of this.providerInstances) {
+        instances.push(entry.config);
+      }
+      const data = {
+        primaryInstanceId: this.primaryInstanceId,
+        instances
+      };
+      fs.writeFileSync(this.configPath, JSON.stringify(data, null, 2), 'utf-8');
+    } catch (error) {
+      logger.error(`[AgentHandler] 保存 Provider 配置失败: ${error}`);
+    }
   }
 
   // ==================== 消息处理方法 ====================
@@ -159,10 +535,11 @@ export class AgentHandler {
     const text = ctx.message.text || '';
     logger.info(`[AgentHandler] 用户输入: ${text}`);
 
-    if (!this.activeProvider) {
+    const primaryProvider = this.getPrimaryProvider();
+    if (!primaryProvider) {
       ctx.addReply({
         type: 'dialogue',
-        data: { text: '[内置Agent] 未配置 LLM Provider', duration: 5000 }
+        data: { text: '[内置Agent] 未配置或未激活主 LLM Provider', duration: 5000 }
       });
       return;
     }
@@ -197,7 +574,7 @@ export class AgentHandler {
 
     try {
       // 工具循环：反复调用 LLM 直到不再请求工具
-      const response = await this.executeWithToolLoop(request, ctx);
+      const response = await this.executeWithToolLoop(request, ctx, primaryProvider);
 
       // 追加助手回复到历史
       this.sessions.addMessage(ctx.sessionId, {
@@ -233,14 +610,14 @@ export class AgentHandler {
    * 2. 如果 LLM 返回 tool_calls → 执行工具 → 将结果追加到消息 → 回到步骤 1
    * 3. 如果 LLM 返回文本 → 结束循环
    */
-  private async executeWithToolLoop(request: LLMRequest, ctx: PipelineContext): Promise<LLMResponse> {
+  private async executeWithToolLoop(request: LLMRequest, ctx: PipelineContext, provider: LLMProvider): Promise<LLMResponse> {
     let iterations = 0;
     let currentRequest = { ...request };
 
     while (iterations < MAX_TOOL_LOOP_ITERATIONS) {
       iterations++;
 
-      const response = await this.activeProvider!.chat(currentRequest);
+      const response = await provider.chat(currentRequest);
 
       // 如果没有工具调用，直接返回
       if (!response.toolCalls || response.toolCalls.length === 0) {
@@ -318,11 +695,13 @@ export class AgentHandler {
     const data = ctx.message.data as TapEventData;
     logger.info(`[AgentHandler] 触碰事件: ${data.hitArea}`);
 
-    // 如果有 LLM Provider 且不是 Echo，让 LLM 决定反应
-    if (this.activeProvider && this.activeProviderId !== 'echo') {
+    // 如果有主 LLM Provider 且不是 Echo，让 LLM 决定反应
+    const primaryProvider = this.getPrimaryProvider();
+    const primaryEntry = this.primaryInstanceId ? this.providerInstances.get(this.primaryInstanceId) : null;
+    if (primaryProvider && primaryEntry?.config.providerId !== 'echo') {
       const prompt = `用户触碰了角色的 "${data.hitArea}" 部位，请给出一个简短可爱的反应（1-2句话）。`;
       try {
-        const response = await this.activeProvider.chat({
+        const response = await primaryProvider.chat({
           messages: [{ role: 'user', content: prompt }],
           systemPrompt: this.characterInfo?.personality || '你是一个可爱的桌面宠物。',
           maxTokens: 100

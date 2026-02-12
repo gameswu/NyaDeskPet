@@ -20,8 +20,11 @@
 - 💻 **[开发与架构指南](docs/DEVELOPMENT.md)**
   项目结构、核心模块设计、安全系统逻辑及技术栈说明。
 
-- 🧩 **[插件开发指南](docs/PLUGINS.md)**
-  插件系统架构、通信协议及示例插件说明。
+- 🧩 **[前端插件开发指南](docs/PLUGINS.md)**
+  前端插件系统架构、通信协议及示例插件说明。
+
+- 🤖 **[Agent 插件开发指南](docs/AGENT_PLUGINS.md)**
+  内置 Agent 插件开发、工具注册与配置系统说明。
 
 ---
 
@@ -95,7 +98,7 @@ npm run version
 
 欢迎提交 Issue 或 Pull Request！
 
-**注意**: 本项目文档结构已固定。后续任何更新请仅在 `README.md` 或 `docs/` 目录下的三个核心文档（`API.md`, `USAGE.md`, `DEVELOPMENT.md`）中进行修改，**严禁新增文档文件**。
+**注意**: 本项目文档结构已固定。后续任何更新请仅在 `README.md` 或 `docs/` 目录下的核心文档（`API.md`, `USAGE.md`, `DEVELOPMENT.md`, `PLUGINS.md`, `AGENT_PLUGINS.md`）中进行修改，**严禁新增文档文件**。
 
 ---
 

@@ -471,80 +471,322 @@ function showAgentPanel(): void {
 }
 
 /**
- * 初始化 Provider 选择器 UI
+ * 初始化 Provider 多实例管理 UI
  */
 async function initAgentProviderUI(): Promise<void> {
   try {
-    const info = await window.electronAPI.agentGetProviders();
-    const select = document.getElementById('agent-provider-select') as HTMLSelectElement;
-    if (!select) return;
-
-    // 填充 Provider 下拉列表
-    select.innerHTML = '';
-    for (const p of info.providers) {
-      const opt = document.createElement('option');
-      opt.value = p.id;
-      opt.textContent = p.name;
-      if (p.id === info.active.id) {
-        opt.selected = true;
-      }
-      select.appendChild(opt);
+    // 绑定添加按钮
+    const btnAdd = document.getElementById('btn-add-provider');
+    if (btnAdd) {
+      btnAdd.onclick = () => showProviderDialog();
     }
 
-    // 渲染当前 Provider 配置字段（带已保存的配置值）
-    const activeMetadata = info.providers.find(p => p.id === info.active.id);
-    renderProviderConfigFields(activeMetadata, info.active.config);
+    // 绑定弹窗关闭/取消
+    const btnClose = document.getElementById('btn-close-provider-dialog');
+    const btnCancel = document.getElementById('btn-provider-dialog-cancel');
+    if (btnClose) btnClose.onclick = () => hideProviderDialog();
+    if (btnCancel) btnCancel.onclick = () => hideProviderDialog();
 
-    // 切换 Provider 时更新配置字段
-    select.onchange = () => {
-      const selectedMeta = info.providers.find(p => p.id === select.value);
-      // 切换时，如果是当前 active 的 provider 则带入已保存的配置，否则使用默认值
-      const savedConfig = (select.value === info.active.id) ? info.active.config : undefined;
-      renderProviderConfigFields(selectedMeta, savedConfig);
-      hideProviderStatus();
-    };
-
-    // 绑定测试按钮
-    const btnTest = document.getElementById('btn-provider-test');
-    if (btnTest) {
-      btnTest.onclick = async () => {
-        showProviderStatus(window.i18nManager.t('agent.provider.testing'), 'info');
-        const result = await window.electronAPI.agentTestProvider();
-        if (result.success) {
-          showProviderStatus(window.i18nManager.t('agent.provider.testSuccess'), 'success');
-        } else {
-          showProviderStatus(
-            `${window.i18nManager.t('agent.provider.testFailed')}: ${result.error || ''}`,
-            'error'
-          );
-        }
+    // 点击遮罩层关闭弹窗
+    const overlay = document.getElementById('provider-dialog-overlay');
+    if (overlay) {
+      overlay.onclick = (e) => {
+        if (e.target === overlay) hideProviderDialog();
       };
     }
 
-    // 绑定应用按钮
-    const btnSave = document.getElementById('btn-provider-save');
+    // 绑定弹窗保存
+    const btnSave = document.getElementById('btn-provider-dialog-save');
     if (btnSave) {
-      btnSave.onclick = async () => {
-        const providerId = select.value;
-        const config = collectProviderConfig(providerId);
-        const result = await window.electronAPI.agentSetProvider(providerId, config);
-        if (result.success) {
-          showProviderStatus(window.i18nManager.t('agent.provider.saved'), 'success');
+      btnSave.onclick = () => saveProviderDialog();
+    }
+
+    // 绑定 Provider 类型切换时更新配置字段
+    const typeSelect = document.getElementById('provider-form-type') as HTMLSelectElement;
+    if (typeSelect) {
+      typeSelect.onchange = () => {
+        const info = (window as any).__providerTypesCache as any[];
+        if (info) {
+          const selectedMeta = info.find((p: any) => p.id === typeSelect.value);
+          renderProviderConfigFields(selectedMeta, undefined, 'provider-form-config');
         }
       };
+    }
+
+    // 初始加载列表
+    await refreshProviderInstances();
+  } catch (error) {
+    window.logger.error('初始化 Provider UI 失败:', error);
+  }
+}
+
+/**
+ * 刷新 Provider 实例列表
+ */
+async function refreshProviderInstances(): Promise<void> {
+  try {
+    const info = await window.electronAPI.agentGetProviders();
+    (window as any).__providerTypesCache = info.providerTypes;
+
+    const container = document.getElementById('agent-provider-list');
+    if (!container) return;
+
+    if (!info.instances || info.instances.length === 0) {
+      container.innerHTML = `<div class="agent-provider-empty">${window.i18nManager.t('agent.provider.empty')}</div>`;
+      return;
+    }
+
+    container.innerHTML = '';
+    for (const inst of info.instances) {
+      const card = document.createElement('div');
+      card.className = `agent-provider-instance-card${inst.isPrimary ? ' primary' : ''}${!inst.enabled ? ' disabled' : ''}`;
+      card.title = inst.isPrimary ? window.i18nManager.t('agent.provider.primary') : window.i18nManager.t('agent.provider.setPrimary');
+
+      const statusLabels: Record<string, string> = {
+        idle: window.i18nManager.t('agent.provider.statusIdle'),
+        connecting: window.i18nManager.t('agent.provider.statusConnecting'),
+        connected: window.i18nManager.t('agent.provider.statusConnected'),
+        error: window.i18nManager.t('agent.provider.statusError')
+      };
+      const statusLabel = statusLabels[inst.status] || inst.status;
+
+      const modelInfo = inst.config?.model ? `<div class="agent-provider-instance-model">${window.i18nManager.t('agent.provider.model')}: <span>${escapeHtml(String(inst.config.model))}</span></div>` : '';
+      const errorInfo = inst.error ? `<div class="agent-provider-instance-error">${escapeHtml(inst.error)}</div>` : '';
+
+      card.innerHTML = `
+        <div class="agent-provider-instance-card-header">
+          <div class="agent-provider-instance-info">
+            <span class="agent-provider-instance-name">${escapeHtml(inst.displayName)}</span>
+            <span class="agent-provider-instance-type">${escapeHtml(inst.metadata?.name || inst.providerId)}</span>
+          </div>
+          <div class="agent-provider-instance-badges">
+            ${inst.isPrimary ? `<span class="agent-provider-primary-badge">${window.i18nManager.t('agent.provider.primary')}</span>` : ''}
+            ${inst.enabled
+              ? `<span class="agent-provider-status-badge ${inst.status}">${statusLabel}</span>`
+              : `<span class="agent-provider-status-badge disabled">${window.i18nManager.t('agent.provider.statusDisabled')}</span>`
+            }
+          </div>
+        </div>
+        ${modelInfo}
+        ${errorInfo}
+        <div class="agent-provider-instance-actions">
+          <label class="provider-enable-toggle" data-action="toggle-enable" data-instance="${escapeHtml(inst.instanceId)}">
+            <input type="checkbox" ${inst.enabled ? 'checked' : ''}>
+            <span class="provider-toggle-slider"></span>
+            <span class="provider-toggle-label">${inst.enabled ? window.i18nManager.t('agent.provider.enabled') : window.i18nManager.t('agent.provider.disabled')}</span>
+          </label>
+          <div class="agent-provider-instance-btns">
+            <button class="btn-small btn-primary" data-action="test" data-instance="${escapeHtml(inst.instanceId)}">
+              <i data-lucide="zap" style="width: 12px; height: 12px;"></i>
+              ${window.i18nManager.t('agent.provider.test')}
+            </button>
+            <button class="btn-small" data-action="edit" data-instance="${escapeHtml(inst.instanceId)}">
+              <i data-lucide="edit-2" style="width: 12px; height: 12px;"></i>
+              ${window.i18nManager.t('agent.provider.edit')}
+            </button>
+            <button class="btn-small btn-danger" data-action="remove" data-instance="${escapeHtml(inst.instanceId)}">
+              <i data-lucide="trash-2" style="width: 12px; height: 12px;"></i>
+              ${window.i18nManager.t('agent.provider.remove')}
+            </button>
+          </div>
+        </div>
+      `;
+
+      // 点击卡片空白区域设为主 LLM
+      card.addEventListener('click', async (e) => {
+        // 如果点击的是按钮或toggle，不触发
+        if ((e.target as HTMLElement).closest('[data-action]') || (e.target as HTMLElement).closest('.provider-enable-toggle')) return;
+        if (!inst.isPrimary) {
+          await window.electronAPI.agentSetPrimaryProvider(inst.instanceId);
+          await refreshProviderInstances();
+        }
+      });
+
+      // 绑定卡片内按钮事件
+      card.querySelectorAll('[data-action]').forEach((btn) => {
+        btn.addEventListener('click', async (e) => {
+          e.stopPropagation(); // 阻止冒泡到卡片点击
+          const action = btn.getAttribute('data-action');
+          const instanceId = btn.getAttribute('data-instance');
+          if (!instanceId) return;
+
+          if (action === 'toggle-enable') {
+            const checkbox = btn.querySelector('input[type="checkbox"]') as HTMLInputElement;
+            if (checkbox) {
+              const shouldEnable = checkbox.checked;
+              if (shouldEnable) {
+                await window.electronAPI.agentEnableProviderInstance(instanceId);
+              } else {
+                await window.electronAPI.agentDisableProviderInstance(instanceId);
+              }
+              await refreshProviderInstances();
+            }
+          } else if (action === 'test') {
+            // 测试连接（不改变实例状态）
+            const testResult = await window.electronAPI.agentTestProviderInstance(instanceId);
+            if (testResult.success) {
+              alert(window.i18nManager.t('agent.provider.testSuccess') + (testResult.model ? ` (${testResult.model})` : ''));
+            } else {
+              alert(`${window.i18nManager.t('agent.provider.testFailed')}: ${testResult.error || ''}`);
+            }
+          } else if (action === 'edit') {
+            showProviderDialog(inst);
+          } else if (action === 'remove') {
+            if (confirm(window.i18nManager.t('agent.provider.removeConfirm'))) {
+              await window.electronAPI.agentRemoveProviderInstance(instanceId);
+              await refreshProviderInstances();
+            }
+          }
+        });
+      });
+
+      container.appendChild(card);
+    }
+
+    // 刷新 lucide 图标
+    if ((window as any).lucide) {
+      (window as any).lucide.createIcons();
     }
   } catch (error) {
-    window.logger.error('加载 Provider 列表失败:', error);
+    window.logger.error('刷新 Provider 列表失败:', error);
+  }
+}
+
+/**
+ * 显示 Provider 配置弹窗（添加或编辑）
+ */
+function showProviderDialog(inst?: any): void {
+  const overlay = document.getElementById('provider-dialog-overlay');
+  if (!overlay) return;
+
+  const titleSpan = document.querySelector('#provider-dialog-title span');
+  const nameInput = document.getElementById('provider-form-name') as HTMLInputElement;
+  const typeSelect = document.getElementById('provider-form-type') as HTMLSelectElement;
+  const types = (window as any).__providerTypesCache as any[];
+
+  if (inst) {
+    // 编辑模式
+    if (titleSpan) titleSpan.textContent = window.i18nManager.t('agent.provider.editTitle');
+    if (nameInput) nameInput.value = inst.displayName;
+
+    // 填充类型下拉
+    if (typeSelect && types) {
+      typeSelect.innerHTML = '';
+      for (const t of types) {
+        const opt = document.createElement('option');
+        opt.value = t.id;
+        opt.textContent = t.name;
+        if (t.id === inst.providerId) opt.selected = true;
+        typeSelect.appendChild(opt);
+      }
+    }
+
+    // 渲染配置字段，带入已保存的配置值
+    const meta = types?.find((t: any) => t.id === inst.providerId);
+    renderProviderConfigFields(meta, inst.config, 'provider-form-config');
+
+    // 标记编辑状态
+    overlay.setAttribute('data-editing-instance', inst.instanceId);
+  } else {
+    // 添加模式
+    if (titleSpan) titleSpan.textContent = window.i18nManager.t('agent.provider.addTitle');
+    if (nameInput) nameInput.value = '';
+
+    // 填充 Provider 类型下拉
+    if (typeSelect && types) {
+      typeSelect.innerHTML = '';
+      for (const t of types) {
+        const opt = document.createElement('option');
+        opt.value = t.id;
+        opt.textContent = t.name;
+        typeSelect.appendChild(opt);
+      }
+      // 渲染第一个类型的配置
+      if (types.length > 0) {
+        renderProviderConfigFields(types[0], undefined, 'provider-form-config');
+      }
+    }
+
+    // 清除编辑状态
+    overlay.removeAttribute('data-editing-instance');
+  }
+
+  overlay.classList.remove('hidden');
+  hideProviderDialogStatus();
+
+  // 刷新弹窗内图标
+  if ((window as any).lucide) {
+    (window as any).lucide.createIcons();
+  }
+}
+
+/**
+ * 隐藏 Provider 配置弹窗
+ */
+function hideProviderDialog(): void {
+  const overlay = document.getElementById('provider-dialog-overlay');
+  if (overlay) {
+    overlay.classList.add('hidden');
+    overlay.removeAttribute('data-editing-instance');
+  }
+}
+
+/**
+ * 保存 Provider 弹窗（添加或更新）
+ */
+async function saveProviderDialog(): Promise<void> {
+  const overlay = document.getElementById('provider-dialog-overlay');
+  if (!overlay) return;
+
+  const typeSelect = document.getElementById('provider-form-type') as HTMLSelectElement;
+  const nameInput = document.getElementById('provider-form-name') as HTMLInputElement;
+  const providerId = typeSelect?.value;
+  const displayName = nameInput?.value.trim();
+
+  if (!displayName) {
+    showProviderDialogStatus(window.i18nManager.t('agent.provider.nameRequired'), 'error');
+    return;
+  }
+
+  const config = collectProviderConfig(providerId, 'provider-form-config');
+  const editingId = overlay.getAttribute('data-editing-instance');
+
+  try {
+    if (editingId) {
+      // 更新现有实例
+      const result = await window.electronAPI.agentUpdateProviderInstance(editingId, {
+        providerId,
+        displayName,
+        config
+      });
+      if (result.success) {
+        hideProviderDialog();
+        await refreshProviderInstances();
+      }
+    } else {
+      // 添加新实例
+      const instanceId = `${providerId}-${Date.now()}`;
+      const result = await window.electronAPI.agentAddProviderInstance({
+        instanceId,
+        providerId,
+        displayName,
+        config
+      });
+      if (result.success) {
+        hideProviderDialog();
+        await refreshProviderInstances();
+      }
+    }
+  } catch (error) {
+    showProviderDialogStatus(`保存失败: ${error}`, 'error');
   }
 }
 
 /**
  * 渲染 Provider 配置字段
- * @param metadata Provider 元信息
- * @param savedConfig 已保存的配置值（可选）
  */
-function renderProviderConfigFields(metadata: any, savedConfig?: Record<string, unknown>): void {
-  const container = document.getElementById('agent-provider-config');
+function renderProviderConfigFields(metadata: any, savedConfig?: Record<string, unknown>, containerId: string = 'provider-form-config'): void {
+  const container = document.getElementById(containerId);
   if (!container) return;
 
   container.innerHTML = '';
@@ -573,7 +815,6 @@ function renderProviderConfigFields(metadata: any, savedConfig?: Record<string, 
     }
     div.appendChild(label);
 
-    // 获取值：优先使用已保存配置，其次使用默认值
     const getValue = () => {
       if (savedConfig && savedConfig[field.key] !== undefined) {
         return savedConfig[field.key];
@@ -637,9 +878,9 @@ function renderProviderConfigFields(metadata: any, savedConfig?: Record<string, 
 /**
  * 收集 Provider 配置表单数据
  */
-function collectProviderConfig(providerId: string): any {
+function collectProviderConfig(providerId: string, containerId: string = 'provider-form-config'): any {
   const config: any = { id: providerId, name: providerId };
-  const container = document.getElementById('agent-provider-config');
+  const container = document.getElementById(containerId);
   if (!container) return config;
 
   const fields = container.querySelectorAll('[data-provider-field]');
@@ -662,29 +903,22 @@ function collectProviderConfig(providerId: string): any {
 }
 
 /**
- * 显示 Provider 操作状态
+ * 显示弹窗状态
  */
-function showProviderStatus(message: string, type: 'success' | 'error' | 'info'): void {
-  const el = document.getElementById('agent-provider-status');
+function showProviderDialogStatus(message: string, type: 'success' | 'error' | 'info'): void {
+  const el = document.getElementById('provider-dialog-status');
   if (!el) return;
   el.textContent = message;
   el.className = `agent-provider-status ${type}`;
   el.classList.remove('hidden');
-
-  // 成功和信息类消息 3 秒后自动隐藏
   if (type === 'success' || type === 'info') {
-    setTimeout(() => hideProviderStatus(), 3000);
+    setTimeout(() => hideProviderDialogStatus(), 3000);
   }
 }
 
-/**
- * 隐藏 Provider 状态
- */
-function hideProviderStatus(): void {
-  const el = document.getElementById('agent-provider-status');
-  if (el) {
-    el.classList.add('hidden');
-  }
+function hideProviderDialogStatus(): void {
+  const el = document.getElementById('provider-dialog-status');
+  if (el) el.classList.add('hidden');
 }
 
 // ==================== Function 工具管理 ====================

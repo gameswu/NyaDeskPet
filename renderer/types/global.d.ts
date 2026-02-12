@@ -69,8 +69,15 @@ export interface ElectronAPI {
   agentGetStatus: () => Promise<AgentServerStatus>;
   agentGetUrl: () => Promise<{ wsUrl: string; httpUrl: string }>;
   agentGetProviders: () => Promise<AgentProvidersInfo>;
-  agentSetProvider: (providerId: string, config: any) => Promise<{ success: boolean }>;
-  agentTestProvider: () => Promise<{ success: boolean; error?: string }>;
+  agentAddProviderInstance: (instanceConfig: AgentProviderInstanceConfig) => Promise<{ success: boolean }>;
+  agentRemoveProviderInstance: (instanceId: string) => Promise<{ success: boolean }>;
+  agentUpdateProviderInstance: (instanceId: string, config: Partial<AgentProviderInstanceConfig>) => Promise<{ success: boolean }>;
+  agentInitProviderInstance: (instanceId: string) => Promise<{ success: boolean; error?: string }>;
+  agentTestProviderInstance: (instanceId: string) => Promise<{ success: boolean; error?: string; model?: string }>;
+  agentSetPrimaryProvider: (instanceId: string) => Promise<{ success: boolean }>;
+  agentDisconnectProviderInstance: (instanceId: string) => Promise<{ success: boolean; error?: string }>;
+  agentEnableProviderInstance: (instanceId: string) => Promise<{ success: boolean; error?: string }>;
+  agentDisableProviderInstance: (instanceId: string) => Promise<{ success: boolean; error?: string }>;
   agentGetPipeline: () => Promise<{ stages: string[] }>;
   onOpenAgent: (callback: () => void) => void;
   onAgentStatusChanged: (callback: (status: AgentServerStatus) => void) => void;
@@ -773,14 +780,31 @@ export interface AgentProviderMetadata {
   configSchema: AgentProviderConfigField[];
 }
 
+// Provider 实例信息
+export interface AgentProviderInstanceInfo {
+  instanceId: string;
+  providerId: string;
+  displayName: string;
+  config: Record<string, unknown>;
+  metadata: AgentProviderMetadata | undefined;
+  enabled: boolean;
+  status: 'idle' | 'connecting' | 'connected' | 'error';
+  error?: string;
+  isPrimary: boolean;
+}
+
+// Provider 实例配置（创建/更新用）
+export interface AgentProviderInstanceConfig {
+  instanceId: string;
+  providerId: string;
+  displayName: string;
+  config: Record<string, unknown>;
+}
+
 // Provider 列表信息
 export interface AgentProvidersInfo {
-  providers: AgentProviderMetadata[];
-  active: {
-    id: string;
-    config: Record<string, unknown>;
-    metadata: AgentProviderMetadata | undefined;
-  };
+  providerTypes: AgentProviderMetadata[];
+  instances: AgentProviderInstanceInfo[];
 }
 
 // ============ 工具信息接口 ============

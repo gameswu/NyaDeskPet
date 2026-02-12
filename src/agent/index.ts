@@ -51,8 +51,22 @@ export {
   AgentHandler,
   type ModelInfo,
   type CharacterInfo,
-  type TapEventData
+  type TapEventData,
+  type ProviderInstanceConfig,
+  type ProviderInstanceInfo
 } from './handler';
+
+// 插件系统
+export {
+  AgentPlugin,
+  AgentPluginManager,
+  agentPluginManager,
+  type AgentPluginMetadata,
+  type AgentPluginContext,
+  type AgentPluginInfo,
+  type PluginProviderInfo,
+  type ProviderAccessor
+} from './agent-plugin';
 
 // 数据库层
 export {

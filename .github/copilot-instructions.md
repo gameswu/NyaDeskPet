@@ -8,9 +8,10 @@
 - `docs/API.md`：API 接口规范与通信协议
 - `docs/USAGE.md`：用户指南、安装说明、打包与故障排除
 - `docs/DEVELOPMENT.md`：架构设计、核心逻辑深度解析
-- `docs/PLUGINS.md`：插件开发指南
+- `docs/PLUGINS.md`：前端插件开发指南
+- `docs/AGENT_PLUGINS.md`：内置 Agent 插件开发指南
 
-**文档原则**：严禁在 `docs/` 目录下创建新文档。所有更新必须在上述四个现有文档（或 README.md）中进行修改和扩展。
+**文档原则**：严禁在 `docs/` 目录下创建新文档。所有更新必须在上述五个现有文档（或 README.md）中进行修改和扩展。
 
 ## 项目概述
 

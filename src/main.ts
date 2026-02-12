@@ -354,6 +354,15 @@ app.whenReady().then(async () => {
   // 加载 Agent 插件
   try {
     await agentPluginManager.loadAll();
+
+    // 注入 Provider 访问器，为插件提供多 LLM 调用能力
+    const handler = agentServer.getHandler();
+    agentPluginManager.setProviderAccessor({
+      getAllProviders: () => handler.getProvidersSummary(),
+      getPrimaryId: () => handler.getPrimaryInstanceId(),
+      callProvider: (instanceId, request) => handler.callProvider(instanceId, request)
+    });
+
     logger.info('Agent 插件管理器已初始化');
   } catch (error) {
     logger.error('Agent 插件管理器初始化失败:', error);
@@ -1230,31 +1239,90 @@ ipcMain.handle('agent:get-url', () => {
 });
 
 /**
- * 获取所有可用的 LLM Provider 列表
+ * 获取所有可用的 LLM Provider 类型列表
  */
 ipcMain.handle('agent:get-providers', () => {
   const handler = agentServer.getHandler();
   return {
-    providers: handler.getAvailableProviders(),
-    active: handler.getActiveProviderInfo()
+    providerTypes: handler.getAvailableProviders(),
+    instances: handler.getAllProviderInstances()
   };
 });
 
 /**
- * 切换当前使用的 LLM Provider
+ * 添加 Provider 实例
  */
-ipcMain.handle('agent:set-provider', async (_event, providerId: string, config: any) => {
+ipcMain.handle('agent:add-provider-instance', async (_event, instanceConfig: any) => {
   const handler = agentServer.getHandler();
-  const success = await handler.setActiveProvider(providerId, config);
+  const success = await handler.addProviderInstance(instanceConfig);
   return { success };
 });
 
 /**
- * 测试当前 Provider 连接
+ * 移除 Provider 实例
  */
-ipcMain.handle('agent:test-provider', async () => {
+ipcMain.handle('agent:remove-provider-instance', async (_event, instanceId: string) => {
   const handler = agentServer.getHandler();
-  return handler.testProvider();
+  const success = await handler.removeProviderInstance(instanceId);
+  return { success };
+});
+
+/**
+ * 更新 Provider 实例配置
+ */
+ipcMain.handle('agent:update-provider-instance', async (_event, instanceId: string, config: any) => {
+  const handler = agentServer.getHandler();
+  const success = await handler.updateProviderInstance(instanceId, config);
+  return { success };
+});
+
+/**
+ * 初始化（连接）Provider 实例
+ */
+ipcMain.handle('agent:init-provider-instance', async (_event, instanceId: string) => {
+  const handler = agentServer.getHandler();
+  return handler.initializeProviderInstance(instanceId);
+});
+
+/**
+ * 测试 Provider 实例连接
+ */
+ipcMain.handle('agent:test-provider-instance', async (_event, instanceId: string) => {
+  const handler = agentServer.getHandler();
+  return handler.testProviderInstance(instanceId);
+});
+
+/**
+ * 设置主 LLM
+ */
+ipcMain.handle('agent:set-primary-provider', async (_event, instanceId: string) => {
+  const handler = agentServer.getHandler();
+  const success = handler.setPrimaryProvider(instanceId);
+  return { success };
+});
+
+/**
+ * 断开 Provider 实例连接
+ */
+ipcMain.handle('agent:disconnect-provider-instance', async (_event, instanceId: string) => {
+  const handler = agentServer.getHandler();
+  return handler.disconnectProviderInstance(instanceId);
+});
+
+/**
+ * 启用 Provider 实例
+ */
+ipcMain.handle('agent:enable-provider-instance', async (_event, instanceId: string) => {
+  const handler = agentServer.getHandler();
+  return handler.enableProviderInstance(instanceId);
+});
+
+/**
+ * 禁用 Provider 实例
+ */
+ipcMain.handle('agent:disable-provider-instance', async (_event, instanceId: string) => {
+  const handler = agentServer.getHandler();
+  return handler.disableProviderInstance(instanceId);
 });
 
 /**
