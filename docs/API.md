@@ -176,6 +176,37 @@
 - 前端接收到插件响应后，自动转发给后端 Agent
 - Agent 可根据 requestId 关联之前发出的请求
 
+**插件状态通知**
+
+前端在插件连接或断开时，通知后端当前已连接的前端插件列表：
+```json
+{
+  "type": "plugin_status",
+  "data": {
+    "plugins": [
+      {
+        "pluginId": "terminal",
+        "pluginName": "Terminal Plugin",
+        "capabilities": ["execute"]
+      },
+      {
+        "pluginId": "ui-automation",
+        "pluginName": "UI Automation",
+        "capabilities": ["screenshot", "click", "type_text"]
+      }
+    ]
+  }
+}
+```
+
+**插件状态通知说明**：
+- `plugins`: 当前所有已连接（WebSocket 处于 OPEN 状态）的前端插件列表
+- `pluginId`: 插件唯一标识
+- `pluginName`: 插件显示名称
+- `capabilities`: 插件支持的能力列表
+- 后端收到此消息后，会将前端插件能力注册为 Function Calling 工具供 LLM 调用
+- 每次插件连接或断开时都会重新发送完整列表
+
 **富内容类型支持**：
 
 插件可以返回多种类型的内容，通过 `result.type` 字段标识：

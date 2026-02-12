@@ -1,0 +1,8 @@
+{
+  "name": "plugin-tool-bridge",
+  "author": "gameswu",
+  "desc": "插件工具桥接 — 将前端插件能力自动转换为 Function Calling 工具，让 LLM 可以调用前端插件",
+  "version": "1.0.0",
+  "entry": "main.js",
+  "autoActivate": true
+}

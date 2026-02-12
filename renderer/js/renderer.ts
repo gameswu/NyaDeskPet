@@ -3,7 +3,7 @@
  * 协调各个模块的工作
  */
 
-import type { AppState, AppDebugInterface, ThemeMode, TapConfig, BackendMessage } from '../types/global';
+import type { AppState, AppDebugInterface, ThemeMode, TapConfig, BackendMessage, AgentProviderMetadata } from '../types/global';
 
 // 应用状态
 const appState: AppState = {
@@ -292,7 +292,7 @@ function setupEventListeners(): void {
     window.logger.info('收到后端消息:', message);
     if (message.type === 'dialogue') {
       const data = message.data as any;
-      addChatMessage(data.text, false, data.attachment);
+      addChatMessage(data.text, false, { attachment: data.attachment, reasoningContent: data.reasoningContent });
     }
   });
 }
@@ -450,6 +450,9 @@ function showAgentPanel(): void {
   // 初始化 Provider 选择器
   initAgentProviderUI();
 
+  // 初始化 TTS Provider UI
+  initAgentTTSUI();
+
   // 加载工具列表
   initAgentToolsUI();
 
@@ -557,7 +560,7 @@ async function refreshProviderInstances(): Promise<void> {
         <div class="agent-provider-instance-card-header">
           <div class="agent-provider-instance-info">
             <span class="agent-provider-instance-name">${escapeHtml(inst.displayName)}</span>
-            <span class="agent-provider-instance-type">${escapeHtml(inst.metadata?.name || inst.providerId)}</span>
+            <span class="agent-provider-instance-type">${escapeHtml(tProvider(inst.providerId, 'name', inst.metadata?.name || inst.providerId))}</span>
           </div>
           <div class="agent-provider-instance-badges">
             ${inst.isPrimary ? `<span class="agent-provider-primary-badge">${window.i18nManager.t('agent.provider.primary')}</span>` : ''}
@@ -675,7 +678,7 @@ function showProviderDialog(inst?: any): void {
       for (const t of types) {
         const opt = document.createElement('option');
         opt.value = t.id;
-        opt.textContent = t.name;
+        opt.textContent = tProvider(t.id, 'name', t.name);
         if (t.id === inst.providerId) opt.selected = true;
         typeSelect.appendChild(opt);
       }
@@ -698,7 +701,7 @@ function showProviderDialog(inst?: any): void {
       for (const t of types) {
         const opt = document.createElement('option');
         opt.value = t.id;
-        opt.textContent = t.name;
+        opt.textContent = tProvider(t.id, 'name', t.name);
         typeSelect.appendChild(opt);
       }
       // 渲染第一个类型的配置
@@ -785,11 +788,26 @@ async function saveProviderDialog(): Promise<void> {
 /**
  * 渲染 Provider 配置字段
  */
+/**
+ * Provider 元信息 i18n 辅助函数
+ * 约定键路径: agent.providers.{providerId}.{path}
+ * 找不到 i18n 键时回退到 metadata 原始值
+ */
+function tProvider(providerId: string, path: string, fallback: string): string {
+  const key = `agent.providers.${providerId}.${path}`;
+  const result = window.i18nManager.t(key);
+  // t() 找不到键时返回 key 本身
+  return result === key ? fallback : result;
+}
+
 function renderProviderConfigFields(metadata: any, savedConfig?: Record<string, unknown>, containerId: string = 'provider-form-config'): void {
   const container = document.getElementById(containerId);
   if (!container) return;
 
   container.innerHTML = '';
+
+  // 保存当前 metadata，供 collectProviderConfig 回退 default 值
+  (window as any).__currentProviderMetadata = metadata;
 
   if (!metadata || !metadata.configSchema || metadata.configSchema.length === 0) {
     const hint = document.createElement('p');
@@ -801,12 +819,14 @@ function renderProviderConfigFields(metadata: any, savedConfig?: Record<string, 
     return;
   }
 
+  const pid: string = metadata.id || '';
+
   for (const field of metadata.configSchema) {
     const div = document.createElement('div');
     div.className = 'provider-field';
 
     const label = document.createElement('label');
-    label.textContent = field.label;
+    label.textContent = tProvider(pid, `fields.${field.key}.label`, field.label);
     if (field.required) {
       const asterisk = document.createElement('span');
       asterisk.textContent = ' *';
@@ -815,6 +835,7 @@ function renderProviderConfigFields(metadata: any, savedConfig?: Record<string, 
     }
     div.appendChild(label);
 
+    // 获取字段值：已保存值 → default → undefined
     const getValue = () => {
       if (savedConfig && savedConfig[field.key] !== undefined) {
         return savedConfig[field.key];
@@ -830,7 +851,7 @@ function renderProviderConfigFields(metadata: any, savedConfig?: Record<string, 
       for (const opt of field.options) {
         const option = document.createElement('option');
         option.value = opt.value;
-        option.textContent = opt.label;
+        option.textContent = tProvider(pid, `fields.${field.key}.options.${opt.value}`, opt.label);
         if (opt.value === currentValue) {
           option.selected = true;
         }
@@ -846,7 +867,7 @@ function renderProviderConfigFields(metadata: any, savedConfig?: Record<string, 
       if (field.description) {
         const hint = document.createElement('div');
         hint.className = 'field-hint';
-        hint.textContent = field.description;
+        hint.textContent = tProvider(pid, `fields.${field.key}.description`, field.description);
         div.appendChild(hint);
       }
       container.appendChild(div);
@@ -854,10 +875,13 @@ function renderProviderConfigFields(metadata: any, savedConfig?: Record<string, 
     } else {
       input = document.createElement('input');
       input.type = field.type === 'password' ? 'password' : field.type === 'number' ? 'number' : 'text';
-      if (field.placeholder) input.placeholder = field.placeholder;
       const val = getValue();
       if (val !== undefined && val !== null) {
+        // 有值（已保存或默认值）→ 填入 input.value
         input.value = String(val);
+      } else if (field.placeholder) {
+        // 无值但有 placeholder → 灰色占位提示
+        input.placeholder = tProvider(pid, `fields.${field.key}.placeholder`, field.placeholder);
       }
     }
 
@@ -867,7 +891,7 @@ function renderProviderConfigFields(metadata: any, savedConfig?: Record<string, 
     if (field.description) {
       const hint = document.createElement('div');
       hint.className = 'field-hint';
-      hint.textContent = field.description;
+      hint.textContent = tProvider(pid, `fields.${field.key}.description`, field.description);
       div.appendChild(hint);
     }
 
@@ -883,16 +907,28 @@ function collectProviderConfig(providerId: string, containerId: string = 'provid
   const container = document.getElementById(containerId);
   if (!container) return config;
 
+  // 获取当前选中的 provider 元信息，用于回退 default 值
+  const metadata = (window as any).__currentProviderMetadata as AgentProviderMetadata | undefined;
+  const schemaMap = new Map<string, any>();
+  if (metadata?.configSchema) {
+    for (const field of metadata.configSchema) {
+      schemaMap.set(field.key, field);
+    }
+  }
+
   const fields = container.querySelectorAll('[data-provider-field]');
   fields.forEach((el) => {
     const key = (el as HTMLElement).dataset.providerField!;
+    const fieldSchema = schemaMap.get(key);
     if (el instanceof HTMLInputElement) {
       if (el.type === 'checkbox') {
         config[key] = el.checked;
       } else if (el.type === 'number') {
-        config[key] = parseFloat(el.value) || 0;
+        const val = el.value.trim();
+        config[key] = val ? (parseFloat(val) || 0) : (fieldSchema?.default ?? 0);
       } else {
-        config[key] = el.value;
+        // 空字符串回退到 field.default
+        config[key] = el.value || (fieldSchema?.default ?? '');
       }
     } else if (el instanceof HTMLSelectElement) {
       config[key] = el.value;
@@ -921,6 +957,460 @@ function hideProviderDialogStatus(): void {
   if (el) el.classList.add('hidden');
 }
 
+// ==================== TTS Provider 管理 UI ====================
+
+/**
+ * TTS Provider 元信息 i18n 辅助函数
+ * 约定键路径: agent.ttsProviders.{providerId}.{path}
+ */
+function tTTSProvider(providerId: string, path: string, fallback: string): string {
+  const key = `agent.ttsProviders.${providerId}.${path}`;
+  const result = window.i18nManager.t(key);
+  return result === key ? fallback : result;
+}
+
+/**
+ * 初始化 TTS Provider 管理 UI
+ */
+async function initAgentTTSUI(): Promise<void> {
+  try {
+    const btnAdd = document.getElementById('btn-add-tts');
+    if (btnAdd) {
+      btnAdd.onclick = () => showTTSDialog();
+    }
+
+    const btnClose = document.getElementById('btn-close-tts-dialog');
+    const btnCancel = document.getElementById('btn-tts-dialog-cancel');
+    if (btnClose) btnClose.onclick = () => hideTTSDialog();
+    if (btnCancel) btnCancel.onclick = () => hideTTSDialog();
+
+    const overlay = document.getElementById('tts-dialog-overlay');
+    if (overlay) {
+      overlay.onclick = (e) => {
+        if (e.target === overlay) hideTTSDialog();
+      };
+    }
+
+    const btnSave = document.getElementById('btn-tts-dialog-save');
+    if (btnSave) {
+      btnSave.onclick = () => saveTTSDialog();
+    }
+
+    const typeSelect = document.getElementById('tts-form-type') as HTMLSelectElement;
+    if (typeSelect) {
+      typeSelect.onchange = () => {
+        const info = (window as any).__ttsTypesCache as any[];
+        if (info) {
+          const selectedMeta = info.find((p: any) => p.id === typeSelect.value);
+          renderTTSConfigFields(selectedMeta, undefined);
+        }
+      };
+    }
+
+    await refreshTTSInstances();
+  } catch (error) {
+    window.logger.error('初始化 TTS Provider UI 失败:', error);
+  }
+}
+
+/**
+ * 渲染 TTS 配置字段（复用 LLM 的 renderProviderConfigFields，但用 TTS i18n）
+ */
+function renderTTSConfigFields(metadata: any, savedConfig?: Record<string, unknown>): void {
+  const container = document.getElementById('tts-form-config');
+  if (!container) return;
+
+  if (!metadata || !metadata.configSchema || metadata.configSchema.length === 0) {
+    const hint = document.createElement('p');
+    hint.className = 'field-hint';
+    hint.style.margin = '0';
+    hint.style.padding = '4px 0';
+    hint.textContent = window.i18nManager.t('agent.provider.noConfig');
+    container.innerHTML = '';
+    container.appendChild(hint);
+    return;
+  }
+
+  // 存储 metadata 引用
+  (window as any).__currentTTSMetadata = metadata;
+
+  container.innerHTML = '';
+
+  const pid: string = metadata.id || '';
+
+  for (const field of metadata.configSchema) {
+    const div = document.createElement('div');
+    div.className = 'provider-field';
+
+    const label = document.createElement('label');
+    label.textContent = tTTSProvider(pid, `fields.${field.key}.label`, field.label);
+    if (field.required) {
+      const asterisk = document.createElement('span');
+      asterisk.textContent = ' *';
+      asterisk.style.color = '#dc3545';
+      label.appendChild(asterisk);
+    }
+    div.appendChild(label);
+
+    // 获取字段值：已保存值 → default → undefined
+    const getValue = (): any => {
+      if (savedConfig && savedConfig[field.key] !== undefined && savedConfig[field.key] !== '') {
+        return savedConfig[field.key];
+      }
+      return field.default;
+    };
+
+    let input: HTMLInputElement | HTMLSelectElement;
+
+    if (field.type === 'select' && field.options) {
+      input = document.createElement('select');
+      const currentValue = getValue();
+      for (const opt of field.options) {
+        const option = document.createElement('option');
+        option.value = opt.value;
+        option.textContent = tTTSProvider(pid, `fields.${field.key}.options.${opt.value}`, opt.label);
+        if (opt.value === String(currentValue)) {
+          option.selected = true;
+        }
+        input.appendChild(option);
+      }
+    } else if (field.type === 'boolean') {
+      const checkbox = document.createElement('input');
+      checkbox.type = 'checkbox';
+      const val = getValue();
+      checkbox.checked = val === true || val === 'true';
+      checkbox.dataset.providerField = field.key;
+      div.appendChild(checkbox);
+      if (field.description) {
+        const hint = document.createElement('div');
+        hint.className = 'field-hint';
+        hint.textContent = tTTSProvider(pid, `fields.${field.key}.description`, field.description);
+        div.appendChild(hint);
+      }
+      container.appendChild(div);
+      continue;
+    } else {
+      input = document.createElement('input');
+      input.name = field.key;
+      input.type = field.type === 'password' ? 'password' : field.type === 'number' ? 'number' : 'text';
+
+      const val = getValue();
+      if (val !== undefined && val !== null) {
+        input.value = String(val);
+      } else if (field.placeholder) {
+        input.placeholder = tTTSProvider(pid, `fields.${field.key}.placeholder`, field.placeholder);
+      }
+
+      if (field.required) input.required = true;
+    }
+
+    input.dataset.providerField = field.key;
+    div.appendChild(input);
+
+    if (field.description) {
+      const hint = document.createElement('div');
+      hint.className = 'field-hint';
+      hint.textContent = tTTSProvider(pid, `fields.${field.key}.description`, field.description);
+      div.appendChild(hint);
+    }
+
+    container.appendChild(div);
+  }
+}
+
+/**
+ * 收集 TTS 配置表单数据
+ */
+function collectTTSConfig(providerId: string): any {
+  const container = document.getElementById('tts-form-config');
+  if (!container) return {};
+
+  const config: any = { id: providerId, name: providerId };
+  const metadata = (window as any).__currentTTSMetadata;
+  const schemaMap = new Map<string, any>();
+  if (metadata?.configSchema) {
+    for (const field of metadata.configSchema) {
+      schemaMap.set(field.key, field);
+    }
+  }
+
+  const fields = container.querySelectorAll('[data-provider-field]');
+  fields.forEach((el) => {
+    const key = (el as HTMLElement).dataset.providerField!;
+    const fieldSchema = schemaMap.get(key);
+    if (el instanceof HTMLInputElement) {
+      if (el.type === 'checkbox') {
+        config[key] = el.checked;
+      } else if (el.type === 'number') {
+        const val = el.value.trim();
+        config[key] = val ? (parseFloat(val) || 0) : (fieldSchema?.default ?? 0);
+      } else {
+        config[key] = el.value || (fieldSchema?.default ?? '');
+      }
+    } else if (el instanceof HTMLSelectElement) {
+      config[key] = el.value;
+    }
+  });
+
+  return config;
+}
+
+/**
+ * 刷新 TTS Provider 实例列表
+ */
+async function refreshTTSInstances(): Promise<void> {
+  try {
+    const info = await window.electronAPI.agentGetTTSProviders();
+    (window as any).__ttsTypesCache = info.providerTypes;
+
+    const container = document.getElementById('agent-tts-list');
+    if (!container) return;
+
+    if (!info.instances || info.instances.length === 0) {
+      container.innerHTML = `<div class="agent-provider-empty">${window.i18nManager.t('agent.tts.empty')}</div>`;
+      return;
+    }
+
+    container.innerHTML = '';
+    for (const inst of info.instances) {
+      const card = document.createElement('div');
+      card.className = `agent-provider-instance-card${inst.isPrimary ? ' primary' : ''}${!inst.enabled ? ' disabled' : ''}`;
+      card.title = inst.isPrimary ? window.i18nManager.t('agent.tts.primary') : window.i18nManager.t('agent.tts.setPrimary');
+
+      const statusLabels: Record<string, string> = {
+        idle: window.i18nManager.t('agent.provider.statusIdle'),
+        connecting: window.i18nManager.t('agent.provider.statusConnecting'),
+        connected: window.i18nManager.t('agent.provider.statusConnected'),
+        error: window.i18nManager.t('agent.provider.statusError')
+      };
+      const statusLabel = statusLabels[inst.status] || inst.status;
+
+      const voiceInfo = inst.config?.voiceId ? `<div class="agent-provider-instance-model">${window.i18nManager.t('agent.tts.voice')}: <span>${escapeHtml(String(inst.config.voiceId))}</span></div>` : '';
+      const errorInfo = inst.error ? `<div class="agent-provider-instance-error">${escapeHtml(inst.error)}</div>` : '';
+
+      card.innerHTML = `
+        <div class="agent-provider-instance-card-header">
+          <div class="agent-provider-instance-info">
+            <span class="agent-provider-instance-name">${escapeHtml(inst.displayName)}</span>
+            <span class="agent-provider-instance-type">${escapeHtml(tTTSProvider(inst.providerId, 'name', inst.metadata?.name || inst.providerId))}</span>
+          </div>
+          <div class="agent-provider-instance-badges">
+            ${inst.isPrimary ? `<span class="agent-provider-primary-badge">${window.i18nManager.t('agent.tts.primary')}</span>` : ''}
+            ${inst.enabled
+              ? `<span class="agent-provider-status-badge ${inst.status}">${statusLabel}</span>`
+              : `<span class="agent-provider-status-badge disabled">${window.i18nManager.t('agent.provider.statusDisabled')}</span>`
+            }
+          </div>
+        </div>
+        ${voiceInfo}
+        ${errorInfo}
+        <div class="agent-provider-instance-actions">
+          <label class="provider-enable-toggle" data-action="toggle-enable" data-instance="${escapeHtml(inst.instanceId)}">
+            <input type="checkbox" ${inst.enabled ? 'checked' : ''}>
+            <span class="provider-toggle-slider"></span>
+            <span class="provider-toggle-label">${inst.enabled ? window.i18nManager.t('agent.provider.enabled') : window.i18nManager.t('agent.provider.disabled')}</span>
+          </label>
+          <div class="agent-provider-instance-btns">
+            <button class="btn-small btn-primary" data-action="test" data-instance="${escapeHtml(inst.instanceId)}">
+              <i data-lucide="zap" style="width: 12px; height: 12px;"></i>
+              ${window.i18nManager.t('agent.provider.test')}
+            </button>
+            <button class="btn-small" data-action="edit" data-instance="${escapeHtml(inst.instanceId)}">
+              <i data-lucide="edit-2" style="width: 12px; height: 12px;"></i>
+              ${window.i18nManager.t('agent.provider.edit')}
+            </button>
+            <button class="btn-small btn-danger" data-action="remove" data-instance="${escapeHtml(inst.instanceId)}">
+              <i data-lucide="trash-2" style="width: 12px; height: 12px;"></i>
+              ${window.i18nManager.t('agent.provider.remove')}
+            </button>
+          </div>
+        </div>
+      `;
+
+      // 点击卡片空白区域设为主 TTS
+      card.addEventListener('click', async (e) => {
+        if ((e.target as HTMLElement).closest('[data-action]') || (e.target as HTMLElement).closest('.provider-enable-toggle')) return;
+        if (!inst.isPrimary) {
+          await window.electronAPI.agentSetPrimaryTTS(inst.instanceId);
+          await refreshTTSInstances();
+        }
+      });
+
+      // 绑定卡片内按钮事件
+      card.querySelectorAll('[data-action]').forEach((btn) => {
+        btn.addEventListener('click', async (e) => {
+          e.stopPropagation();
+          const action = btn.getAttribute('data-action');
+          const instanceId = btn.getAttribute('data-instance');
+          if (!instanceId) return;
+
+          if (action === 'toggle-enable') {
+            const checkbox = btn.querySelector('input[type="checkbox"]') as HTMLInputElement;
+            if (checkbox) {
+              if (checkbox.checked) {
+                await window.electronAPI.agentEnableTTSInstance(instanceId);
+              } else {
+                await window.electronAPI.agentDisableTTSInstance(instanceId);
+              }
+              await refreshTTSInstances();
+            }
+          } else if (action === 'test') {
+            const testResult = await window.electronAPI.agentTestTTSInstance(instanceId);
+            if (testResult.success) {
+              alert(window.i18nManager.t('agent.tts.testSuccess'));
+            } else {
+              alert(`${window.i18nManager.t('agent.tts.testFailed')}: ${testResult.error || ''}`);
+            }
+          } else if (action === 'edit') {
+            showTTSDialog(inst);
+          } else if (action === 'remove') {
+            if (confirm(window.i18nManager.t('agent.tts.removeConfirm'))) {
+              await window.electronAPI.agentRemoveTTSInstance(instanceId);
+              await refreshTTSInstances();
+            }
+          }
+        });
+      });
+
+      container.appendChild(card);
+    }
+
+    if ((window as any).lucide) {
+      (window as any).lucide.createIcons();
+    }
+  } catch (error) {
+    window.logger.error('刷新 TTS 列表失败:', error);
+  }
+}
+
+/**
+ * 显示 TTS Provider 配置弹窗
+ */
+function showTTSDialog(inst?: any): void {
+  const overlay = document.getElementById('tts-dialog-overlay');
+  if (!overlay) return;
+
+  const titleSpan = document.querySelector('#tts-dialog-title span');
+  const nameInput = document.getElementById('tts-form-name') as HTMLInputElement;
+  const typeSelect = document.getElementById('tts-form-type') as HTMLSelectElement;
+  const types = (window as any).__ttsTypesCache as any[];
+
+  if (inst) {
+    if (titleSpan) titleSpan.textContent = window.i18nManager.t('agent.tts.editTitle');
+    if (nameInput) nameInput.value = inst.displayName;
+
+    if (typeSelect && types) {
+      typeSelect.innerHTML = '';
+      for (const t of types) {
+        const opt = document.createElement('option');
+        opt.value = t.id;
+        opt.textContent = tTTSProvider(t.id, 'name', t.name);
+        if (t.id === inst.providerId) opt.selected = true;
+        typeSelect.appendChild(opt);
+      }
+    }
+
+    const meta = types?.find((t: any) => t.id === inst.providerId);
+    renderTTSConfigFields(meta, inst.config);
+    overlay.setAttribute('data-editing-instance', inst.instanceId);
+  } else {
+    if (titleSpan) titleSpan.textContent = window.i18nManager.t('agent.tts.addTitle');
+    if (nameInput) nameInput.value = '';
+
+    if (typeSelect && types) {
+      typeSelect.innerHTML = '';
+      for (const t of types) {
+        const opt = document.createElement('option');
+        opt.value = t.id;
+        opt.textContent = tTTSProvider(t.id, 'name', t.name);
+        typeSelect.appendChild(opt);
+      }
+      if (types.length > 0) {
+        renderTTSConfigFields(types[0], undefined);
+      }
+    }
+
+    overlay.removeAttribute('data-editing-instance');
+  }
+
+  overlay.classList.remove('hidden');
+  hideTTSDialogStatus();
+
+  if ((window as any).lucide) {
+    (window as any).lucide.createIcons();
+  }
+}
+
+function hideTTSDialog(): void {
+  const overlay = document.getElementById('tts-dialog-overlay');
+  if (overlay) {
+    overlay.classList.add('hidden');
+    overlay.removeAttribute('data-editing-instance');
+  }
+}
+
+async function saveTTSDialog(): Promise<void> {
+  const overlay = document.getElementById('tts-dialog-overlay');
+  if (!overlay) return;
+
+  const typeSelect = document.getElementById('tts-form-type') as HTMLSelectElement;
+  const nameInput = document.getElementById('tts-form-name') as HTMLInputElement;
+  const providerId = typeSelect?.value;
+  const displayName = nameInput?.value.trim();
+
+  if (!displayName) {
+    showTTSDialogStatus(window.i18nManager.t('agent.tts.nameRequired'), 'error');
+    return;
+  }
+
+  const config = collectTTSConfig(providerId);
+  const editingId = overlay.getAttribute('data-editing-instance');
+
+  try {
+    if (editingId) {
+      const result = await window.electronAPI.agentUpdateTTSInstance(editingId, {
+        providerId,
+        displayName,
+        config
+      });
+      if (result.success) {
+        hideTTSDialog();
+        await refreshTTSInstances();
+      }
+    } else {
+      const instanceId = `tts-${providerId}-${Date.now()}`;
+      const result = await window.electronAPI.agentAddTTSInstance({
+        instanceId,
+        providerId,
+        displayName,
+        config
+      });
+      if (result.success) {
+        hideTTSDialog();
+        await refreshTTSInstances();
+      }
+    }
+  } catch (error) {
+    showTTSDialogStatus(`保存失败: ${error}`, 'error');
+  }
+}
+
+function showTTSDialogStatus(message: string, type: 'success' | 'error' | 'info'): void {
+  const el = document.getElementById('tts-dialog-status');
+  if (!el) return;
+  el.textContent = message;
+  el.className = `agent-provider-status ${type}`;
+  el.classList.remove('hidden');
+  if (type === 'success' || type === 'info') {
+    setTimeout(() => hideTTSDialogStatus(), 3000);
+  }
+}
+
+function hideTTSDialogStatus(): void {
+  const el = document.getElementById('tts-dialog-status');
+  if (el) el.classList.add('hidden');
+}
+
 // ==================== Function 工具管理 ====================
 
 /**
@@ -932,6 +1422,11 @@ async function initAgentToolsUI(): Promise<void> {
   if (btnRefresh) {
     btnRefresh.onclick = () => refreshToolList();
   }
+
+  // 监听后端工具变更，自动刷新列表
+  window.electronAPI.onAgentToolsChanged(() => {
+    refreshToolList();
+  });
 
   await refreshToolList();
 }
@@ -961,8 +1456,8 @@ async function refreshToolList(): Promise<void> {
       const item = document.createElement('div');
       item.className = 'agent-tool-item';
 
-      const sourceIcon = tool.source === 'mcp' ? '🔌' : '⚡';
-      const sourceLabel = tool.source === 'mcp' ? 'MCP' : 'Func';
+      const sourceIcon = tool.source === 'mcp' ? '🔌' : tool.source === 'plugin' ? '🧩' : '⚡';
+      const sourceLabel = tool.source === 'mcp' ? 'MCP' : tool.source === 'plugin' ? 'Plugin' : 'Func';
       const mcpInfo = tool.mcpServer ? ` · ${tool.mcpServer}` : '';
 
       item.innerHTML = `
@@ -1317,11 +1812,6 @@ function initAgentPluginUI(): void {
     };
   }
 
-  // 绑定配置弹窗关闭按钮
-  const btnCloseConfig = document.getElementById('btn-close-plugin-config');
-  if (btnCloseConfig) {
-    btnCloseConfig.onclick = () => hidePluginConfigDialog();
-  }
 }
 
 /**
@@ -1466,103 +1956,130 @@ async function refreshAgentPlugins(): Promise<void> {
 }
 
 /**
- * 显示插件配置弹窗
+ * 显示插件配置弹窗（模态覆盖层）
  */
 function showPluginConfigDialog(plugin: any): void {
-  const dialog = document.getElementById('agent-plugin-config-dialog');
-  const title = document.getElementById('agent-plugin-config-title');
-  const body = document.getElementById('agent-plugin-config-body');
-  if (!dialog || !title || !body) return;
-
-  title.textContent = `${plugin.name} - ${window.i18nManager.t('agent.agentPlugins.config')}`;
-  body.innerHTML = '';
-
   if (!plugin.configSchema) return;
 
-  // 渲染配置字段
+  // 移除已存在的弹窗
+  hidePluginConfigDialog();
+
+  const configTitle = `${plugin.name} - ${window.i18nManager.t('agent.agentPlugins.config')}`;
+
+  // 渲染配置字段 HTML
+  let fieldsHtml = '';
   for (const [key, field] of Object.entries(plugin.configSchema as Record<string, any>)) {
-    const div = document.createElement('div');
-    div.className = 'config-field';
-
-    const label = document.createElement('label');
-    label.textContent = field.description || key;
-    div.appendChild(label);
-
     const currentValue = plugin.config?.[key] ?? field.default;
+    let inputHtml = '';
 
     if (field.type === 'boolean') {
-      const checkbox = document.createElement('input');
-      checkbox.type = 'checkbox';
-      checkbox.checked = !!currentValue;
-      checkbox.dataset.configKey = key;
-      div.appendChild(checkbox);
+      inputHtml = `<label class="plugin-config-switch">
+        <input type="checkbox" data-config-key="${key}" ${currentValue ? 'checked' : ''}>
+        <span class="plugin-config-slider"></span>
+      </label>`;
     } else if (field.type === 'select' && field.options) {
-      const select = document.createElement('select');
-      select.dataset.configKey = key;
-      for (const opt of field.options) {
-        const option = document.createElement('option');
-        option.value = opt.value;
-        option.textContent = opt.label;
-        if (opt.value === String(currentValue)) option.selected = true;
-        select.appendChild(option);
-      }
-      div.appendChild(select);
+      const optionsHtml = field.options.map((opt: any) =>
+        `<option value="${opt.value}" ${opt.value === String(currentValue) ? 'selected' : ''}>${opt.label}</option>`
+      ).join('');
+      inputHtml = `<select class="plugin-config-input" data-config-key="${key}">${optionsHtml}</select>`;
     } else if (field.type === 'number') {
-      const input = document.createElement('input');
-      input.type = 'number';
-      input.dataset.configKey = key;
-      if (currentValue !== undefined) input.value = String(currentValue);
-      div.appendChild(input);
+      inputHtml = `<input type="number" class="plugin-config-input" data-config-key="${key}" value="${currentValue !== undefined ? currentValue : ''}">`;
+    } else if (field.type === 'string' && String(currentValue || '').length > 80) {
+      inputHtml = `<textarea class="plugin-config-textarea" data-config-key="${key}" rows="4">${currentValue ?? ''}</textarea>`;
     } else {
-      const input = document.createElement('input');
-      input.type = 'text';
-      input.dataset.configKey = key;
-      if (currentValue !== undefined) input.value = String(currentValue);
-      div.appendChild(input);
+      inputHtml = `<input type="text" class="plugin-config-input" data-config-key="${key}" value="${currentValue !== undefined ? String(currentValue).replace(/"/g, '&quot;') : ''}">`;
     }
 
-    body.appendChild(div);
+    fieldsHtml += `<div class="plugin-config-field">
+      <label class="plugin-config-label">${key}</label>
+      <div class="plugin-config-description">${field.description || ''}</div>
+      ${inputHtml}
+    </div>`;
   }
 
-  // 绑定保存按钮
-  const btnSave = document.getElementById('btn-plugin-config-save');
-  if (btnSave) {
-    btnSave.onclick = async () => {
-      const config: Record<string, unknown> = {};
-      body.querySelectorAll('[data-config-key]').forEach((el) => {
-        const key = (el as HTMLElement).dataset.configKey!;
-        if (el instanceof HTMLInputElement) {
-          if (el.type === 'checkbox') config[key] = el.checked;
-          else if (el.type === 'number') config[key] = parseFloat(el.value) || 0;
-          else config[key] = el.value;
-        } else if (el instanceof HTMLSelectElement) {
-          config[key] = el.value;
-        }
-      });
+  // 创建模态覆盖层
+  const overlay = document.createElement('div');
+  overlay.id = 'agent-plugin-config-overlay';
+  overlay.className = 'plugin-config-dialog-overlay';
+  overlay.innerHTML = `
+    <div class="plugin-config-dialog">
+      <div class="plugin-config-header">
+        <h3><i data-lucide="settings" style="width: 20px; height: 20px;"></i> ${configTitle}</h3>
+        <button class="close-btn" id="btn-agent-config-close">
+          <i data-lucide="x" style="width: 20px; height: 20px;"></i>
+        </button>
+      </div>
+      <div class="plugin-config-body">
+        <div class="plugin-config-fields">
+          ${fieldsHtml}
+        </div>
+      </div>
+      <div class="plugin-config-footer">
+        <div></div>
+        <div class="plugin-config-footer-right">
+          <button class="plugin-config-btn secondary" id="btn-agent-config-cancel">
+            ${window.i18nManager.t('settings.cancel') || '取消'}
+          </button>
+          <button class="plugin-config-btn primary" id="btn-agent-config-save">
+            ${window.i18nManager.t('agent.agentPlugins.saveConfig') || '保存配置'}
+          </button>
+        </div>
+      </div>
+    </div>
+  `;
 
-      try {
-        const result = await window.electronAPI.agentSavePluginConfig(plugin.name, config);
-        if (result.success) {
-          hidePluginConfigDialog();
-          await refreshAgentPlugins();
-        } else {
-          window.logger.error('保存插件配置失败:', result.error);
-        }
-      } catch (error) {
-        window.logger.error('保存插件配置失败:', error);
+  document.body.appendChild(overlay);
+
+  // 刷新图标
+  if (window.lucide) {
+    window.lucide.createIcons();
+  }
+
+  // 点击覆盖层关闭
+  overlay.addEventListener('click', (e) => {
+    if (e.target === overlay) hidePluginConfigDialog();
+  });
+
+  // 关闭按钮
+  document.getElementById('btn-agent-config-close')?.addEventListener('click', () => hidePluginConfigDialog());
+  document.getElementById('btn-agent-config-cancel')?.addEventListener('click', () => hidePluginConfigDialog());
+
+  // 保存按钮
+  document.getElementById('btn-agent-config-save')?.addEventListener('click', async () => {
+    const config: Record<string, unknown> = {};
+    overlay.querySelectorAll('[data-config-key]').forEach((el) => {
+      const key = (el as HTMLElement).dataset.configKey!;
+      if (el instanceof HTMLInputElement) {
+        if (el.type === 'checkbox') config[key] = el.checked;
+        else if (el.type === 'number') config[key] = parseFloat(el.value) || 0;
+        else config[key] = el.value;
+      } else if (el instanceof HTMLSelectElement) {
+        config[key] = el.value;
+      } else if (el instanceof HTMLTextAreaElement) {
+        config[key] = el.value;
       }
-    };
-  }
+    });
 
-  dialog.classList.remove('hidden');
+    try {
+      const result = await window.electronAPI.agentSavePluginConfig(plugin.name, config);
+      if (result.success) {
+        hidePluginConfigDialog();
+        await refreshAgentPlugins();
+      } else {
+        window.logger.error('保存插件配置失败:', result.error);
+      }
+    } catch (error) {
+      window.logger.error('保存插件配置失败:', error);
+    }
+  });
 }
 
 /**
  * 隐藏插件配置弹窗
  */
 function hidePluginConfigDialog(): void {
-  const dialog = document.getElementById('agent-plugin-config-dialog');
-  if (dialog) dialog.classList.add('hidden');
+  const overlay = document.getElementById('agent-plugin-config-overlay');
+  if (overlay) overlay.remove();
 }
 
 /**
@@ -1673,20 +2190,43 @@ function hideChatWindow(): void {
 /**
  * 添加聊天消息到界面
  */
-function addChatMessage(text: string, isUser: boolean, attachment?: { type: 'image' | 'file', url: string, name?: string }): void {
+function addChatMessage(text: string, isUser: boolean, options?: { attachment?: { type: 'image' | 'file', url: string, name?: string }; reasoningContent?: string }): void {
   const messagesContainer = document.getElementById('chat-messages');
   if (!messagesContainer) return;
 
   const messageDiv = document.createElement('div');
   messageDiv.className = `chat-message ${isUser ? 'user' : 'assistant'}`;
-  
+
+  // 思维链（折叠展示）
+  if (!isUser && options?.reasoningContent) {
+    const details = document.createElement('details');
+    details.className = 'reasoning-block';
+    const summary = document.createElement('summary');
+    summary.className = 'reasoning-summary';
+    const icon = document.createElement('i');
+    icon.setAttribute('data-lucide', 'brain');
+    icon.style.cssText = 'width: 13px; height: 13px;';
+    summary.appendChild(icon);
+    const label = document.createElement('span');
+    label.textContent = window.i18nManager.t('chatWindow.reasoning');
+    summary.appendChild(label);
+    details.appendChild(summary);
+    const content = document.createElement('div');
+    content.className = 'reasoning-content';
+    content.textContent = options.reasoningContent;
+    details.appendChild(content);
+    messageDiv.appendChild(details);
+  }
+
   if (text) {
     const textNode = document.createElement('div');
     textNode.textContent = text;
     messageDiv.appendChild(textNode);
   }
 
-  if (attachment) {
+  const attachment = options?.attachment;
+
+  if (attachment?.type) {
     const attachmentDiv = document.createElement('div');
     attachmentDiv.className = 'message-attachment';
 
@@ -1895,9 +2435,11 @@ function initializeChatWindow(): void {
           const isImage = file.type.startsWith('image/');
           
           addChatMessage('', true, {
-            type: isImage ? 'image' : 'file',
-            url: url,
-            name: file.name
+            attachment: {
+              type: isImage ? 'image' : 'file',
+              url: url,
+              name: file.name
+            }
           });
           
           // 发送文件数据到后端
@@ -2766,6 +3308,13 @@ window.addEventListener('beforeunload', () => {
   
   if (window.audioPlayer) {
     window.audioPlayer.stop();
+    if (window.audioPlayer.audioContext) {
+      window.audioPlayer.audioContext.close().catch(() => {});
+    }
+  }
+  
+  if (window.pluginConnector) {
+    window.pluginConnector.disconnectAll();
   }
 });
 

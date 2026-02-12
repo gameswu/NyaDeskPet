@@ -26,8 +26,13 @@ import {
   type ProviderMetadata,
   providerRegistry
 } from './provider';
+import {
+  type TTSProvider,
+  ttsProviderRegistry
+} from './tts-provider';
 import { type PipelineContext, SessionManager } from './context';
 import { toolManager, type ToolCall, type ToolResult } from './tools';
+import { agentPluginManager, type HandlerAccessor, type MessageContext, type PluginInvokeSender } from './agent-plugin';
 
 // ==================== 类型定义 ====================
 
@@ -90,6 +95,28 @@ export interface ProviderInstanceInfo {
   isPrimary: boolean;
 }
 
+/** TTS Provider 实例配置（持久化用） */
+export interface TTSProviderInstanceConfig {
+  instanceId: string;
+  providerId: string;
+  displayName: string;
+  config: ProviderConfig;
+  enabled: boolean;
+}
+
+/** TTS Provider 实例运行时状态 */
+export interface TTSProviderInstanceInfo {
+  instanceId: string;
+  providerId: string;
+  displayName: string;
+  config: ProviderConfig;
+  metadata: ProviderMetadata | undefined;
+  enabled: boolean;
+  status: 'idle' | 'connecting' | 'connected' | 'error';
+  error?: string;
+  isPrimary: boolean;
+}
+
 export class AgentHandler {
   /** 所有 Provider 实例（instanceId → 运行时） */
   private providerInstances: Map<string, {
@@ -101,6 +128,23 @@ export class AgentHandler {
 
   /** 主 LLM 实例 ID */
   private primaryInstanceId: string = '';
+
+  /** 所有 TTS Provider 实例（instanceId → 运行时） */
+  private ttsInstances: Map<string, {
+    config: TTSProviderInstanceConfig;
+    provider: TTSProvider | null;
+    status: 'idle' | 'connecting' | 'connected' | 'error';
+    error?: string;
+  }> = new Map();
+
+  /** 主 TTS 实例 ID */
+  private primaryTTSInstanceId: string = '';
+
+  /** Provider 初始化并发锁（防止同一实例被并发 initialize） */
+  private initLocks: Map<string, Promise<{ success: boolean; error?: string }>> = new Map();
+
+  /** TTS 配置持久化文件路径 */
+  private ttsConfigPath: string = '';
 
   /** 会话管理器 */
   public readonly sessions: SessionManager;
@@ -115,14 +159,33 @@ export class AgentHandler {
   /** 配置持久化文件路径 */
   private configPath: string;
 
+  // ==================== 插件调用基础设施 ====================
+
+  /** 挂起的插件调用请求（requestId → resolve/reject） */
+  private pendingPluginRequests: Map<string, {
+    resolve: (result: any) => void;
+    reject: (error: Error) => void;
+    timer: NodeJS.Timeout;
+  }> = new Map();
+
+  /** 当前活跃的 WebSocket 连接（用于插件调用） */
+  private activeWs: import('ws').WebSocket | null = null;
+  private activeSendFn: ((ws: import('ws').WebSocket, msg: object) => void) | null = null;
+
   constructor() {
     this.sessions = new SessionManager();
     // 持久化路径
     const { app } = require('electron');
-    this.configPath = require('path').join(app.getPath('userData'), 'data', 'providers.json');
+    const path = require('path');
+    this.configPath = path.join(app.getPath('userData'), 'data', 'providers.json');
+    this.ttsConfigPath = path.join(app.getPath('userData'), 'data', 'tts-providers.json');
+
+    // 注入 Handler 访问器到插件管理器
+    agentPluginManager.setHandlerAccessor(this.createHandlerAccessor());
 
     // 加载持久化配置
     this.loadConfig();
+    this.loadTTSConfig();
   }
 
   // ==================== Provider 实例管理 ====================
@@ -208,36 +271,50 @@ export class AgentHandler {
 
   /** 初始化（连接）一个 Provider 实例 */
   public async initializeProviderInstance(instanceId: string): Promise<{ success: boolean; error?: string }> {
+    // 并发锁：如果同一实例正在初始化，直接复用其 Promise
+    const pending = this.initLocks.get(instanceId);
+    if (pending) {
+      logger.info(`[AgentHandler] Provider 实例 ${instanceId} 正在初始化中，等待完成...`);
+      return pending;
+    }
+
     const entry = this.providerInstances.get(instanceId);
     if (!entry) return { success: false, error: '实例不存在' };
 
-    try {
-      // 如果已有实例，先终止
-      if (entry.provider) {
-        await entry.provider.terminate();
+    const initPromise = (async (): Promise<{ success: boolean; error?: string }> => {
+      try {
+        // 如果已有实例，先终止
+        if (entry.provider) {
+          await entry.provider.terminate();
+        }
+
+        entry.status = 'connecting';
+        entry.error = undefined;
+
+        const provider = providerRegistry.create(entry.config.providerId, entry.config.config);
+        if (!provider) {
+          throw new Error(`无法创建 Provider: ${entry.config.providerId}`);
+        }
+
+        await provider.initialize();
+        entry.provider = provider;
+        entry.status = 'connected';
+        entry.error = undefined;
+
+        logger.info(`[AgentHandler] Provider 实例已连接: ${entry.config.displayName}`);
+        return { success: true };
+      } catch (error) {
+        entry.status = 'error';
+        entry.error = (error as Error).message;
+        logger.error(`[AgentHandler] Provider 实例连接失败: ${(error as Error).message}`);
+        return { success: false, error: (error as Error).message };
+      } finally {
+        this.initLocks.delete(instanceId);
       }
+    })();
 
-      entry.status = 'connecting';
-      entry.error = undefined;
-
-      const provider = providerRegistry.create(entry.config.providerId, entry.config.config);
-      if (!provider) {
-        throw new Error(`无法创建 Provider: ${entry.config.providerId}`);
-      }
-
-      await provider.initialize();
-      entry.provider = provider;
-      entry.status = 'connected';
-      entry.error = undefined;
-
-      logger.info(`[AgentHandler] Provider 实例已连接: ${entry.config.displayName}`);
-      return { success: true };
-    } catch (error) {
-      entry.status = 'error';
-      entry.error = (error as Error).message;
-      logger.error(`[AgentHandler] Provider 实例连接失败: ${(error as Error).message}`);
-      return { success: false, error: (error as Error).message };
-    }
+    this.initLocks.set(instanceId, initPromise);
+    return initPromise;
   }
 
   /** 断开 Provider 实例连接 */
@@ -525,16 +602,407 @@ export class AgentHandler {
     }
   }
 
+  // ==================== TTS Provider 实例管理 ====================
+
+  /** 添加一个 TTS Provider 实例 */
+  public async addTTSInstance(instanceConfig: TTSProviderInstanceConfig): Promise<boolean> {
+    if (!ttsProviderRegistry.has(instanceConfig.providerId)) {
+      logger.error(`[AgentHandler] TTS Provider 类型不存在: ${instanceConfig.providerId}`);
+      return false;
+    }
+
+    if (instanceConfig.enabled === undefined) {
+      instanceConfig.enabled = true;
+    }
+
+    this.ttsInstances.set(instanceConfig.instanceId, {
+      config: instanceConfig,
+      provider: null,
+      status: 'idle'
+    });
+
+    // 如果是第一个 TTS 实例，自动设为主 TTS
+    if (this.ttsInstances.size === 1) {
+      this.primaryTTSInstanceId = instanceConfig.instanceId;
+    }
+
+    this.saveTTSConfig();
+    logger.info(`[AgentHandler] 添加 TTS 实例: ${instanceConfig.displayName} (${instanceConfig.providerId})`);
+    return true;
+  }
+
+  /** 移除一个 TTS Provider 实例 */
+  public async removeTTSInstance(instanceId: string): Promise<boolean> {
+    const entry = this.ttsInstances.get(instanceId);
+    if (!entry) return false;
+
+    if (entry.provider) {
+      try { await entry.provider.terminate(); } catch {}
+    }
+
+    this.ttsInstances.delete(instanceId);
+
+    if (this.primaryTTSInstanceId === instanceId) {
+      const firstKey = this.ttsInstances.keys().next().value;
+      this.primaryTTSInstanceId = firstKey || '';
+    }
+
+    this.saveTTSConfig();
+    logger.info(`[AgentHandler] 移除 TTS 实例: ${instanceId}`);
+    return true;
+  }
+
+  /** 更新 TTS Provider 实例配置 */
+  public async updateTTSInstance(instanceId: string, config: Partial<TTSProviderInstanceConfig>): Promise<boolean> {
+    const entry = this.ttsInstances.get(instanceId);
+    if (!entry) return false;
+
+    if (config.config) {
+      entry.config.config = { ...entry.config.config, ...config.config };
+    }
+    if (config.displayName) {
+      entry.config.displayName = config.displayName;
+    }
+    if (config.providerId) {
+      entry.config.providerId = config.providerId;
+    }
+
+    if (entry.provider) {
+      try { await entry.provider.terminate(); } catch {}
+      entry.provider = null;
+      entry.status = 'idle';
+    }
+
+    this.saveTTSConfig();
+    return true;
+  }
+
+  /** 初始化（连接）一个 TTS Provider 实例 */
+  public async initializeTTSInstance(instanceId: string): Promise<{ success: boolean; error?: string }> {
+    // 并发锁：复用已有的初始化 Promise
+    const lockKey = `tts:${instanceId}`;
+    const pending = this.initLocks.get(lockKey);
+    if (pending) {
+      logger.info(`[AgentHandler] TTS 实例 ${instanceId} 正在初始化中，等待完成...`);
+      return pending;
+    }
+
+    const entry = this.ttsInstances.get(instanceId);
+    if (!entry) return { success: false, error: '实例不存在' };
+
+    const initPromise = (async (): Promise<{ success: boolean; error?: string }> => {
+      try {
+        if (entry.provider) {
+          await entry.provider.terminate();
+        }
+
+        entry.status = 'connecting';
+        entry.error = undefined;
+
+        const provider = ttsProviderRegistry.create(entry.config.providerId, entry.config.config);
+        if (!provider) {
+          throw new Error(`无法创建 TTS Provider: ${entry.config.providerId}`);
+        }
+
+        await provider.initialize();
+        entry.provider = provider;
+        entry.status = 'connected';
+        entry.error = undefined;
+
+        logger.info(`[AgentHandler] TTS 实例已连接: ${entry.config.displayName}`);
+        return { success: true };
+      } catch (error) {
+        entry.status = 'error';
+        entry.error = (error as Error).message;
+        logger.error(`[AgentHandler] TTS 实例连接失败: ${(error as Error).message}`);
+        return { success: false, error: (error as Error).message };
+      } finally {
+        this.initLocks.delete(lockKey);
+      }
+    })();
+
+    this.initLocks.set(lockKey, initPromise);
+    return initPromise;
+  }
+
+  /** 断开 TTS Provider 实例连接 */
+  public async disconnectTTSInstance(instanceId: string): Promise<{ success: boolean; error?: string }> {
+    const entry = this.ttsInstances.get(instanceId);
+    if (!entry) return { success: false, error: '实例不存在' };
+
+    try {
+      if (entry.provider) {
+        await entry.provider.terminate();
+        entry.provider = null;
+      }
+      entry.status = 'idle';
+      entry.error = undefined;
+      logger.info(`[AgentHandler] TTS 实例已断开: ${entry.config.displayName}`);
+      return { success: true };
+    } catch (error) {
+      entry.status = 'error';
+      entry.error = (error as Error).message;
+      return { success: false, error: (error as Error).message };
+    }
+  }
+
+  /** 启用 TTS Provider 实例 */
+  public async enableTTSInstance(instanceId: string): Promise<{ success: boolean; error?: string }> {
+    const entry = this.ttsInstances.get(instanceId);
+    if (!entry) return { success: false, error: '实例不存在' };
+
+    entry.config.enabled = true;
+    this.saveTTSConfig();
+    logger.info(`[AgentHandler] TTS 实例已启用: ${entry.config.displayName}`);
+    return this.initializeTTSInstance(instanceId);
+  }
+
+  /** 禁用 TTS Provider 实例 */
+  public async disableTTSInstance(instanceId: string): Promise<{ success: boolean; error?: string }> {
+    const entry = this.ttsInstances.get(instanceId);
+    if (!entry) return { success: false, error: '实例不存在' };
+
+    entry.config.enabled = false;
+
+    if (entry.provider) {
+      try { await entry.provider.terminate(); } catch {}
+      entry.provider = null;
+    }
+    entry.status = 'idle';
+    entry.error = undefined;
+
+    this.saveTTSConfig();
+    logger.info(`[AgentHandler] TTS 实例已禁用: ${entry.config.displayName}`);
+    return { success: true };
+  }
+
+  /** 设置主 TTS */
+  public setPrimaryTTS(instanceId: string): boolean {
+    if (!this.ttsInstances.has(instanceId)) return false;
+    this.primaryTTSInstanceId = instanceId;
+    this.saveTTSConfig();
+    logger.info(`[AgentHandler] 已设置主 TTS: ${instanceId}`);
+    return true;
+  }
+
+  /** 获取主 TTS 的 Provider 实例 */
+  public getPrimaryTTSProvider(): TTSProvider | null {
+    if (!this.primaryTTSInstanceId) return null;
+    const entry = this.ttsInstances.get(this.primaryTTSInstanceId);
+    return entry?.provider || null;
+  }
+
+  /** 获取主 TTS instanceId */
+  public getPrimaryTTSInstanceId(): string {
+    return this.primaryTTSInstanceId;
+  }
+
+  /** 测试指定 TTS Provider 实例 */
+  public async testTTSInstance(instanceId: string): Promise<{ success: boolean; error?: string }> {
+    const entry = this.ttsInstances.get(instanceId);
+    if (!entry) return { success: false, error: '实例不存在' };
+
+    if (entry.provider) {
+      return entry.provider.test();
+    }
+
+    let tempProvider: TTSProvider | null = null;
+    try {
+      tempProvider = ttsProviderRegistry.create(entry.config.providerId, entry.config.config);
+      if (!tempProvider) {
+        return { success: false, error: `无法创建 TTS Provider: ${entry.config.providerId}` };
+      }
+      await tempProvider.initialize();
+      const result = await tempProvider.test();
+      return result;
+    } catch (error) {
+      return { success: false, error: (error as Error).message };
+    } finally {
+      if (tempProvider) {
+        try { await tempProvider.terminate(); } catch {}
+      }
+    }
+  }
+
+  /** 获取所有 TTS 实例信息 */
+  public getAllTTSInstances(): TTSProviderInstanceInfo[] {
+    const result: TTSProviderInstanceInfo[] = [];
+    for (const [instanceId, entry] of this.ttsInstances) {
+      result.push({
+        instanceId,
+        providerId: entry.config.providerId,
+        displayName: entry.config.displayName,
+        config: entry.config.config,
+        metadata: ttsProviderRegistry.get(entry.config.providerId),
+        enabled: entry.config.enabled !== false,
+        status: entry.status,
+        error: entry.error,
+        isPrimary: instanceId === this.primaryTTSInstanceId
+      });
+    }
+    return result;
+  }
+
+  /** 获取所有可用 TTS Provider 类型 */
+  public getAvailableTTSProviders(): ProviderMetadata[] {
+    return ttsProviderRegistry.getAll();
+  }
+
+  /** 获取 TTS 音色列表 */
+  public async getTTSVoices(instanceId: string): Promise<Array<{ id: string; name: string; description?: string }>> {
+    const entry = this.ttsInstances.get(instanceId);
+    if (!entry?.provider) return [];
+
+    try {
+      const voices = await entry.provider.getVoices();
+      return voices.map(v => ({ id: v.id, name: v.name, description: v.description }));
+    } catch (error) {
+      logger.error(`[AgentHandler] 获取 TTS 音色列表失败: ${(error as Error).message}`);
+      return [];
+    }
+  }
+
+  // ==================== TTS 自动连接 ====================
+
+  private async autoConnectTTSEnabled(): Promise<void> {
+    for (const [instanceId, entry] of this.ttsInstances) {
+      if (entry.config.enabled) {
+        this.initializeTTSInstance(instanceId).catch(err => {
+          logger.warn(`[AgentHandler] 自动连接 TTS 失败 (${entry.config.displayName}): ${err}`);
+        });
+      }
+    }
+  }
+
+  // ==================== TTS 持久化 ====================
+
+  private loadTTSConfig(): void {
+    const fs = require('fs');
+    const path = require('path');
+    try {
+      const dir = path.dirname(this.ttsConfigPath);
+      if (!fs.existsSync(dir)) {
+        fs.mkdirSync(dir, { recursive: true });
+      }
+
+      if (fs.existsSync(this.ttsConfigPath)) {
+        const data = JSON.parse(fs.readFileSync(this.ttsConfigPath, 'utf-8'));
+        if (data.instances && Array.isArray(data.instances)) {
+          for (const inst of data.instances) {
+            if (inst.enabled === undefined) {
+              inst.enabled = true;
+            }
+            this.ttsInstances.set(inst.instanceId, {
+              config: inst,
+              provider: null,
+              status: 'idle'
+            });
+          }
+        }
+        if (data.primaryInstanceId) {
+          this.primaryTTSInstanceId = data.primaryInstanceId;
+        }
+        logger.info(`[AgentHandler] 已加载 ${this.ttsInstances.size} 个 TTS Provider 配置`);
+        this.autoConnectTTSEnabled();
+      }
+    } catch (error) {
+      logger.warn(`[AgentHandler] 加载 TTS Provider 配置失败: ${error}`);
+    }
+  }
+
+  private saveTTSConfig(): void {
+    const fs = require('fs');
+    try {
+      const instances: TTSProviderInstanceConfig[] = [];
+      for (const [, entry] of this.ttsInstances) {
+        instances.push(entry.config);
+      }
+      const data = {
+        primaryInstanceId: this.primaryTTSInstanceId,
+        instances
+      };
+      fs.writeFileSync(this.ttsConfigPath, JSON.stringify(data, null, 2), 'utf-8');
+    } catch (error) {
+      logger.error(`[AgentHandler] 保存 TTS Provider 配置失败: ${error}`);
+    }
+  }
+
+  /**
+   * 使用主 TTS Provider 合成音频并通过 WebSocket 流式发送
+   * LLM 回复后自动调用，将文字转语音推送到前端
+   */
+  public async synthesizeAndStream(text: string, ctx: PipelineContext): Promise<void> {
+    const ttsProvider = this.getPrimaryTTSProvider();
+    if (!ttsProvider) {
+      return; // 没有 TTS Provider 就静默跳过
+    }
+
+    try {
+      const format = ttsProvider.getConfig().format as string || 'mp3';
+      const mimeType = ttsProvider.getMimeType(format);
+
+      // 发送 audio_stream_start
+      ctx.send({
+        type: 'audio_stream_start',
+        data: {
+          mimeType,
+          text
+        }
+      });
+
+      // 流式合成并发送 audio_chunk
+      let sequence = 0;
+      for await (const chunk of ttsProvider.synthesizeStream({ text, format: format as any })) {
+        ctx.send({
+          type: 'audio_chunk',
+          data: {
+            chunk: chunk.toString('base64'),
+            sequence: sequence++
+          }
+        });
+      }
+
+      // 发送 audio_stream_end
+      ctx.send({
+        type: 'audio_stream_end',
+        data: { complete: true }
+      });
+
+      logger.info(`[AgentHandler] TTS 合成完成，共 ${sequence} 个分片`);
+    } catch (error) {
+      logger.error(`[AgentHandler] TTS 合成失败: ${(error as Error).message}`);
+      // 如果已经发送了 start，需要发送 end 通知前端
+      ctx.send({
+        type: 'audio_stream_end',
+        data: { complete: false, error: (error as Error).message }
+      });
+    }
+  }
+
   // ==================== 消息处理方法 ====================
 
   /**
-   * 处理用户文本输入 — 核心逻辑
-   * 通过 LLM Provider 生成回复，支持 Function Calling 工具循环
+   * 处理用户文本输入 — 核心逻辑（Core Agent 增强版）
+   * 
+   * 如果有活跃的 handler 插件，委托给插件处理；
+   * 否则使用默认逻辑（简单的 LLM 调用 + 文本回复）。
    */
   public async processUserInput(ctx: PipelineContext): Promise<void> {
     const text = ctx.message.text || '';
     logger.info(`[AgentHandler] 用户输入: ${text}`);
 
+    // 更新活跃连接（用于插件调用等场景）
+    this.setActiveConnection(ctx.ws, (_ws, msg) => ctx.send(msg));
+
+    // 尝试委托给 handler 插件
+    const handlerPlugin = agentPluginManager.getHandlerPlugin();
+    if (handlerPlugin?.onUserInput) {
+      const mctx = this.createMessageContext(ctx);
+      const handled = await handlerPlugin.onUserInput(mctx);
+      if (handled) return;
+    }
+
+    // === 默认逻辑（无 handler 插件时的回退） ===
     const primaryProvider = this.getPrimaryProvider();
     if (!primaryProvider) {
       ctx.addReply({
@@ -544,59 +1012,33 @@ export class AgentHandler {
       return;
     }
 
-    // 从会话历史构建消息
-    const history = this.sessions.getHistory(ctx.sessionId);
-
-    // 构建系统提示词
-    let systemPrompt = '你是一个桌面宠物助手。';
-    if (this.characterInfo?.useCustom && this.characterInfo.personality) {
-      systemPrompt = this.characterInfo.personality;
-    }
-
-    // 追加用户消息到历史
     this.sessions.addMessage(ctx.sessionId, { role: 'user', content: text });
 
-    // 构建 LLM 请求
+    const history = this.sessions.getHistory(ctx.sessionId);
     const request: LLMRequest = {
-      messages: [
-        ...history,
-        { role: 'user', content: text }
-      ],
-      systemPrompt,
+      messages: history,
+      systemPrompt: this.characterInfo?.personality || '你是一个可爱的桌面宠物。',
       sessionId: ctx.sessionId
     };
 
-    // 如果有已启用的工具，添加到请求中
     if (this.enableToolCalling && toolManager.hasEnabledTools()) {
       request.tools = toolManager.toOpenAITools();
       request.toolChoice = 'auto';
     }
 
     try {
-      // 工具循环：反复调用 LLM 直到不再请求工具
       const response = await this.executeWithToolLoop(request, ctx, primaryProvider);
-
-      // 追加助手回复到历史
-      this.sessions.addMessage(ctx.sessionId, {
-        role: 'assistant',
-        content: response.text
-      });
+      this.sessions.addMessage(ctx.sessionId, { role: 'assistant', content: response.text });
 
       ctx.addReply({
         type: 'dialogue',
-        data: {
-          text: response.text,
-          duration: Math.max(3000, response.text.length * 100)
-        }
+        data: { text: response.text, duration: Math.min(30000, Math.max(3000, response.text.length * 80)) }
       });
     } catch (error) {
       logger.error('[AgentHandler] LLM 调用失败:', error);
       ctx.addReply({
         type: 'dialogue',
-        data: {
-          text: `[内置Agent] AI 回复失败: ${(error as Error).message}`,
-          duration: 5000
-        }
+        data: { text: `[内置Agent] AI 回复失败: ${(error as Error).message}`, duration: 5000 }
       });
     }
   }
@@ -686,6 +1128,12 @@ export class AgentHandler {
       hitAreas: this.modelInfo.hitAreas,
       paramCount: this.modelInfo.availableParameters?.length || 0
     });
+
+    // 委托给 handler 插件
+    const handlerPlugin = agentPluginManager.getHandlerPlugin();
+    if (handlerPlugin?.onModelInfo) {
+      handlerPlugin.onModelInfo(this.createMessageContext(ctx));
+    }
   }
 
   /**
@@ -695,41 +1143,35 @@ export class AgentHandler {
     const data = ctx.message.data as TapEventData;
     logger.info(`[AgentHandler] 触碰事件: ${data.hitArea}`);
 
-    // 如果有主 LLM Provider 且不是 Echo，让 LLM 决定反应
+    // 尝试委托给 handler 插件
+    const handlerPlugin = agentPluginManager.getHandlerPlugin();
+    if (handlerPlugin?.onTapEvent) {
+      const mctx = this.createMessageContext(ctx);
+      const handled = await handlerPlugin.onTapEvent(mctx);
+      if (handled) return;
+    }
+
+    // 默认反应
     const primaryProvider = this.getPrimaryProvider();
     const primaryEntry = this.primaryInstanceId ? this.providerInstances.get(this.primaryInstanceId) : null;
     if (primaryProvider && primaryEntry?.config.providerId !== 'echo') {
-      const prompt = `用户触碰了角色的 "${data.hitArea}" 部位，请给出一个简短可爱的反应（1-2句话）。`;
       try {
         const response = await primaryProvider.chat({
-          messages: [{ role: 'user', content: prompt }],
+          messages: [{ role: 'user', content: `用户触碰了你的 "${data.hitArea}" 部位，请给出简短反应。` }],
           systemPrompt: this.characterInfo?.personality || '你是一个可爱的桌面宠物。',
           maxTokens: 100
         });
-        ctx.addReply({
-          type: 'dialogue',
-          data: { text: response.text, duration: 3000 }
-        });
+        ctx.addReply({ type: 'dialogue', data: { text: response.text, duration: 3000 } });
         return;
       } catch (error) {
         logger.warn('[AgentHandler] 触碰 LLM 调用失败，使用默认反应');
       }
     }
 
-    // 默认反应（无 LLM 或 LLM 失败时）
     const reactions: Record<string, string> = {
-      'Head': '头被摸了喵~',
-      'Body': '不要乱摸喵！',
-      'Face': '脸好痒喵~'
+      'Head': '头被摸了喵~', 'Body': '不要乱摸喵！', 'Face': '脸好痒喵~'
     };
-
-    ctx.addReply({
-      type: 'dialogue',
-      data: {
-        text: reactions[data.hitArea] || '被点到了喵~',
-        duration: 3000
-      }
-    });
+    ctx.addReply({ type: 'dialogue', data: { text: reactions[data.hitArea] || '被点到了喵~', duration: 3000 } });
   }
 
   /**
@@ -741,6 +1183,12 @@ export class AgentHandler {
       useCustom: this.characterInfo.useCustom,
       name: this.characterInfo.name
     });
+
+    // 委托给 handler 插件
+    const handlerPlugin = agentPluginManager.getHandlerPlugin();
+    if (handlerPlugin?.onCharacterInfo) {
+      handlerPlugin.onCharacterInfo(this.createMessageContext(ctx));
+    }
   }
 
   /**
@@ -750,23 +1198,180 @@ export class AgentHandler {
     const data = ctx.message.data;
     logger.info(`[AgentHandler] 收到文件: ${data?.fileName}`);
 
-    // TODO: 将文件内容传给 LLM（如多模态模型）处理
     ctx.addReply({
       type: 'dialogue',
-      data: {
-        text: `[内置Agent] 收到文件: ${data?.fileName}`,
-        duration: 3000
-      }
+      data: { text: `[内置Agent] 收到文件: ${data?.fileName}`, duration: 3000 }
     });
   }
 
   /**
    * 处理插件响应
+   * 将插件响应与挂起的请求匹配，解析 Promise
    */
   public processPluginResponse(ctx: PipelineContext): void {
     const data = ctx.message.data;
-    logger.info(`[AgentHandler] 插件响应: ${data?.pluginId} - ${data?.action}`);
-    // TODO: 根据插件响应结果执行后续逻辑（如让 LLM 继续处理）
+    if (!data?.requestId) {
+      logger.warn('[AgentHandler] 插件响应缺少 requestId');
+      return;
+    }
+
+    const requestId = data.requestId as string;
+    const pending = this.pendingPluginRequests.get(requestId);
+
+    if (!pending) {
+      // 也通知 handler 插件（如果有）
+      const handlerPlugin = agentPluginManager.getHandlerPlugin();
+      if (handlerPlugin?.onPluginResponse) {
+        handlerPlugin.onPluginResponse(this.createMessageContext(ctx));
+      }
+      return;
+    }
+
+    clearTimeout(pending.timer);
+    this.pendingPluginRequests.delete(requestId);
+    logger.info(`[AgentHandler] 插件响应已匹配: ${data.pluginId} - ${data.action} (requestId: ${requestId})`);
+
+    pending.resolve({
+      success: data.success ?? false,
+      result: data.result,
+      error: data.error
+    });
+  }
+
+  /**
+   * 处理前端插件状态报告
+   * 前端在插件连接/断开时发送 plugin_status 消息，通知后端当前已连接的插件列表。
+   * 后端将这些信息传递给 handler 插件的 registerConnectedPlugins，
+   * 使 plugin-tool-bridge 将前端插件能力注册为 Function Calling 工具。
+   */
+  public processPluginStatus(ctx: PipelineContext): void {
+    const data = ctx.message.data;
+    if (!data?.plugins || !Array.isArray(data.plugins)) {
+      logger.warn('[AgentHandler] plugin_status 消息格式不正确');
+      return;
+    }
+
+    const plugins = data.plugins as Array<{ pluginId: string; pluginName: string; capabilities: string[] }>;
+    logger.info(`[AgentHandler] 收到前端插件状态: ${plugins.length} 个插件`);
+
+    // 通过 HandlerAccessor 传递给 handler 插件
+    const handlerPlugin = agentPluginManager.getHandlerPlugin();
+    if (handlerPlugin && typeof (handlerPlugin as any).registerConnectedPlugins === 'function') {
+      (handlerPlugin as any).registerConnectedPlugins(plugins);
+    }
+  }
+
+  // ==================== WebSocket 连接管理 ====================
+
+  /**
+   * 设置活跃的 WebSocket 连接（用于插件调用）
+   */
+  public setActiveConnection(ws: import('ws').WebSocket, sendFn: (ws: import('ws').WebSocket, msg: object) => void): void {
+    this.activeWs = ws;
+    this.activeSendFn = sendFn;
+  }
+
+  /**
+   * 清除活跃连接（WebSocket 断开时调用）
+   * 同时 reject 所有挂起的插件请求
+   */
+  public clearActiveConnection(ws: import('ws').WebSocket): void {
+    if (this.activeWs === ws) {
+      this.activeWs = null;
+      this.activeSendFn = null;
+
+      // 清理所有挂起的插件请求
+      for (const [requestId, pending] of this.pendingPluginRequests) {
+        clearTimeout(pending.timer);
+        pending.reject(new Error('WebSocket 连接已断开'));
+        this.pendingPluginRequests.delete(requestId);
+      }
+      logger.info('[AgentHandler] 活跃连接已清除，挂起的插件请求已拒绝');
+    }
+  }
+
+  /**
+   * 创建插件调用发送器
+   * 发送 plugin_invoke 到前端，返回 Promise 等待 plugin_response
+   */
+  public createPluginInvokeSender(): PluginInvokeSender {
+    return (pluginId: string, action: string, params: Record<string, unknown>, timeout: number = 30000) => {
+      return new Promise((resolve, reject) => {
+        if (!this.activeWs || !this.activeSendFn) {
+          reject(new Error('没有活跃的 WebSocket 连接'));
+          return;
+        }
+
+        const requestId = `req_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+
+        const timer = setTimeout(() => {
+          this.pendingPluginRequests.delete(requestId);
+          reject(new Error(`插件调用超时 (${timeout}ms): ${pluginId}.${action}`));
+        }, timeout);
+
+        this.pendingPluginRequests.set(requestId, { resolve, reject, timer });
+
+        this.activeSendFn!(this.activeWs!, {
+          type: 'plugin_invoke',
+          data: { requestId, pluginId, action, params, timeout }
+        });
+
+        logger.debug(`[AgentHandler] 已发送插件调用: ${pluginId}.${action} (requestId: ${requestId})`);
+      });
+    };
+  }
+
+  // ==================== 内部工具方法 ====================
+
+  /**
+   * 从 PipelineContext 创建 MessageContext（供插件使用）
+   */
+  private createMessageContext(ctx: PipelineContext): MessageContext {
+    return {
+      message: ctx.message,
+      sessionId: ctx.sessionId,
+      addReply: (msg) => ctx.addReply(msg),
+      send: (msg) => ctx.send(msg),
+      ws: ctx.ws
+    };
+  }
+
+  /**
+   * 创建 HandlerAccessor（注入到插件管理器）
+   */
+  private createHandlerAccessor(): HandlerAccessor {
+    const handler = this;
+    return {
+      getSessions: () => handler.sessions,
+      getModelInfo: () => handler.modelInfo,
+      getCharacterInfo: () => handler.characterInfo,
+      synthesizeAndStream: (text: string, ctx: MessageContext) => handler.synthesizeAndStream(text, ctx as any),
+      hasTTS: () => handler.getPrimaryTTSProvider() !== null,
+      getPluginInvokeSender: () => (handler.activeWs && handler.activeSendFn) ? handler.createPluginInvokeSender() : null,
+      isToolCallingEnabled: () => handler.enableToolCalling,
+      getOpenAITools: () => (handler.enableToolCalling && toolManager.hasEnabledTools()) ? toolManager.toOpenAITools() : undefined,
+      hasEnabledTools: () => toolManager.hasEnabledTools(),
+      executeWithToolLoop: (request: LLMRequest, ctx: MessageContext) => {
+        const provider = handler.getPrimaryProvider();
+        if (!provider) throw new Error('未配置主 LLM Provider');
+        // 创建一个轻量的 PipelineContext 代理用于工具循环
+        const pctx = {
+          sessionId: ctx.sessionId,
+          send: (msg: object) => ctx.send(msg)
+        } as any;
+        return handler.executeWithToolLoop(request, pctx, provider);
+      },
+      registerConnectedPlugins: (plugins: Array<{ pluginId: string; pluginName: string; capabilities: string[] }>) => {
+        // 委托给 handler 插件的 registerConnectedPlugins 方法
+        const handlerPlugin = agentPluginManager.getHandlerPlugin();
+        if (handlerPlugin && typeof (handlerPlugin as any).registerConnectedPlugins === 'function') {
+          (handlerPlugin as any).registerConnectedPlugins(plugins);
+          logger.info(`[AgentHandler] 已注册 ${plugins.length} 个前端插件到 handler 插件`);
+        } else {
+          logger.warn('[AgentHandler] 无 handler 插件或 handler 插件不支持 registerConnectedPlugins');
+        }
+      }
+    };
   }
 
   // ==================== 状态访问 ====================

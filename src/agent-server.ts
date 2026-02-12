@@ -134,6 +134,7 @@ export class AgentServer {
           ws.on('close', () => {
             const sid = this.sessionMap.get(ws);
             this.clients.delete(ws);
+            this.handler.clearActiveConnection(ws);
             if (sid) {
               this.handler.sessions.removeSession(sid);
             }

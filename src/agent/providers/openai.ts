@@ -123,8 +123,8 @@ interface OpenAIModelsResponse {
  * 支持标准 OpenAI Chat Completions API
  */
 export class OpenAIProvider extends LLMProvider {
-  private client: AxiosInstance | null = null;
-  private cachedModels: string[] = [];
+  protected client: AxiosInstance | null = null;
+  protected cachedModels: string[] = [];
 
   constructor(config: ProviderConfig) {
     super(config);
@@ -183,7 +183,7 @@ export class OpenAIProvider extends LLMProvider {
   /**
    * 确保客户端已初始化
    */
-  private ensureClient(): AxiosInstance {
+  protected ensureClient(): AxiosInstance {
     if (!this.client) {
       throw new Error('OpenAI Provider 未初始化，请先调用 initialize()');
     }

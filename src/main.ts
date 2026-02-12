@@ -114,12 +114,22 @@ function createWindow(): void {
   // 设置窗口可拖拽
   mainWindow.setIgnoreMouseEvents(false);
 
-  // 窗口关闭时隐藏而不是退出（除非在开发模式）
+  // 窗口关闭时隐藏而不是退出（除非在开发模式或正在退出）
   mainWindow.on('close', (event) => {
     if (!isDev && !isQuitting) {
       event.preventDefault();
       mainWindow?.hide();
+    } else if (isDev) {
+      // 开发模式：关闭 detached DevTools 窗口，防止残留
+      if (mainWindow?.webContents.isDevToolsOpened()) {
+        mainWindow.webContents.closeDevTools();
+      }
     }
+  });
+
+  // 窗口销毁后清空引用
+  mainWindow.on('closed', () => {
+    mainWindow = null;
   });
 }
 
@@ -372,14 +382,29 @@ app.whenReady().then(async () => {
   createTray();
 
   app.on('activate', () => {
-    if (BrowserWindow.getAllWindows().length === 0) {
+    // 正在退出时不响应 activate
+    if (isQuitting) return;
+
+    if (mainWindow) {
+      // 窗口存在但被隐藏，重新显示
+      mainWindow.show();
+      mainWindow.focus();
+    } else if (BrowserWindow.getAllWindows().length === 0) {
+      // 窗口已销毁（正常不应到达此处），重建窗口和托盘
       createWindow();
+      if (!tray) {
+        createTray();
+      }
     }
   });
 });
 
 app.on('window-all-closed', () => {
-  // 不自动退出，保持托盘运行
+  if (isDev) {
+    // 开发模式：所有窗口关闭后直接退出
+    app.quit();
+  }
+  // 生产模式：不自动退出，保持托盘运行
   // 用户需要通过托盘菜单退出
 });
 
@@ -394,10 +419,6 @@ app.on('will-quit', () => {
     tray.destroy();
     tray = null;
   }
-  
-  // 关闭日志系统
-  logger.info('应用退出');
-  logger.close();
 });
 
 // IPC 通信处理
@@ -1000,7 +1021,13 @@ ipcMain.handle('plugin:stop', async (_event: IpcMainInvokeEvent, args: { name: s
 });
 
 // 应用退出时清理所有插件进程和内置 Agent
-app.on('before-quit', async () => {
+// 注意：before-quit 不等待 async 回调，因此使用 will-quit + 同步阻塞
+let cleanupDone = false;
+app.on('will-quit', (event) => {
+  if (cleanupDone) return; // 防止 app.exit() 重入
+  cleanupDone = true;
+
+  // 同步清理插件进程
   logger.info('应用退出，清理插件进程');
   pluginProcesses.forEach((process, name) => {
     if (process && !process.killed) {
@@ -1010,35 +1037,56 @@ app.on('before-quit', async () => {
   });
   pluginProcesses.clear();
 
-  // 停止内置 Agent 服务器
-  if (agentServer.isRunning()) {
-    logger.info('停止内置 Agent 服务器');
-    await agentServer.stop();
-  }
+  // 异步清理需要阻塞退出
+  event.preventDefault();
 
-  // 关闭 MCP 连接
-  try {
-    await mcpManager.terminate();
-    logger.info('MCP 管理器已关闭');
-  } catch (error) {
-    logger.error('MCP 管理器关闭失败:', error);
-  }
+  // 安全超时：无论清理是否完成，5秒后强制退出
+  const forceExitTimer = setTimeout(() => {
+    logger.warn('清理超时，强制退出');
+    logger.close();
+    process.exit(0);
+  }, 5000);
+  // 不让此 timer 阻止进程退出
+  forceExitTimer.unref();
+  
+  const cleanup = async () => {
+    // 停止内置 Agent 服务器
+    if (agentServer.isRunning()) {
+      logger.info('停止内置 Agent 服务器');
+      await agentServer.stop();
+    }
 
-  // 销毁 Agent 插件
-  try {
-    await agentPluginManager.destroyAll();
-    logger.info('Agent 插件管理器已关闭');
-  } catch (error) {
-    logger.error('Agent 插件管理器关闭失败:', error);
-  }
+    // 关闭 MCP 连接
+    try {
+      await mcpManager.terminate();
+      logger.info('MCP 管理器已关闭');
+    } catch (error) {
+      logger.error('MCP 管理器关闭失败:', error);
+    }
 
-  // 关闭数据库
-  try {
-    agentDb.close();
-    logger.info('Agent 数据库已关闭');
-  } catch (error) {
-    logger.error('Agent 数据库关闭失败:', error);
-  }
+    // 销毁 Agent 插件
+    try {
+      await agentPluginManager.destroyAll();
+      logger.info('Agent 插件管理器已关闭');
+    } catch (error) {
+      logger.error('Agent 插件管理器关闭失败:', error);
+    }
+
+    // 关闭数据库
+    try {
+      agentDb.close();
+      logger.info('Agent 数据库已关闭');
+    } catch (error) {
+      logger.error('Agent 数据库关闭失败:', error);
+    }
+  };
+
+  cleanup().finally(() => {
+    clearTimeout(forceExitTimer);
+    logger.info('应用退出');
+    logger.close();
+    app.exit(0);
+  });
 });
 
 /**
@@ -1334,7 +1382,76 @@ ipcMain.handle('agent:get-pipeline', () => {
   };
 });
 
+// ==================== TTS Provider 管理 IPC ====================
+
+ipcMain.handle('agent:get-tts-providers', () => {
+  const handler = agentServer.getHandler();
+  return {
+    providerTypes: handler.getAvailableTTSProviders(),
+    instances: handler.getAllTTSInstances()
+  };
+});
+
+ipcMain.handle('agent:add-tts-instance', async (_event, instanceConfig: any) => {
+  const handler = agentServer.getHandler();
+  const success = await handler.addTTSInstance(instanceConfig);
+  return { success };
+});
+
+ipcMain.handle('agent:remove-tts-instance', async (_event, instanceId: string) => {
+  const handler = agentServer.getHandler();
+  const success = await handler.removeTTSInstance(instanceId);
+  return { success };
+});
+
+ipcMain.handle('agent:update-tts-instance', async (_event, instanceId: string, config: any) => {
+  const handler = agentServer.getHandler();
+  const success = await handler.updateTTSInstance(instanceId, config);
+  return { success };
+});
+
+ipcMain.handle('agent:init-tts-instance', async (_event, instanceId: string) => {
+  const handler = agentServer.getHandler();
+  return handler.initializeTTSInstance(instanceId);
+});
+
+ipcMain.handle('agent:test-tts-instance', async (_event, instanceId: string) => {
+  const handler = agentServer.getHandler();
+  return handler.testTTSInstance(instanceId);
+});
+
+ipcMain.handle('agent:set-primary-tts', async (_event, instanceId: string) => {
+  const handler = agentServer.getHandler();
+  const success = handler.setPrimaryTTS(instanceId);
+  return { success };
+});
+
+ipcMain.handle('agent:disconnect-tts-instance', async (_event, instanceId: string) => {
+  const handler = agentServer.getHandler();
+  return handler.disconnectTTSInstance(instanceId);
+});
+
+ipcMain.handle('agent:enable-tts-instance', async (_event, instanceId: string) => {
+  const handler = agentServer.getHandler();
+  return handler.enableTTSInstance(instanceId);
+});
+
+ipcMain.handle('agent:disable-tts-instance', async (_event, instanceId: string) => {
+  const handler = agentServer.getHandler();
+  return handler.disableTTSInstance(instanceId);
+});
+
+ipcMain.handle('agent:get-tts-voices', async (_event, instanceId: string) => {
+  const handler = agentServer.getHandler();
+  return handler.getTTSVoices(instanceId);
+});
+
 // ==================== 工具管理 IPC ====================
+
+// 工具变更时通知渲染进程刷新列表
+toolManager.onChange(() => {
+  mainWindow?.webContents.send('agent-tools-changed');
+});
 
 /**
  * 获取所有工具列表

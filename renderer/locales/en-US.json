@@ -22,7 +22,8 @@
     "attach": "Attach File",
     "close": "Close",
     "conversations": "Conversations",
-    "newChat": "New Chat"
+    "newChat": "New Chat",
+    "reasoning": "Thinking"
   },
   "settings": {
     "title": "Settings",
@@ -34,6 +35,7 @@
       "logs": "Logs",
       "about": "About"
     },
+    "cancel": "Cancel",
     "model": {
       "title": "Live2D Model",
       "path": "Model Path",
@@ -204,6 +206,176 @@
       "statusConnected": "Connected",
       "statusDisabled": "Disabled",
       "statusError": "Error"
+    },
+    "providers": {
+      "openai": {
+        "name": "OpenAI / Compatible API",
+        "description": "Supports OpenAI API and all compatible interfaces (DeepSeek, Moonshot, Groq, SiliconFlow, etc.)",
+        "fields": {
+          "apiKey": {
+            "label": "API Key",
+            "placeholder": "sk-...",
+            "description": "API key from OpenAI or compatible provider"
+          },
+          "baseUrl": {
+            "label": "API Base URL",
+            "placeholder": "https://api.openai.com/v1",
+            "description": "Compatible API address (e.g. https://api.deepseek.com/v1)"
+          },
+          "model": {
+            "label": "Model",
+            "placeholder": "gpt-4o-mini",
+            "description": "Model name to use"
+          },
+          "timeout": {
+            "label": "Timeout (seconds)",
+            "description": "Request timeout duration"
+          },
+          "proxy": {
+            "label": "Proxy Address",
+            "placeholder": "http://127.0.0.1:7890",
+            "description": "HTTP/HTTPS proxy (if needed)"
+          }
+        }
+      },
+      "deepseek": {
+        "name": "DeepSeek",
+        "description": "DeepSeek official API with deepseek-chat and deepseek-reasoner models, 128K context, Function Calling support",
+        "fields": {
+          "apiKey": {
+            "label": "API Key",
+            "placeholder": "sk-...",
+            "description": "API key from DeepSeek platform (https://platform.deepseek.com)"
+          },
+          "baseUrl": {
+            "label": "API Base URL",
+            "description": "DeepSeek API address, usually no need to change"
+          },
+          "model": {
+            "label": "Model",
+            "description": "deepseek-chat for general conversation, deepseek-reasoner for complex reasoning tasks",
+            "options": {
+              "deepseek-chat": "deepseek-chat",
+              "deepseek-reasoner": "deepseek-reasoner"
+            }
+          },
+          "timeout": {
+            "label": "Timeout (seconds)",
+            "description": "Request timeout, consider increasing for reasoner model"
+          },
+          "proxy": {
+            "label": "Proxy Address",
+            "placeholder": "http://127.0.0.1:7890",
+            "description": "HTTP/HTTPS proxy (if needed)"
+          }
+        }
+      },
+      "openrouter": {
+        "name": "OpenRouter",
+        "description": "Access 400+ AI models (OpenAI, Claude, Gemini, Llama, etc.) via OpenRouter unified gateway with automatic failover, multimodal and Function Calling support",
+        "fields": {
+          "apiKey": {
+            "label": "API Key",
+            "placeholder": "sk-or-v1-...",
+            "description": "API key from OpenRouter (https://openrouter.ai/keys)"
+          },
+          "model": {
+            "label": "Model",
+            "placeholder": "openai/gpt-4o-mini",
+            "description": "Model ID in provider/model format (e.g. anthropic/claude-sonnet-4, google/gemini-2.5-flash). Full list at https://openrouter.ai/models"
+          },
+          "timeout": {
+            "label": "Timeout (seconds)",
+            "description": "Request timeout, consider increasing for reasoning models"
+          },
+          "proxy": {
+            "label": "Proxy Address",
+            "placeholder": "http://127.0.0.1:7890",
+            "description": "HTTP/HTTPS proxy (if needed)"
+          }
+        }
+      },
+      "echo": {
+        "name": "Echo (Built-in)",
+        "description": "Echoes input messages without calling any AI service. For testing or as fallback."
+      }
+    },
+    "tts": {
+      "title": "TTS Provider",
+      "add": "Add TTS",
+      "addTitle": "Add TTS Provider",
+      "editTitle": "Edit TTS Provider",
+      "type": "TTS Type",
+      "displayName": "Display Name",
+      "displayNamePlaceholder": "e.g. My Fish Audio",
+      "save": "Save",
+      "cancel": "Cancel",
+      "empty": "No TTS instances yet. Click the button above to add one.",
+      "primary": "Primary TTS",
+      "setPrimary": "Click to set as primary TTS",
+      "voice": "Voice",
+      "nameRequired": "Please enter a display name",
+      "removeConfirm": "Are you sure you want to remove this TTS instance?",
+      "testSuccess": "TTS connection test succeeded",
+      "testFailed": "TTS connection test failed"
+    },
+    "ttsProviders": {
+      "fish-audio": {
+        "name": "Fish Audio",
+        "description": "High-quality AI speech synthesis with 400+ pre-built voices, custom voice cloning, streaming, emotion tags, multi-language",
+        "fields": {
+          "apiKey": {
+            "label": "API Key",
+            "placeholder": "your_api_key",
+            "description": "API key from Fish Audio (https://fish.audio/account/api-keys)"
+          },
+          "voiceId": {
+            "label": "Voice ID",
+            "placeholder": "802e3bc2b27e49c2995d23ef70e6ac89",
+            "description": "Voice model ID, find at https://fish.audio/discovery. Leave empty for default voice"
+          },
+          "model": {
+            "label": "TTS Model",
+            "description": "TTS engine model version",
+            "options": {
+              "s1": "S1 (Latest, Recommended)",
+              "speech-1.6": "Speech 1.6 (Stable)",
+              "speech-1.5": "Speech 1.5 (Legacy)"
+            }
+          },
+          "format": {
+            "label": "Audio Format",
+            "description": "Output audio format",
+            "options": {
+              "mp3": "MP3",
+              "wav": "WAV",
+              "opus": "Opus",
+              "pcm": "PCM"
+            }
+          },
+          "latency": {
+            "label": "Latency Mode",
+            "description": "Trade-off between latency and quality",
+            "options": {
+              "normal": "Normal (Best Quality)",
+              "balanced": "Balanced (Low Latency)"
+            }
+          },
+          "speed": {
+            "label": "Speed",
+            "description": "Speech speed, range 0.5 - 2.0"
+          },
+          "timeout": {
+            "label": "Timeout (seconds)",
+            "description": "Request timeout duration"
+          },
+          "proxy": {
+            "label": "Proxy",
+            "placeholder": "http://127.0.0.1:7890",
+            "description": "HTTP/HTTPS proxy (if needed)"
+          }
+        }
+      }
     },
     "tools": {
       "title": "Function Tools",

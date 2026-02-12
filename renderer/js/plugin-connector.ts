@@ -206,6 +206,7 @@ class PluginConnector {
       if (result.success) {
         plugin.processId = null;
         plugin.status = 'stopped';
+        plugin.reconnectAttempts = 0;
         window.logger?.info('插件系统：插件已停止', { name });
         this.updatePluginUI();
         return true;
@@ -248,6 +249,9 @@ class PluginConnector {
         // 请求插件元数据
         await this.requestMetadata(name);
         this.updatePluginUI();
+
+        // 通知后端 Agent 当前已连接的前端插件
+        this.notifyPluginStatusToBackend();
       };
 
       plugin.ws.onmessage = (event: MessageEvent) => {
@@ -300,6 +304,40 @@ class PluginConnector {
     
     this.updatePluginUI();
     window.logger?.info('插件系统：WebSocket已断开', { name });
+
+    // 通知后端 Agent 当前已连接的前端插件
+    this.notifyPluginStatusToBackend();
+  }
+
+  /**
+   * 通知后端 Agent 当前已连接的前端插件状态
+   * 发送 plugin_status 消息，包含所有已连接插件的 ID、名称和能力列表。
+   * 后端 handler 会将这些信息传递给 plugin-tool-bridge 插件，
+   * 将前端插件能力注册为 Function Calling 工具。
+   */
+  private notifyPluginStatusToBackend(): void {
+    if (!window.backendClient) {
+      return;
+    }
+
+    const connectedPlugins: Array<{ pluginId: string; pluginName: string; capabilities: string[] }> = [];
+
+    for (const [name, info] of this.plugins) {
+      if (info.status === 'connected' && info.ws && info.ws.readyState === WebSocket.OPEN) {
+        connectedPlugins.push({
+          pluginId: info.manifest.id || name,
+          pluginName: name,
+          capabilities: info.manifest.capabilities || []
+        });
+      }
+    }
+
+    window.backendClient.sendMessage({
+      type: 'plugin_status',
+      data: { plugins: connectedPlugins }
+    });
+
+    window.logger?.info('插件系统：已通知后端插件状态', { count: connectedPlugins.length });
   }
 
   /**

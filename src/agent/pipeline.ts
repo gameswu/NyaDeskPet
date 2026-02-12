@@ -176,6 +176,10 @@ export class ProcessStage extends Stage {
         this.handler.processPluginResponse(ctx);
         break;
 
+      case 'plugin_status':
+        this.handler.processPluginStatus(ctx);
+        break;
+
       default:
         logger.debug(`[Process] 未处理的消息类型: ${type}`);
     }

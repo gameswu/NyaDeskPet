@@ -1,0 +1,8 @@
+{
+  "name": "protocol-adapter",
+  "author": "gameswu",
+  "desc": "协议适配插件 — 将 LLM 的文本回复解析为前端期望的结构化消息格式",
+  "version": "1.0.0",
+  "entry": "main.js",
+  "autoActivate": true
+}

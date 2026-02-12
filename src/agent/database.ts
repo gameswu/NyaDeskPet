@@ -52,8 +52,8 @@ export interface ToolDefinitionRecord {
   description: string;
   /** JSON Schema 格式的参数定义 */
   parameters: string;
-  /** 工具来源：'function' | 'mcp' */
-  source: 'function' | 'mcp';
+  /** 工具来源：'function' | 'mcp' | 'plugin' */
+  source: 'function' | 'mcp' | 'plugin';
   /** MCP 服务器名（source=mcp 时） */
   mcpServer: string | null;
   enabled: boolean;
@@ -62,6 +62,9 @@ export interface ToolDefinitionRecord {
 }
 
 // ==================== 数据库管理器 ====================
+
+/** 当前 Schema 版本，每次修改表结构时递增 */
+const CURRENT_SCHEMA_VERSION = 1;
 
 export class AgentDatabase {
   private db: Database.Database | null = null;
@@ -94,8 +97,9 @@ export class AgentDatabase {
     this.db.pragma('journal_mode = WAL');
     this.db.pragma('foreign_keys = ON');
 
-    // 创建表结构
+    // 创建表结构并执行迁移
     this.createTables();
+    this.runMigrations();
   }
 
   /** 关闭数据库 */
@@ -155,7 +159,7 @@ export class AgentDatabase {
         name TEXT NOT NULL UNIQUE,
         description TEXT DEFAULT '',
         parameters TEXT DEFAULT '{}',
-        source TEXT NOT NULL DEFAULT 'function' CHECK(source IN ('function', 'mcp')),
+        source TEXT NOT NULL DEFAULT 'function' CHECK(source IN ('function', 'mcp', 'plugin')),
         mcp_server TEXT,
         enabled INTEGER DEFAULT 1,
         created_at INTEGER NOT NULL,
@@ -167,6 +171,81 @@ export class AgentDatabase {
     `);
 
     logger.info('[AgentDB] 表结构已就绪');
+  }
+
+  // ==================== Schema 迁移 ====================
+
+  /**
+   * 获取当前数据库的 Schema 版本
+   */
+  private getSchemaVersion(): number {
+    const db = this.ensureDb();
+    // 检查 schema_version 表是否存在
+    const tableExists = db.prepare(
+      `SELECT COUNT(*) as count FROM sqlite_master WHERE type='table' AND name='schema_version'`
+    ).get() as { count: number };
+
+    if (tableExists.count === 0) {
+      // 首次运行或旧版本升级：创建 schema_version 表
+      db.exec(`
+        CREATE TABLE schema_version (
+          version INTEGER NOT NULL,
+          applied_at INTEGER NOT NULL
+        );
+      `);
+      // 已有表结构视为 version 0（旧版无迁移系统）
+      db.prepare('INSERT INTO schema_version (version, applied_at) VALUES (?, ?)').run(0, Date.now());
+      return 0;
+    }
+
+    const row = db.prepare('SELECT version FROM schema_version ORDER BY version DESC LIMIT 1').get() as { version: number } | undefined;
+    return row?.version ?? 0;
+  }
+
+  /**
+   * 设置 Schema 版本
+   */
+  private setSchemaVersion(version: number): void {
+    const db = this.ensureDb();
+    db.prepare('INSERT INTO schema_version (version, applied_at) VALUES (?, ?)').run(version, Date.now());
+  }
+
+  /**
+   * 执行数据库迁移
+   * 在这里按版本号递增定义所有迁移步骤
+   */
+  private runMigrations(): void {
+    const db = this.ensureDb();
+    const currentVersion = this.getSchemaVersion();
+
+    if (currentVersion >= CURRENT_SCHEMA_VERSION) {
+      logger.info(`[AgentDB] Schema 版本 ${currentVersion}，无需迁移`);
+      return;
+    }
+
+    logger.info(`[AgentDB] 开始迁移：v${currentVersion} → v${CURRENT_SCHEMA_VERSION}`);
+
+    // 所有迁移在一个事务中执行
+    const migrate = db.transaction(() => {
+      // ===== Migration v0 → v1: 初始版本，建立基线 =====
+      if (currentVersion < 1) {
+        // v1 为当前表结构的基线版本，无需额外 DDL
+        // 未来新增迁移示例：
+        // db.exec(`ALTER TABLE conversations ADD COLUMN archived INTEGER DEFAULT 0`);
+        logger.info('[AgentDB] 迁移 v0 → v1: 建立基线');
+      }
+
+      // ===== 未来迁移在此处追加 =====
+      // if (currentVersion < 2) {
+      //   db.exec(`ALTER TABLE ... ADD COLUMN ...`);
+      //   logger.info('[AgentDB] 迁移 v1 → v2: ...');
+      // }
+
+      this.setSchemaVersion(CURRENT_SCHEMA_VERSION);
+    });
+
+    migrate();
+    logger.info(`[AgentDB] 迁移完成：当前版本 v${CURRENT_SCHEMA_VERSION}`);
   }
 
   // ==================== 对话 CRUD ====================
@@ -365,7 +444,7 @@ export class AgentDatabase {
     name: string;
     description: string;
     parameters: Record<string, unknown>;
-    source: 'function' | 'mcp';
+    source: 'function' | 'mcp' | 'plugin';
     mcpServer?: string;
     enabled?: boolean;
   }): void {

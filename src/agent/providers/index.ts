@@ -11,6 +11,12 @@ export { EchoProvider, ECHO_METADATA } from './echo';
 // ==================== OpenAI 兼容 Provider ====================
 export { OpenAIProvider, OPENAI_METADATA } from './openai';
 
+// ==================== DeepSeek Provider ====================
+export { DeepSeekProvider, DEEPSEEK_METADATA } from './deepseek';
+
+// ==================== OpenRouter Provider ====================
+export { OpenRouterProvider, OPENROUTER_METADATA } from './openrouter';
+
 // ==================== 后续可添加更多 Provider ====================
 // export { AnthropicProvider, ANTHROPIC_METADATA } from './anthropic';
 // export { OllamaProvider, OLLAMA_METADATA } from './ollama';

@@ -28,6 +28,7 @@ import * as path from 'path';
 import { app } from 'electron';
 import { toolManager, type ToolSchema, type ToolHandler } from './tools';
 import type { LLMRequest, LLMResponse } from './provider';
+import type { SessionManager, OutgoingMessage } from './context';
 
 // ==================== 类型定义 ====================
 
@@ -55,6 +56,12 @@ export interface AgentPluginMetadata {
   repo?: string;
   /** 入口文件（默认 main.js） */
   entry?: string;
+  /** 是否为消息处理器插件（拦截 user_input、tap_event 等核心消息处理） */
+  handlerPlugin?: boolean;
+  /** 是否在加载后自动激活 */
+  autoActivate?: boolean;
+  /** 依赖的插件名称列表（将按顺序在此插件之前激活） */
+  dependencies?: string[];
 }
 
 /** 插件配置 Schema 字段 */
@@ -87,6 +94,14 @@ export interface AgentPluginInfo {
 }
 
 /** 插件上下文（传递给插件实例） */
+/** 插件调用发送器（发送 plugin_invoke 到前端，等待 plugin_response） */
+export type PluginInvokeSender = (
+  pluginId: string,
+  action: string,
+  params: Record<string, unknown>,
+  timeout?: number
+) => Promise<{ success: boolean; result?: any; error?: string }>;
+
 export interface AgentPluginContext {
   /** 注册工具 */
   registerTool(schema: ToolSchema, handler: ToolHandler): void;
@@ -118,6 +133,31 @@ export interface AgentPluginContext {
    * @returns LLM 响应
    */
   callProvider(instanceId: string, request: LLMRequest): Promise<LLMResponse>;
+
+  // ====== Handler 插件扩展能力 ======
+
+  /** 获取会话管理器 */
+  getSessions(): SessionManager;
+  /** 获取当前模型信息 */
+  getModelInfo(): any | null;
+  /** 获取当前角色信息 */
+  getCharacterInfo(): any | null;
+  /** 使用主 TTS Provider 合成音频并流式推送到前端 */
+  synthesizeAndStream(text: string, ctx: MessageContext): Promise<void>;
+  /** 是否有已连接的 TTS Provider */
+  hasTTS(): boolean;
+  /** 获取插件调用发送器（用于调用前端插件） */
+  getPluginInvokeSender(): PluginInvokeSender | null;
+  /** 工具系统是否启用 */
+  isToolCallingEnabled(): boolean;
+  /** 获取 OpenAI 格式的工具列表 */
+  getOpenAITools(): any[] | undefined;
+  /** 检查是否有已注册工具 */
+  hasEnabledTools(): boolean;
+  /** 获取其他插件的实例（用于插件间服务调用） */
+  getPluginInstance(pluginName: string): AgentPlugin | null;
+  /** 执行含工具循环的 LLM 调用（自动处理 tool_calls → 执行 → 继续） */
+  executeWithToolLoop(request: LLMRequest, ctx: MessageContext): Promise<LLMResponse>;
 }
 
 // ==================== 插件基类 ====================
@@ -127,6 +167,23 @@ export interface AgentPluginContext {
  * 
  * 所有 Agent 插件都应继承此类并实现生命周期方法。
  */
+/**
+ * 消息上下文（传递给插件的消息处理钩子）
+ * 提供消息相关操作，如添加回复、发送消息等
+ */
+export interface MessageContext {
+  /** 原始消息 */
+  message: { type: string; text?: string; data?: any; timestamp?: number };
+  /** 会话 ID */
+  sessionId: string;
+  /** 添加回复到缓冲（Respond 阶段统一发送） */
+  addReply(msg: OutgoingMessage): void;
+  /** 立即发送消息（不经过缓冲，用于流式场景） */
+  send(msg: object): void;
+  /** WebSocket 连接引用 */
+  ws: any;
+}
+
 export abstract class AgentPlugin {
   /** 插件上下文 */
   protected ctx!: AgentPluginContext;
@@ -141,6 +198,25 @@ export abstract class AgentPlugin {
 
   /** 销毁（插件卸载前调用） */
   async terminate(): Promise<void> {}
+
+  // ====== 消息处理钩子（handlerPlugin 专用） ======
+  // 返回 true 表示已处理，handler 不再执行默认逻辑
+  // 返回 false 或不实现则 handler 执行默认逻辑
+
+  /** 处理用户文本输入 */
+  async onUserInput?(mctx: MessageContext): Promise<boolean>;
+
+  /** 处理触碰事件 */
+  async onTapEvent?(mctx: MessageContext): Promise<boolean>;
+
+  /** 处理模型信息更新 */
+  onModelInfo?(mctx: MessageContext): boolean;
+
+  /** 处理角色信息更新 */
+  onCharacterInfo?(mctx: MessageContext): boolean;
+
+  /** 处理插件响应 */
+  onPluginResponse?(mctx: MessageContext): boolean;
 }
 
 // ==================== 内部记录 ====================
@@ -173,6 +249,32 @@ export interface ProviderAccessor {
   callProvider(instanceId: string, request: LLMRequest): Promise<LLMResponse>;
 }
 
+/** Handler 访问器接口（为 handlerPlugin 提供深度访问） */
+export interface HandlerAccessor {
+  /** 获取会话管理器 */
+  getSessions(): SessionManager;
+  /** 获取模型信息 */
+  getModelInfo(): any | null;
+  /** 获取角色信息 */
+  getCharacterInfo(): any | null;
+  /** TTS 合成并推流 */
+  synthesizeAndStream(text: string, ctx: MessageContext): Promise<void>;
+  /** 是否有可用的 TTS Provider */
+  hasTTS(): boolean;
+  /** 获取插件调用发送器 */
+  getPluginInvokeSender(): PluginInvokeSender | null;
+  /** 是否启用了工具调用 */
+  isToolCallingEnabled(): boolean;
+  /** 获取 OpenAI 格式的工具列表 */
+  getOpenAITools(): any[] | undefined;
+  /** 是否有已注册的工具 */
+  hasEnabledTools(): boolean;
+  /** 执行含工具循环的 LLM 调用 */
+  executeWithToolLoop(request: LLMRequest, ctx: MessageContext): Promise<LLMResponse>;
+  /** 注册已连接的前端插件（触发 plugin-tool-bridge 工具注册） */
+  registerConnectedPlugins(plugins: Array<{ pluginId: string; pluginName: string; capabilities: string[] }>): void;
+}
+
 export class AgentPluginManager {
   private plugins: Map<string, PluginRecord> = new Map();
   /** 插件源码目录 */
@@ -181,6 +283,10 @@ export class AgentPluginManager {
   private pluginsDataDir: string;
   /** Provider 访问器（由外部注入，避免循环依赖） */
   private providerAccessor: ProviderAccessor | null = null;
+  /** Handler 访问器（由外部注入，为 handlerPlugin 提供深度访问） */
+  private handlerAccessor: HandlerAccessor | null = null;
+  /** 当前激活的 handler 插件名称 */
+  private activeHandlerPluginName: string | null = null;
 
   constructor() {
     // 插件源码目录：应用根目录/agent-plugins/
@@ -196,6 +302,35 @@ export class AgentPluginManager {
   setProviderAccessor(accessor: ProviderAccessor): void {
     this.providerAccessor = accessor;
     logger.info('[AgentPluginManager] Provider 访问器已注入');
+  }
+
+  /**
+   * 注入 Handler 访问器
+   * 为 handlerPlugin 提供会话管理、TTS、插件调用等深度访问能力
+   */
+  setHandlerAccessor(accessor: HandlerAccessor): void {
+    this.handlerAccessor = accessor;
+    logger.info('[AgentPluginManager] Handler 访问器已注入');
+  }
+
+  /**
+   * 获取当前激活的 handler 插件实例
+   * handler 会调用此方法来委托消息处理
+   */
+  getHandlerPlugin(): AgentPlugin | null {
+    if (!this.activeHandlerPluginName) return null;
+    const record = this.plugins.get(this.activeHandlerPluginName);
+    if (!record || record.status !== 'active' || !record.instance) return null;
+    return record.instance;
+  }
+
+  /**
+   * 获取指定插件实例（用于插件间服务调用）
+   */
+  getPluginInstance(name: string): AgentPlugin | null {
+    const record = this.plugins.get(name);
+    if (!record || record.status !== 'active' || !record.instance) return null;
+    return record.instance;
   }
 
   /**
@@ -226,6 +361,89 @@ export class AgentPluginManager {
     }
 
     logger.info(`[AgentPluginManager] 已加载 ${this.plugins.size} 个插件`);
+
+    // 自动激活标记了 autoActivate 的插件（按依赖顺序）
+    await this.autoActivatePlugins();
+  }
+
+  /**
+   * 自动激活标记了 autoActivate 的插件
+   * 按依赖关系排序，确保被依赖的插件先激活
+   */
+  private async autoActivatePlugins(): Promise<void> {
+    // 收集需要自动激活的插件
+    const toActivate: string[] = [];
+    for (const [name, record] of this.plugins) {
+      if (record.metadata.autoActivate && record.status !== 'active') {
+        toActivate.push(name);
+      }
+    }
+
+    if (toActivate.length === 0) return;
+
+    // 拓扑排序：按依赖关系确定激活顺序
+    let sorted: string[];
+    try {
+      sorted = this.topologicalSort(toActivate);
+    } catch (error) {
+      logger.error(`[AgentPluginManager] 插件依赖排序失败: ${error}`);
+      // 循环依赖时回退到原始顺序，尽力激活
+      sorted = toActivate;
+    }
+
+    for (const name of sorted) {
+      try {
+        await this.activatePlugin(name);
+        logger.info(`[AgentPluginManager] 自动激活插件: ${name}`);
+      } catch (error) {
+        logger.error(`[AgentPluginManager] 自动激活插件 ${name} 失败: ${error}`);
+      }
+    }
+  }
+
+  /**
+   * 拓扑排序：按依赖关系排序插件名称
+   * 使用 visiting 集合检测循环依赖（DFS 灰白黑三色标记法）
+   */
+  private topologicalSort(names: string[]): string[] {
+    const nameSet = new Set(names);
+    const visited = new Set<string>();   // 已完成（黑色）
+    const visiting = new Set<string>();  // 正在访问（灰色，用于检测环）
+    const result: string[] = [];
+
+    const visit = (name: string, chain: string[]) => {
+      if (visited.has(name)) return;
+
+      if (visiting.has(name)) {
+        // 检测到循环依赖：chain 中从 name 开始到当前形成环
+        const cycleStart = chain.indexOf(name);
+        const cycle = chain.slice(cycleStart).concat(name);
+        logger.error(`[AgentPluginManager] 检测到循环依赖: ${cycle.join(' → ')}`);
+        throw new Error(`插件循环依赖: ${cycle.join(' → ')}`);
+      }
+
+      visiting.add(name);
+
+      // 获取依赖
+      const record = this.plugins.get(name);
+      if (record?.metadata.dependencies) {
+        for (const dep of record.metadata.dependencies) {
+          if (nameSet.has(dep)) {
+            visit(dep, [...chain, name]);
+          }
+        }
+      }
+
+      visiting.delete(name);
+      visited.add(name);
+      result.push(name);
+    };
+
+    for (const name of names) {
+      visit(name, []);
+    }
+
+    return result;
   }
 
   /**
@@ -348,6 +566,12 @@ export class AgentPluginManager {
       record.status = 'active';
       record.error = undefined;
 
+      // 如果是 handler 插件，记录为当前活跃的 handler 插件
+      if (record.metadata.handlerPlugin) {
+        this.activeHandlerPluginName = name;
+        logger.info(`[AgentPluginManager] 已设置 handler 插件: ${name}`);
+      }
+
       logger.info(`[AgentPluginManager] 插件 ${name} 已激活`);
     } catch (error) {
       record.status = 'error';
@@ -383,6 +607,12 @@ export class AgentPluginManager {
     record.instance = null;
     record.status = 'loaded';
     record.error = undefined;
+
+    // 如果停用的是 handler 插件，清除跟踪
+    if (this.activeHandlerPluginName === name) {
+      this.activeHandlerPluginName = null;
+      logger.info(`[AgentPluginManager] handler 插件已清除: ${name}`);
+    }
 
     logger.info(`[AgentPluginManager] 插件 ${name} 已停用`);
   }
@@ -534,7 +764,7 @@ export class AgentPluginManager {
     return {
       registerTool: (schema: ToolSchema, handler: ToolHandler) => {
         const toolId = `plugin_${pluginName}_${schema.name}`;
-        toolManager.registerFunction(schema, handler, { id: toolId });
+        toolManager.registerFunction(schema, handler, { id: toolId, source: 'plugin' });
         record.registeredToolIds.push(toolId);
       },
 
@@ -593,6 +823,63 @@ export class AgentPluginManager {
         }
         logger.info(`[Plugin:${pluginName}] 调用 Provider: ${instanceId}`);
         return manager.providerAccessor.callProvider(instanceId, request);
+      },
+
+      // ====== Handler 扩展能力（handlerPlugin 专用） ======
+
+      getSessions: (): SessionManager => {
+        if (!manager.handlerAccessor) {
+          throw new Error('Handler 访问器未注入');
+        }
+        return manager.handlerAccessor.getSessions();
+      },
+
+      getModelInfo: () => {
+        return manager.handlerAccessor?.getModelInfo() ?? null;
+      },
+
+      getCharacterInfo: () => {
+        return manager.handlerAccessor?.getCharacterInfo() ?? null;
+      },
+
+      synthesizeAndStream: async (text: string, ctx: MessageContext): Promise<void> => {
+        if (!manager.handlerAccessor) {
+          throw new Error('Handler 访问器未注入');
+        }
+        return manager.handlerAccessor.synthesizeAndStream(text, ctx);
+      },
+
+      hasTTS: (): boolean => {
+        return manager.handlerAccessor?.hasTTS() ?? false;
+      },
+
+      getPluginInvokeSender: (): PluginInvokeSender | null => {
+        return manager.handlerAccessor?.getPluginInvokeSender() ?? null;
+      },
+
+      isToolCallingEnabled: (): boolean => {
+        return manager.handlerAccessor?.isToolCallingEnabled() ?? false;
+      },
+
+      getOpenAITools: (): any[] | undefined => {
+        return manager.handlerAccessor?.getOpenAITools();
+      },
+
+      hasEnabledTools: (): boolean => {
+        return manager.handlerAccessor?.hasEnabledTools() ?? false;
+      },
+
+      // ====== 插件间协作 ======
+
+      getPluginInstance: (name: string): AgentPlugin | null => {
+        return manager.getPluginInstance(name);
+      },
+
+      executeWithToolLoop: async (request: LLMRequest, ctx: MessageContext): Promise<LLMResponse> => {
+        if (!manager.handlerAccessor) {
+          throw new Error('Handler 访问器未注入，无法执行工具循环');
+        }
+        return manager.handlerAccessor.executeWithToolLoop(request, ctx);
       }
     };
   }

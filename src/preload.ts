@@ -1,125 +1,9 @@
 import { contextBridge, ipcRenderer, IpcRendererEvent } from 'electron';
 
-// 更新检查结果类型
-export interface UpdateCheckResult {
-  hasUpdate: boolean;
-  currentVersion: string;
-  latestVersion?: string;
-  releaseUrl?: string;
-  releaseName?: string;
-  releaseNotes?: string;
-  publishedAt?: string;
-  error?: string;
-}
-
-// 定义暴露给渲染进程的 API 类型
-export interface ElectronAPI {
-  // 窗口控制
-  minimizeWindow: () => Promise<void>;
-  closeWindow: () => Promise<void>;
-  showWindow: () => Promise<void>;
-  hideWindow: () => Promise<void>;
-  toggleWindow: () => Promise<void>;
-  setIgnoreMouseEvents: (ignore: boolean, options?: { forward?: boolean }) => Promise<void>;
-  getWindowPosition: () => Promise<{ x: number; y: number }>;
-  getCursorScreenPoint: () => Promise<{ x: number; y: number }>;
-  
-  // 消息通信
-  sendMessage: (message: unknown) => Promise<{ success: boolean; message: string }>;
-  
-  // UI状态更新
-  updateUIState: (state: { uiVisible?: boolean; chatOpen?: boolean }) => void;
-  
-  // 文件选择
-  selectModelFile: () => Promise<string | null>;
-  
-  // 更新检查
-  checkUpdate: (updateSource: string) => Promise<UpdateCheckResult>;
-  openExternal: (url: string) => Promise<void>;
-  getAppVersion: () => Promise<string>;
-  
-  // ASR 服务
-  asrInitialize: () => Promise<{ success: boolean }>;
-  asrIsReady: () => Promise<{ ready: boolean }>;
-  asrRecognize: (audioData: string) => Promise<{ success: boolean; text?: string; confidence?: number; error?: string }>;
-  
-  // 日志系统
-  loggerUpdateConfig: (config: any) => Promise<{ success: boolean }>;
-  loggerGetConfig: () => Promise<any>;
-  loggerGetFiles: () => Promise<Array<{ name: string; path: string; size: number; mtime: Date; isCurrent: boolean }>>;
-  loggerDeleteFile: (fileName: string) => Promise<{ success: boolean }>;
-  loggerDeleteAll: () => Promise<{ success: true; count: number }>;
-  loggerOpenDirectory: () => Promise<{ success: boolean }>;
-  loggerLog: (level: string, message: string, data?: any) => void;
-  
-  // 开机自启动
-  setAutoLaunch: (enable: boolean) => Promise<{ success: boolean }>;
-  getAutoLaunch: () => Promise<{ enabled: boolean }>;
-  
-  // 终端插件
-  terminalExecute: (options: any) => Promise<any>;
-  terminalGetSessions: () => Promise<any[]>;
-  terminalCloseSession: (sessionId: string) => Promise<{ success: boolean }>;
-  terminalSendInput: (sessionId: string, input: string) => Promise<{ success: boolean }>;
-  terminalResize: (sessionId: string, cols: number, rows: number) => Promise<{ success: boolean }>;
-  terminalGetCwd: (sessionId: string) => Promise<{ cwd: string | null }>;
-  
-  // UI自动化插件
-  uiCaptureScreen: (options?: any) => Promise<any>;
-  uiMouseClick: (options: any) => Promise<{ success: boolean; error?: string }>;
-  uiMouseMove: (options: any) => Promise<{ success: boolean; error?: string }>;
-  uiMouseDrag: (options: any) => Promise<{ success: boolean; error?: string }>;
-  uiGetMousePosition: () => Promise<{ x: number; y: number }>;
-  uiKeyboardType: (options: any) => Promise<{ success: boolean; error?: string }>;
-  uiKeyboardPress: (options: any) => Promise<{ success: boolean; error?: string }>;
-  uiMouseScroll: (deltaX: number, deltaY: number) => Promise<{ success: boolean; error?: string }>;
-  uiGetScreenSize: () => Promise<{ width: number; height: number }>;
-  uiSetMouseSpeed: (speed: number) => Promise<{ success: boolean }>;
-  
-  // 监听来自主进程的消息
-  onBackendMessage: (callback: (data: unknown) => void) => void;
-  onVoicePlay: (callback: (data: unknown) => void) => void;
-  onLive2dCommand: (callback: (data: unknown) => void) => void;
-  onOpenSettings: (callback: () => void) => void;
-  onOpenPlugins: (callback: () => void) => void;
-  onOpenChat: (callback: () => void) => void;
-  onToggleUI: (callback: () => void) => void;
-  
-  // 内置 Agent 管理
-  agentStart: () => Promise<any>;
-  agentStop: () => Promise<any>;
-  agentGetStatus: () => Promise<any>;
-  agentGetUrl: () => Promise<{ wsUrl: string; httpUrl: string }>;
-  onOpenAgent: (callback: () => void) => void;
-  onAgentStatusChanged: (callback: (status: any) => void) => void;
-  notifyBackendModeChanged: (mode: 'builtin' | 'custom') => void;
-  
-  // 工具管理
-  agentGetTools: () => Promise<any[]>;
-  agentSetToolEnabled: (toolId: string, enabled: boolean) => Promise<{ success: boolean }>;
-  agentDeleteTool: (toolId: string) => Promise<{ success: boolean }>;
-  agentGetToolStats: () => Promise<{ total: number; enabled: number; function: number; mcp: number }>;
-  agentSetToolCallingEnabled: (enabled: boolean) => Promise<{ success: boolean }>;
-  
-  // MCP 管理
-  agentGetMCPServers: () => Promise<{ configs: any[]; statuses: any[] }>;
-  agentAddMCPServer: (config: any) => Promise<{ success: boolean; error?: string }>;
-  agentRemoveMCPServer: (name: string) => Promise<{ success: boolean; error?: string }>;
-  agentConnectMCPServer: (name: string) => Promise<{ success: boolean; error?: string }>;
-  agentDisconnectMCPServer: (name: string) => Promise<{ success: boolean; error?: string }>;
-  
-  // Agent 插件管理
-  agentGetPlugins: () => Promise<any[]>;
-  agentActivatePlugin: (name: string) => Promise<{ success: boolean; error?: string }>;
-  agentDeactivatePlugin: (name: string) => Promise<{ success: boolean; error?: string }>;
-  agentReloadPlugin: (name: string) => Promise<{ success: boolean; error?: string }>;
-  agentUninstallPlugin: (name: string) => Promise<{ success: boolean; error?: string }>;
-  agentSavePluginConfig: (name: string, config: any) => Promise<{ success: boolean; error?: string }>;
-  agentOpenPluginsDir: () => Promise<{ success: boolean }>;
-  
-  // 插件管理
-  invoke: (channel: string, ...args: any[]) => Promise<any>;
-}
+/**
+ * ElectronAPI 类型定义的唯一来源：renderer/types/global.d.ts
+ * 修改 API 时请同步更新 global.d.ts 中的 ElectronAPI 接口
+ */
 
 // 暴露安全的 API 给渲染进程
 const electronAPI = {
@@ -217,12 +101,28 @@ const electronAPI = {
   agentDisableProviderInstance: (instanceId: string) => ipcRenderer.invoke('agent:disable-provider-instance', instanceId),
   agentGetPipeline: () => ipcRenderer.invoke('agent:get-pipeline'),
   
+  // TTS Provider 管理
+  agentGetTTSProviders: () => ipcRenderer.invoke('agent:get-tts-providers'),
+  agentAddTTSInstance: (instanceConfig: any) => ipcRenderer.invoke('agent:add-tts-instance', instanceConfig),
+  agentRemoveTTSInstance: (instanceId: string) => ipcRenderer.invoke('agent:remove-tts-instance', instanceId),
+  agentUpdateTTSInstance: (instanceId: string, config: any) => ipcRenderer.invoke('agent:update-tts-instance', instanceId, config),
+  agentInitTTSInstance: (instanceId: string) => ipcRenderer.invoke('agent:init-tts-instance', instanceId),
+  agentTestTTSInstance: (instanceId: string) => ipcRenderer.invoke('agent:test-tts-instance', instanceId),
+  agentSetPrimaryTTS: (instanceId: string) => ipcRenderer.invoke('agent:set-primary-tts', instanceId),
+  agentDisconnectTTSInstance: (instanceId: string) => ipcRenderer.invoke('agent:disconnect-tts-instance', instanceId),
+  agentEnableTTSInstance: (instanceId: string) => ipcRenderer.invoke('agent:enable-tts-instance', instanceId),
+  agentDisableTTSInstance: (instanceId: string) => ipcRenderer.invoke('agent:disable-tts-instance', instanceId),
+  agentGetTTSVoices: (instanceId: string) => ipcRenderer.invoke('agent:get-tts-voices', instanceId),
+  
   // 工具管理
   agentGetTools: () => ipcRenderer.invoke('agent:get-tools'),
   agentSetToolEnabled: (toolId: string, enabled: boolean) => ipcRenderer.invoke('agent:set-tool-enabled', toolId, enabled),
   agentDeleteTool: (toolId: string) => ipcRenderer.invoke('agent:delete-tool', toolId),
   agentGetToolStats: () => ipcRenderer.invoke('agent:get-tool-stats'),
   agentSetToolCallingEnabled: (enabled: boolean) => ipcRenderer.invoke('agent:set-tool-calling-enabled', enabled),
+  onAgentToolsChanged: (callback: () => void) => {
+    ipcRenderer.on('agent-tools-changed', () => callback());
+  },
   
   // MCP 管理
   agentGetMCPServers: () => ipcRenderer.invoke('agent:get-mcp-servers'),

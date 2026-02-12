@@ -42,7 +42,7 @@ export interface ToolDefinition {
   /** JSON Schema */
   schema: ToolSchema;
   /** 工具来源 */
-  source: 'function' | 'mcp';
+  source: 'function' | 'mcp' | 'plugin';
   /** 执行器（function 类型工具） */
   handler?: ToolHandler;
   /** MCP 服务器名（mcp 类型工具） */
@@ -98,7 +98,22 @@ export class ToolManager {
   /** 已注册的工具 */
   private tools: Map<string, ToolDefinition> = new Map();
 
+  /** 工具变更回调列表 */
+  private onChangeCallbacks: Array<() => void> = [];
+
   constructor() {}
+
+  /** 注册工具变更回调 */
+  onChange(callback: () => void): void {
+    this.onChangeCallbacks.push(callback);
+  }
+
+  /** 通知工具变更 */
+  private notifyChange(): void {
+    for (const cb of this.onChangeCallbacks) {
+      try { cb(); } catch { /* ignore */ }
+    }
+  }
 
   // ==================== 工具注册 ====================
 
@@ -108,13 +123,14 @@ export class ToolManager {
   registerFunction(
     schema: ToolSchema,
     handler: ToolHandler,
-    options?: { id?: string; enabled?: boolean }
+    options?: { id?: string; enabled?: boolean; source?: 'function' | 'plugin' }
   ): void {
     const id = options?.id || `func_${schema.name}`;
+    const source = options?.source || 'function';
     const def: ToolDefinition = {
       id,
       schema,
-      source: 'function',
+      source,
       handler,
       enabled: options?.enabled !== false
     };
@@ -129,12 +145,14 @@ export class ToolManager {
         name: schema.name,
         description: schema.description,
         parameters: schema.parameters,
-        source: 'function',
+        source,
         enabled: def.enabled
       });
     } catch {
       // 数据库未初始化时忽略
     }
+
+    this.notifyChange();
   }
 
   /**
@@ -172,6 +190,8 @@ export class ToolManager {
     } catch {
       // 数据库未初始化时忽略
     }
+
+    this.notifyChange();
   }
 
   /** 注销工具 */
@@ -183,6 +203,7 @@ export class ToolManager {
       // 忽略
     }
     logger.info(`[ToolManager] 注销工具: ${id}`);
+    this.notifyChange();
   }
 
   /** 注销某个 MCP 服务器的所有工具 */
@@ -198,6 +219,7 @@ export class ToolManager {
       // 忽略
     }
     logger.info(`[ToolManager] 注销 MCP 服务器的所有工具: ${serverName}`);
+    this.notifyChange();
   }
 
   // ==================== 工具查询 ====================
@@ -293,19 +315,26 @@ export class ToolManager {
     try {
       logger.info(`[ToolManager] 执行工具: ${toolCall.name}`, { args: toolCall.arguments });
 
-      // 带超时执行
-      const result = await Promise.race([
-        tool.handler(toolCall.arguments),
-        new Promise<ToolResult>((_, reject) =>
-          setTimeout(() => reject(new Error(`Tool "${toolCall.name}" execution timeout (${timeout}ms)`)), timeout)
-        )
-      ]);
-
-      // 确保 toolCallId 正确
-      result.toolCallId = toolCall.id;
+      // 带超时执行（清理定时器避免泄漏）
+      let timer: NodeJS.Timeout;
+      const timeoutPromise = new Promise<ToolResult>((_, reject) => {
+        timer = setTimeout(() => reject(new Error(`Tool "${toolCall.name}" execution timeout (${timeout}ms)`)), timeout);
+      });
       
-      logger.info(`[ToolManager] 工具执行完成: ${toolCall.name}`, { success: result.success });
-      return result;
+      try {
+        const result = await Promise.race([
+          tool.handler(toolCall.arguments),
+          timeoutPromise
+        ]);
+
+        // 确保 toolCallId 正确
+        result.toolCallId = toolCall.id;
+        
+        logger.info(`[ToolManager] 工具执行完成: ${toolCall.name}`, { success: result.success });
+        return result;
+      } finally {
+        clearTimeout(timer!);
+      }
     } catch (error) {
       const message = (error as Error).message;
       logger.error(`[ToolManager] 工具执行失败: ${toolCall.name}`, { error: message });
@@ -330,13 +359,14 @@ export class ToolManager {
   }
 
   /** 获取工具统计 */
-  getStats(): { total: number; enabled: number; function: number; mcp: number } {
+  getStats(): { total: number; enabled: number; function: number; mcp: number; plugin: number } {
     const all = this.getAllTools();
     return {
       total: all.length,
       enabled: all.filter(t => t.enabled).length,
       function: all.filter(t => t.source === 'function').length,
-      mcp: all.filter(t => t.source === 'mcp').length
+      mcp: all.filter(t => t.source === 'mcp').length,
+      plugin: all.filter(t => t.source === 'plugin').length
     };
   }
 }

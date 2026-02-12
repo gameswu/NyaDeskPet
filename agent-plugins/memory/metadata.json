@@ -1,0 +1,8 @@
+{
+  "name": "memory",
+  "author": "gameswu",
+  "desc": "记忆管理插件 — 会话分离的上下文管理，支持自动压缩汇总，提供记忆查看和清除工具",
+  "version": "1.0.0",
+  "entry": "main.js",
+  "autoActivate": true
+}

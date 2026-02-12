@@ -10,6 +10,28 @@ Agent 插件运行在 Electron 的 **主进程** 中，基于 `AgentPlugin` 基�
 2. **管理生命周期**：包含加载、激活、停用、卸载等钩子
 3. **持久化数据**：拥有独立的配置存储和数据目录
 4. **访问上下文**：使用日志、配置管理等基础设施
+5. **拦截消息处理（Handler 插件）**：通过 `handlerPlugin: true` 标记，可拦截 `user_input`、`tap_event` 等核心消息处理流程
+
+### 插件类型
+
+| 类型 | 说明 | 示例 |
+|------|------|------|
+| **普通插件** | 注册工具供 LLM 调用 | 天气查询、文件操作 |
+| **Handler 插件** | 拦截并替换消息处理核心逻辑 | `core-agent`（内置） |
+
+### 内置 Core Agent 插件
+
+项目采用 **多插件组合架构**，将桌宠 Agent 核心能力拆分为 5 个独立的纯 JS 插件（位于 `agent-plugins/`）：
+
+| 插件名 | 类型 | 说明 |
+|--------|------|------|
+| `personality` | 普通插件 | 人格系统 — 构建结构化系统提示词，整合默认人格、用户人格、Live2D 模型能力 |
+| `memory` | 普通插件 | 记忆管理 — 会话分离的上下文管理，支持自动压缩汇总 |
+| `protocol-adapter` | 普通插件 | 协议适配 — 将 LLM 回复中的 XML 标签解析为前端 `dialogue`/`live2d`/`sync_command` 格式 |
+| `plugin-tool-bridge` | 普通插件 | 插件工具桥接 — 将前端插件能力转换为 Function Calling 工具供 LLM 调用 |
+| `core-agent` | Handler 插件 | 核心协调器 — 组合上述 4 个插件，处理用户输入、触碰事件等核心流程 |
+
+所有 5 个插件均设置了 `autoActivate: true`，会在应用启动时自动激活。`core-agent` 声明了对其他 4 个插件的 `dependencies` 依赖，系统会通过拓扑排序确保依赖先于依赖者激活。
 
 ---
 
@@ -36,9 +58,23 @@ agent-plugins/
   "desc": "为 Agent 提供天气查询能力",
   "version": "1.0.0",
   "repo": "https://github.com/nyadeskpet/weather-plugin",
-  "entry": "main.js"
+  "entry": "main.js",
+  "autoActivate": true,
+  "dependencies": []
 }
 ```
+
+| 字段 | 必须 | 说明 |
+|------|------|------|
+| `name` | ✅ | 插件唯一名称 |
+| `author` | ✅ | 作者 |
+| `desc` | ✅ | 描述 |
+| `version` | ✅ | 版本号 |
+| `repo` | ❌ | 仓库地址 |
+| `entry` | ❌ | 入口文件（默认 `main.js`） |
+| `handlerPlugin` | ❌ | 是否为 Handler 插件（默认 `false`） |
+| `autoActivate` | ❌ | 是否在加载后自动激活（默认 `false`） |
+| `dependencies` | ❌ | 依赖的插件名称列表，系统会按拓扑排序确保依赖先激活 |
 
 ### 3. main.js (开发示例)
 
@@ -137,6 +173,17 @@ abstract class AgentPlugin {
 | `getProviders()` | 获取所有 Provider 实例摘要列表 |
 | `getPrimaryProviderId()` | 获取主 LLM 的 instanceId |
 | `callProvider(instanceId, request)` | 调用指定 Provider 进行 LLM 对话 |
+| `getSessions()` | 获取会话管理器（Handler 插件专用） |
+| `getModelInfo()` | 获取当前 Live2D 模型信息（Handler 插件专用） |
+| `getCharacterInfo()` | 获取当前角色人设信息（Handler 插件专用） |
+| `synthesizeAndStream(text, ctx)` | 使用主 TTS 合成并推流到前端（Handler 插件专用） |
+| `hasTTS()` | 是否有可用的 TTS Provider（Handler 插件专用） |
+| `getPluginInvokeSender()` | 获取前端插件调用发送器（Handler 插件专用） |
+| `isToolCallingEnabled()` | 工具系统是否启用（Handler 插件专用） |
+| `getOpenAITools()` | 获取 OpenAI 格式工具列表（Handler 插件专用） |
+| `hasEnabledTools()` | 是否有已注册工具（Handler 插件专用） |
+| `getPluginInstance(name)` | 获取其他已激活插件的实例（用于插件间服务调用） |
+| `executeWithToolLoop(request, ctx)` | 执行含工具循环的 LLM 调用（自动处理 tool_calls → 执行 → 继续） |
 
 #### 调用多 LLM Provider
 
@@ -297,3 +344,173 @@ A: 可以在开发模式下启动应用 (`npm run dev`)，插件的日志会输�
 
 ### Q: 插件可以引用 Electron 模块吗？
 A: 可以。因为插件运行在主进程中，你可以使用 `require('electron')` 访问 `app`, `BrowserWindow` 等 API，但通过 Agent 接口操作更为推荐和安全。
+
+### Q: 如何实现插件间通信？
+A: 使用 `this.ctx.getPluginInstance('目标插件名')` 获取其他已激活插件的实例，然后直接调用其公开方法。注意：目标插件必须已经激活，可通过 `dependencies` 字段确保依赖顺序。
+
+---
+
+## 自动激活与依赖管理
+
+### 自动激活
+
+在 `metadata.json` 中设置 `autoActivate: true`，插件将在应用启动时自动激活，无需用户手动操作。
+
+### 依赖声明
+
+通过 `dependencies` 数组声明依赖的其他插件。系统使用**拓扑排序**确保依赖插件在当前插件之前激活：
+
+```json
+{
+  "name": "core-agent",
+  "autoActivate": true,
+  "dependencies": ["personality", "memory", "protocol-adapter", "plugin-tool-bridge"]
+}
+```
+
+如果存在循环依赖，系统会检测并记录警告，跳过相关插件的自动激活。
+
+---
+
+## 插件间服务调用
+
+插件可以通过 `ctx.getPluginInstance()` 获取其他已激活插件的实例，直接调用其公开方法，实现服务化协作。
+
+### 示例：core-agent 如何使用 personality 插件
+
+```javascript
+class CoreAgentPlugin extends AgentPlugin {
+  personality = null;
+  memory = null;
+
+  async initialize() {
+    // 获取依赖插件实例
+    this.personality = this.ctx.getPluginInstance('personality');
+    this.memory = this.ctx.getPluginInstance('memory');
+
+    if (!this.personality || !this.memory) {
+      throw new Error('缺少必要的依赖插件');
+    }
+  }
+
+  async onUserInput(mctx) {
+    // 使用 personality 插件构建系统提示词
+    const systemPrompt = this.personality.buildSystemPrompt();
+
+    // 使用 memory 插件获取上下文消息
+    const messages = this.memory.buildContextMessages(
+      mctx.sessionId,
+      this.ctx.getSessions(),
+      this.ctx.getPrimaryProviderId()
+    );
+
+    // 调用 LLM
+    const response = await this.ctx.executeWithToolLoop({
+      messages,
+      systemPrompt,
+      sessionId: mctx.sessionId
+    }, mctx);
+
+    return true;
+  }
+}
+```
+
+### executeWithToolLoop
+
+`ctx.executeWithToolLoop(request, mctx)` 封装了完整的工具循环逻辑：
+
+1. 发送请求到主 LLM
+2. 如果 LLM 返回 `tool_calls` → 执行工具 → 将结果追加到消息 → 回到步骤 1
+3. 如果 LLM 返回文本 → 结束循环，返回最终响应
+
+最大迭代次数为 10，超过后自动终止并返回提示。
+
+---
+
+## 前端插件状态同步
+
+当前端插件通过 WebSocket 连接或断开时，`PluginConnector` 会自动发送 `plugin_status` 消息到后端 Agent，通知当前已连接的前端插件列表。
+
+后端 `AgentHandler` 收到后，会调用 handler 插件的 `registerConnectedPlugins()` 方法，`core-agent` 会将其传递给 `plugin-tool-bridge` 插件，将前端插件能力注册为 Function Calling 工具。
+
+```
+前端 PluginConnector → plugin_status → AgentHandler → core-agent → plugin-tool-bridge → 注册工具
+```
+
+---
+
+## Handler 插件开发
+
+Handler 插件是一种特殊的 Agent 插件，它可以拦截并替换 `AgentHandler` 的核心消息处理逻辑（如 `user_input`、`tap_event`）。
+
+### 标记为 Handler 插件
+
+在 `metadata.json` 中设置 `handlerPlugin: true`：
+
+```json
+{
+  "name": "my-custom-agent",
+  "author": "NyaDev",
+  "desc": "自定义 Agent 行为",
+  "version": "1.0.0",
+  "entry": "main.js",
+  "handlerPlugin": true
+}
+```
+
+### 消息处理钩子
+
+Handler 插件可以实现以下钩子方法，返回 `true` 表示已处理（handler 跳过默认逻辑），返回 `false` 则 handler 继续执行默认逻辑：
+
+```javascript
+class MyAgent extends AgentPlugin {
+  // 处理用户文本输入
+  async onUserInput(mctx) {
+    const text = mctx.message.text;
+    // 自定义处理逻辑...
+    mctx.addReply({ type: 'dialogue', data: { text: '回复', duration: 3000 } });
+    return true; // 已处理
+  }
+
+  // 处理触碰事件
+  async onTapEvent(mctx) {
+    const hitArea = mctx.message.data?.hitArea;
+    // 自定义反应...
+    return true;
+  }
+
+  // 处理模型信息更新
+  onModelInfo(mctx) {
+    const modelInfo = mctx.message.data;
+    // 同步模型能力信息...
+    return true;
+  }
+
+  // 处理角色信息更新
+  onCharacterInfo(mctx) {
+    const characterInfo = mctx.message.data;
+    // 同步角色人设...
+    return true;
+  }
+}
+```
+
+### MessageContext
+
+钩子方法接收 `MessageContext` 对象，提供消息处理所需的操作：
+
+| 属性/方法 | 说明 |
+|-----------|------|
+| `message` | 原始消息对象（含 `type`, `text`, `data`） |
+| `sessionId` | 当前会话 ID |
+| `addReply(msg)` | 添加回复到缓冲（Respond 阶段统一发送） |
+| `send(msg)` | 立即发送消息（用于流式场景如 TTS） |
+| `ws` | WebSocket 连接引用 |
+
+### 注意事项
+
+- 同一时间只能有一个 Handler 插件处于激活状态
+- Handler 插件的钩子优先于 handler 默认逻辑执行
+- 如果 Handler 插件的钩子返回 `false`，handler 会执行默认逻辑作为回退
+- 内置 `core-agent` 插件是默认的 Handler 插件，提供完整的桌宠 Agent 能力

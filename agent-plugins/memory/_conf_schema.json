@@ -1,0 +1,22 @@
+{
+  "recentMessageCount": {
+    "type": "number",
+    "description": "保留的近期消息数量。数字越大，AI 记住的近期对话越多，但消耗的 token 也越多。",
+    "default": 10
+  },
+  "compressionThreshold": {
+    "type": "number",
+    "description": "触发自动压缩的消息总数阈值。当会话消息数超过此值时，会自动将早期历史压缩为摘要。",
+    "default": 20
+  },
+  "maxTokenEstimate": {
+    "type": "number",
+    "description": "最大 token 估算值。当上下文预估 token 数超过此值时，也会触发压缩。",
+    "default": 4000
+  },
+  "compressionMaxTokens": {
+    "type": "number",
+    "description": "压缩摘要时 LLM 回复的最大 token 数。控制摘要的详细程度。",
+    "default": 500
+  }
+}

@@ -79,6 +79,20 @@ export interface ElectronAPI {
   agentEnableProviderInstance: (instanceId: string) => Promise<{ success: boolean; error?: string }>;
   agentDisableProviderInstance: (instanceId: string) => Promise<{ success: boolean; error?: string }>;
   agentGetPipeline: () => Promise<{ stages: string[] }>;
+
+  // TTS Provider 管理
+  agentGetTTSProviders: () => Promise<{ providerTypes: AgentProviderMetadata[]; instances: AgentProviderInstanceInfo[] }>;
+  agentAddTTSInstance: (instanceConfig: AgentProviderInstanceConfig) => Promise<{ success: boolean }>;
+  agentRemoveTTSInstance: (instanceId: string) => Promise<{ success: boolean }>;
+  agentUpdateTTSInstance: (instanceId: string, config: Partial<AgentProviderInstanceConfig>) => Promise<{ success: boolean }>;
+  agentInitTTSInstance: (instanceId: string) => Promise<{ success: boolean; error?: string }>;
+  agentTestTTSInstance: (instanceId: string) => Promise<{ success: boolean; error?: string }>;
+  agentSetPrimaryTTS: (instanceId: string) => Promise<{ success: boolean }>;
+  agentDisconnectTTSInstance: (instanceId: string) => Promise<{ success: boolean; error?: string }>;
+  agentEnableTTSInstance: (instanceId: string) => Promise<{ success: boolean; error?: string }>;
+  agentDisableTTSInstance: (instanceId: string) => Promise<{ success: boolean; error?: string }>;
+  agentGetTTSVoices: (instanceId: string) => Promise<Array<{ id: string; name: string; description?: string }>>;
+
   onOpenAgent: (callback: () => void) => void;
   onAgentStatusChanged: (callback: (status: AgentServerStatus) => void) => void;
   notifyBackendModeChanged: (mode: 'builtin' | 'custom') => void;
@@ -89,6 +103,7 @@ export interface ElectronAPI {
   agentDeleteTool: (toolId: string) => Promise<{ success: boolean }>;
   agentGetToolStats: () => Promise<{ total: number; enabled: number; function: number; mcp: number }>;
   agentSetToolCallingEnabled: (enabled: boolean) => Promise<{ success: boolean }>;
+  onAgentToolsChanged: (callback: () => void) => void;
   
   // MCP 管理
   agentGetMCPServers: () => Promise<{ configs: MCPServerInfo[]; statuses: MCPServerStatusInfo[] }>;
@@ -348,6 +363,15 @@ export interface PluginResponseData {
   timestamp: number;
 }
 
+/** 前端插件状态数据（发送给后端 Agent，通知已连接的前端插件列表） */
+export interface PluginStatusData {
+  plugins: Array<{
+    pluginId: string;
+    pluginName: string;
+    capabilities: string[];
+  }>;
+}
+
 // Tap配置记录类型
 export interface TapConfigRecord {
   [modelPath: string]: TapConfig;
@@ -537,8 +561,8 @@ export interface BackendConfig {
 }
 
 export interface BackendMessage {
-  type: 'dialogue' | 'live2d' | 'system' | 'user_input' | 'interaction' | 'model_info' | 'tap_event' | 'sync_command' | 'character_info' | 'audio_stream_start' | 'audio_chunk' | 'audio_stream_end' | 'file_upload' | 'plugin_invoke' | 'plugin_response';
-  data?: DialogueData | Live2DCommandData | AudioStreamStartData | AudioChunkData | AudioStreamEndData | SyncCommandData | ModelInfo | CharacterInfo | FileUploadData | PluginInvokeData | PluginResponseData | unknown;
+  type: 'dialogue' | 'live2d' | 'system' | 'user_input' | 'interaction' | 'model_info' | 'tap_event' | 'sync_command' | 'character_info' | 'audio_stream_start' | 'audio_chunk' | 'audio_stream_end' | 'file_upload' | 'plugin_invoke' | 'plugin_response' | 'plugin_status';
+  data?: DialogueData | Live2DCommandData | AudioStreamStartData | AudioChunkData | AudioStreamEndData | SyncCommandData | ModelInfo | CharacterInfo | FileUploadData | PluginInvokeData | PluginResponseData | PluginStatusData | unknown;
   text?: string;
   timestamp?: number;
   action?: string;
@@ -555,6 +579,7 @@ export interface BackendMessage {
 export interface DialogueData {
   text: string;
   duration?: number;
+  reasoningContent?: string;
   attachment?: {
     type: 'image' | 'file';
     url: string;
@@ -813,7 +838,7 @@ export interface AgentToolInfo {
   name: string;
   description: string;
   parameters: Record<string, unknown>;
-  source: 'function' | 'mcp';
+  source: 'function' | 'mcp' | 'plugin';
   mcpServer?: string;
   enabled: boolean;
 }

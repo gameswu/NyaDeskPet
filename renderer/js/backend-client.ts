@@ -25,6 +25,7 @@ class BackendClient implements IBackendClient {
   public isConnecting: boolean;
   public messageHandlers: Array<(message: BackendMessage) => void>;
   public statusIndicator: HTMLElement | null;
+  private _disposed: boolean;
 
   constructor(config: BackendConfig = {}) {
     this.httpUrl = config.httpUrl || 'http://localhost:8000';
@@ -33,6 +34,7 @@ class BackendClient implements IBackendClient {
     this.reconnectInterval = 5000;
     this.reconnectTimer = null;
     this.isConnecting = false;
+    this._disposed = false;
     this.messageHandlers = [];
     this.statusIndicator = document.getElementById('status-indicator');
   }
@@ -110,14 +112,18 @@ class BackendClient implements IBackendClient {
           window.logger.info('WebSocket 连接关闭');
           this.isConnecting = false;
           this.updateStatus('disconnected');
-          this.scheduleReconnect();
+          if (!this._disposed) {
+            this.scheduleReconnect();
+          }
           resolve(false);
         };
       } catch (error) {
         window.logger.error('WebSocket 连接失败:', error);
         this.isConnecting = false;
         this.updateStatus('disconnected');
-        this.scheduleReconnect();
+        if (!this._disposed) {
+          this.scheduleReconnect();
+        }
         resolve(false);
       }
     });
@@ -318,6 +324,11 @@ class BackendClient implements IBackendClient {
    * @param message - 消息对象
    */
   public async sendMessage(message: BackendMessage): Promise<{ success: boolean; method?: string; data?: unknown; error?: string }> {
+    // 已关闭，不再发送
+    if (this._disposed) {
+      return { success: false, method: 'none', error: 'Client disposed' };
+    }
+
     // 优先使用 WebSocket
     if (this.ws && this.ws.readyState === WebSocket.OPEN) {
       this.ws.send(JSON.stringify(message));
@@ -467,6 +478,7 @@ class BackendClient implements IBackendClient {
    * 关闭连接
    */
   public disconnect(): void {
+    this._disposed = true;
     this.clearReconnectTimer();
     if (this.ws) {
       this.ws.close();

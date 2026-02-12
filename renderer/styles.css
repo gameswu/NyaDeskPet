@@ -469,6 +469,66 @@ body {
   border-bottom-left-radius: 4px;
 }
 
+/* 思维链折叠块 */
+.reasoning-block {
+  margin-bottom: 8px;
+  border: 1px solid rgba(0, 0, 0, 0.08);
+  border-radius: 8px;
+  overflow: hidden;
+  font-size: 13px;
+}
+
+.reasoning-summary {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 10px;
+  cursor: pointer;
+  user-select: none;
+  color: #888;
+  font-size: 12px;
+  font-weight: 500;
+  background: rgba(0, 0, 0, 0.03);
+  transition: background 0.2s ease, color 0.2s ease;
+  list-style: none;
+}
+
+.reasoning-summary::-webkit-details-marker {
+  display: none;
+}
+
+.reasoning-summary::after {
+  content: '';
+  margin-left: auto;
+  width: 0;
+  height: 0;
+  border-left: 4px solid transparent;
+  border-right: 4px solid transparent;
+  border-top: 5px solid #aaa;
+  transition: transform 0.2s ease;
+}
+
+details.reasoning-block[open] > .reasoning-summary::after {
+  transform: rotate(180deg);
+}
+
+.reasoning-summary:hover {
+  background: rgba(0, 0, 0, 0.06);
+  color: #666;
+}
+
+.reasoning-content {
+  padding: 8px 10px;
+  color: #777;
+  font-size: 12px;
+  line-height: 1.6;
+  white-space: pre-wrap;
+  word-break: break-word;
+  max-height: 300px;
+  overflow-y: auto;
+  border-top: 1px solid rgba(0, 0, 0, 0.06);
+}
+
 /* 消息附件样式 */
 .message-attachment {
   margin-top: 8px;
@@ -1051,72 +1111,7 @@ body {
   word-break: break-all;
 }
 
-/* 插件配置弹窗 */
-.agent-plugin-config-dialog {
-  background: #fff;
-  border: 1px solid #ddd;
-  border-radius: 10px;
-  padding: 16px;
-  margin-top: 12px;
-  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.1);
-}
-
-.agent-plugin-config-dialog.hidden {
-  display: none;
-}
-
-.agent-plugin-config-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  margin-bottom: 12px;
-}
-
-.agent-plugin-config-header h4 {
-  margin: 0;
-  font-size: 14px;
-  color: #333;
-}
-
-.agent-plugin-config-body .config-field {
-  margin-bottom: 12px;
-}
-
-.agent-plugin-config-body .config-field label {
-  display: block;
-  font-size: 13px;
-  font-weight: 500;
-  color: #555;
-  margin-bottom: 4px;
-}
-
-.agent-plugin-config-body .config-field .config-hint {
-  font-size: 11px;
-  color: #999;
-  margin-top: 2px;
-}
-
-.agent-plugin-config-body .config-field input,
-.agent-plugin-config-body .config-field select {
-  width: 100%;
-  padding: 6px 10px;
-  border: 1px solid #ddd;
-  border-radius: 6px;
-  font-size: 13px;
-  box-sizing: border-box;
-}
-
-.agent-plugin-config-body .config-field input:focus,
-.agent-plugin-config-body .config-field select:focus {
-  outline: none;
-  border-color: #4CAF50;
-  box-shadow: 0 0 0 2px rgba(76, 175, 80, 0.15);
-}
-
-.agent-plugin-config-footer {
-  margin-top: 12px;
-  text-align: right;
-}
+/* Agent 插件配置弹窗 — 现在复用 .plugin-config-dialog-overlay 样式 */
 
 .agent-status-card {
   background: #f8f9fa;
@@ -1536,6 +1531,8 @@ body {
 
 .provider-dialog-body > .provider-field input::placeholder {
   color: #bbb;
+  font-size: 13px;
+  font-style: normal;
 }
 
 .provider-dialog-footer {
@@ -1634,6 +1631,8 @@ body {
 
 .agent-provider-config .provider-field input::placeholder {
   color: #bbb;
+  font-size: 13px;
+  font-style: normal;
 }
 
 .agent-provider-config .provider-field input:focus,
@@ -1816,6 +1815,11 @@ body {
   color: #6600cc;
 }
 
+.agent-tool-icon.plugin {
+  background: #e8fde8;
+  color: #009933;
+}
+
 .agent-tool-info {
   flex: 1;
   min-width: 0;
@@ -1846,6 +1850,11 @@ body {
 .agent-tool-source-badge.mcp {
   background: #f0e8fd;
   color: #6600cc;
+}
+
+.agent-tool-source-badge.plugin {
+  background: #e8fde8;
+  color: #009933;
 }
 
 .agent-tool-desc {
@@ -2763,6 +2772,29 @@ body.dark-theme {
   color: #e0e0e0;
 }
 
+.dark-theme .reasoning-block {
+  border-color: rgba(255, 255, 255, 0.08);
+}
+
+.dark-theme .reasoning-summary {
+  color: #999;
+  background: rgba(255, 255, 255, 0.03);
+}
+
+.dark-theme .reasoning-summary:hover {
+  background: rgba(255, 255, 255, 0.06);
+  color: #ccc;
+}
+
+.dark-theme .reasoning-summary::after {
+  border-top-color: #777;
+}
+
+.dark-theme .reasoning-content {
+  color: #aaa;
+  border-top-color: rgba(255, 255, 255, 0.06);
+}
+
 .dark-theme .chat-input-area {
   background: #333;
   border-top-color: rgba(255, 255, 255, 0.1);
@@ -3090,6 +3122,10 @@ body.dark-theme {
   box-shadow: 0 0 0 2px rgba(74, 158, 255, 0.2);
 }
 
+.dark-theme .agent-provider-config .provider-field input::placeholder {
+  color: #666;
+}
+
 .dark-theme .agent-provider-config .provider-field .field-hint {
   color: #777;
 }
@@ -3161,6 +3197,11 @@ body.dark-theme {
   color: #a87de8;
 }
 
+.dark-theme .agent-tool-icon.plugin {
+  background: rgba(0, 153, 51, 0.15);
+  color: #6dde8a;
+}
+
 .dark-theme .agent-tool-name {
   color: #e0e0e0;
 }
@@ -3173,6 +3214,11 @@ body.dark-theme {
 .dark-theme .agent-tool-source-badge.mcp {
   background: rgba(102, 0, 204, 0.2);
   color: #a87de8;
+}
+
+.dark-theme .agent-tool-source-badge.plugin {
+  background: rgba(0, 153, 51, 0.2);
+  color: #6dde8a;
 }
 
 .dark-theme .agent-tool-desc {
@@ -3335,36 +3381,7 @@ body.dark-theme {
   background: rgba(220, 53, 69, 0.1);
 }
 
-.dark-theme .agent-plugin-config-dialog {
-  background: #2a2a2a;
-  border-color: #3a3a3a;
-  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.4);
-}
-
-.dark-theme .agent-plugin-config-header h4 {
-  color: #e0e0e0;
-}
-
-.dark-theme .agent-plugin-config-body .config-field label {
-  color: #bbb;
-}
-
-.dark-theme .agent-plugin-config-body .config-field input,
-.dark-theme .agent-plugin-config-body .config-field select {
-  background: #333;
-  border-color: #444;
-  color: #e0e0e0;
-}
-
-.dark-theme .agent-plugin-config-body .config-field input:focus,
-.dark-theme .agent-plugin-config-body .config-field select:focus {
-  border-color: #4a9eff;
-  box-shadow: 0 0 0 2px rgba(74, 158, 255, 0.2);
-}
-
-.dark-theme .agent-plugin-config-body .config-field .config-hint {
-  color: #777;
-}
+/* Agent 插件配置弹窗暗色主题 — 现在复用 .plugin-config-dialog 暗色主题 */
 
 .dark-theme .settings-content {
   background: rgba(40, 40, 40, 0.95);
@@ -4482,7 +4499,7 @@ body.dark-theme {
   color: #d4d4d4;
 }
 
-.dark-theme .toggle-slider {
+.dark-theme .toggle-label .toggle-slider {
   background: #3a3a3a;
 }
 
@@ -4701,7 +4718,7 @@ body.dark-theme {
   display: none;
 }
 
-.toggle-slider {
+.toggle-label .toggle-slider {
   position: relative;
   width: 44px;
   height: 24px;
@@ -4710,7 +4727,7 @@ body.dark-theme {
   transition: background 0.3s;
 }
 
-.toggle-slider:before {
+.toggle-label .toggle-slider:before {
   content: '';
   position: absolute;
   width: 18px;
@@ -5557,6 +5574,10 @@ body.dark-theme {
 }
 
 .dark-theme .plugin-config-header h3 {
+  color: #d4d4d4;
+}
+
+.dark-theme .plugin-config-header .close-btn {
   color: #d4d4d4;
 }
 

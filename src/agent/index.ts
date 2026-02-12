@@ -21,6 +21,16 @@ export {
   registerProvider
 } from './provider';
 
+// TTS Provider 基础层
+export {
+  TTSProvider,
+  type TTSRequest,
+  type TTSResponse,
+  type VoiceInfo,
+  ttsProviderRegistry,
+  registerTTSProvider
+} from './tts-provider';
+
 // 内置 Provider 实现（导入时自动注册）
 export {
   EchoProvider,
@@ -28,6 +38,12 @@ export {
   OpenAIProvider,
   OPENAI_METADATA
 } from './providers';
+
+// 内置 TTS Provider 实现（导入时自动注册）
+export {
+  FishAudioProvider,
+  FISH_AUDIO_METADATA
+} from './tts-providers';
 
 // Pipeline 层
 export {
@@ -53,7 +69,9 @@ export {
   type CharacterInfo,
   type TapEventData,
   type ProviderInstanceConfig,
-  type ProviderInstanceInfo
+  type ProviderInstanceInfo,
+  type TTSProviderInstanceConfig,
+  type TTSProviderInstanceInfo
 } from './handler';
 
 // 插件系统
@@ -65,7 +83,10 @@ export {
   type AgentPluginContext,
   type AgentPluginInfo,
   type PluginProviderInfo,
-  type ProviderAccessor
+  type ProviderAccessor,
+  type HandlerAccessor,
+  type MessageContext,
+  type PluginInvokeSender
 } from './agent-plugin';
 
 // 数据库层

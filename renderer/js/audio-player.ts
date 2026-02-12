@@ -69,6 +69,13 @@ class AudioPlayer implements IAudioPlayer {
     this.clearTimeline();
     this.stopLipSync();
     
+    // 断开 AnalyserNode
+    if (this.analyser) {
+      try { this.analyser.disconnect(); } catch { /* ignore */ }
+      this.analyser = null;
+      this.dataArray = null;
+    }
+    
     if (this.currentAudio) {
       this.currentAudio.pause();
       this.currentAudio.src = '';
@@ -196,6 +203,26 @@ class AudioPlayer implements IAudioPlayer {
     this.currentAudio = new Audio();
     this.currentAudio.volume = this.volume;
     this.currentAudio.src = URL.createObjectURL(this.mediaSource);
+
+    // 初始化 AnalyserNode 用于口型同步
+    if (this.audioContext) {
+      try {
+        if (this.audioContext.state === 'suspended') {
+          this.audioContext.resume();
+        }
+        const source = this.audioContext.createMediaElementSource(this.currentAudio);
+        this.analyser = this.audioContext.createAnalyser();
+        this.analyser.fftSize = 256;
+        source.connect(this.analyser);
+        this.analyser.connect(this.audioContext.destination);
+        this.dataArray = new Uint8Array(this.analyser.frequencyBinCount);
+        window.logger.info('[AudioPlayer] AnalyserNode 已连接，口型同步就绪');
+      } catch (error) {
+        window.logger.warn('[AudioPlayer] AnalyserNode 初始化失败，口型同步不可用:', error);
+        this.analyser = null;
+        this.dataArray = null;
+      }
+    }
     
     // 监听 MediaSource 事件
     this.mediaSource.addEventListener('sourceopen', () => {

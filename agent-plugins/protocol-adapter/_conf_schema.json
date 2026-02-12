@@ -1,0 +1,17 @@
+{
+  "durationPerChar": {
+    "type": "number",
+    "description": "对话气泡持续时间系数（毫秒/字）。数字越大，气泡显示越久。",
+    "default": 80
+  },
+  "minDuration": {
+    "type": "number",
+    "description": "对话气泡最短持续时间（毫秒）。",
+    "default": 3000
+  },
+  "maxDuration": {
+    "type": "number",
+    "description": "对话气泡最长持续时间（毫秒）。",
+    "default": 30000
+  }
+}

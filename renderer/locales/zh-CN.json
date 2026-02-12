@@ -22,7 +22,8 @@
     "attach": "发送文件",
     "close": "关闭",
     "conversations": "对话记录",
-    "newChat": "新对话"
+    "newChat": "新对话",
+    "reasoning": "思考过程"
   },
   "settings": {
     "title": "设置",
@@ -34,6 +35,7 @@
       "logs": "日志",
       "about": "关于"
     },
+    "cancel": "取消",
     "model": {
       "title": "Live2D 模型",
       "path": "模型路径",
@@ -205,6 +207,176 @@
       "statusConnected": "已连接",
       "statusDisabled": "已禁用",
       "statusError": "错误"
+    },
+    "providers": {
+      "openai": {
+        "name": "OpenAI / 兼容 API",
+        "description": "支持 OpenAI API 及所有兼容接口（如 DeepSeek, Moonshot, Groq, 硅基流动等）",
+        "fields": {
+          "apiKey": {
+            "label": "API Key",
+            "placeholder": "sk-...",
+            "description": "从 OpenAI 或兼容服务商获取的 API 密钥"
+          },
+          "baseUrl": {
+            "label": "API Base URL",
+            "placeholder": "https://api.openai.com/v1",
+            "description": "兼容 API 地址（如 https://api.deepseek.com/v1）"
+          },
+          "model": {
+            "label": "模型",
+            "placeholder": "gpt-4o-mini",
+            "description": "要使用的模型名称"
+          },
+          "timeout": {
+            "label": "超时时间（秒）",
+            "description": "请求超时时间"
+          },
+          "proxy": {
+            "label": "代理地址",
+            "placeholder": "http://127.0.0.1:7890",
+            "description": "HTTP/HTTPS 代理（如需翻墙访问）"
+          }
+        }
+      },
+      "deepseek": {
+        "name": "DeepSeek",
+        "description": "DeepSeek 官方 API，支持 deepseek-chat 和 deepseek-reasoner 模型，128K 上下文，支持 Function Calling",
+        "fields": {
+          "apiKey": {
+            "label": "API Key",
+            "placeholder": "sk-...",
+            "description": "从 DeepSeek 平台获取的 API 密钥（https://platform.deepseek.com）"
+          },
+          "baseUrl": {
+            "label": "API Base URL",
+            "description": "DeepSeek API 地址，通常无需修改"
+          },
+          "model": {
+            "label": "模型",
+            "description": "deepseek-chat 适合通用对话，deepseek-reasoner 适合复杂推理任务",
+            "options": {
+              "deepseek-chat": "deepseek-chat",
+              "deepseek-reasoner": "deepseek-reasoner"
+            }
+          },
+          "timeout": {
+            "label": "超时时间（秒）",
+            "description": "请求超时时间，reasoner 模型建议适当增大"
+          },
+          "proxy": {
+            "label": "代理地址",
+            "placeholder": "http://127.0.0.1:7890",
+            "description": "HTTP/HTTPS 代理（如需使用）"
+          }
+        }
+      },
+      "openrouter": {
+        "name": "OpenRouter",
+        "description": "通过 OpenRouter 统一网关访问 400+ AI 模型（OpenAI、Claude、Gemini、Llama 等），自动故障转移，支持多模态和 Function Calling",
+        "fields": {
+          "apiKey": {
+            "label": "API Key",
+            "placeholder": "sk-or-v1-...",
+            "description": "从 OpenRouter 获取的 API 密钥（https://openrouter.ai/keys）"
+          },
+          "model": {
+            "label": "模型",
+            "placeholder": "openai/gpt-4o-mini",
+            "description": "模型 ID，格式为 provider/model（如 anthropic/claude-sonnet-4、google/gemini-2.5-flash）。完整列表见 https://openrouter.ai/models"
+          },
+          "timeout": {
+            "label": "超时时间（秒）",
+            "description": "请求超时时间，推理模型建议适当增大"
+          },
+          "proxy": {
+            "label": "代理地址",
+            "placeholder": "http://127.0.0.1:7890",
+            "description": "HTTP/HTTPS 代理（如需使用）"
+          }
+        }
+      },
+      "echo": {
+        "name": "Echo（内置）",
+        "description": "回显输入消息，不调用任何 AI 服务。用于测试或无 LLM 时的兖底。"
+      }
+    },
+    "tts": {
+      "title": "TTS Provider",
+      "add": "添加 TTS",
+      "addTitle": "添加 TTS Provider",
+      "editTitle": "编辑 TTS Provider",
+      "type": "TTS 类型",
+      "displayName": "显示名称",
+      "displayNamePlaceholder": "例如：我的 Fish Audio",
+      "save": "保存",
+      "cancel": "取消",
+      "empty": "暂无 TTS 实例，点击上方按钮添加",
+      "primary": "主 TTS",
+      "setPrimary": "点击设为主 TTS",
+      "voice": "音色",
+      "nameRequired": "请输入显示名称",
+      "removeConfirm": "确定要删除此 TTS 实例吗？",
+      "testSuccess": "TTS 连接测试成功",
+      "testFailed": "TTS 连接测试失败"
+    },
+    "ttsProviders": {
+      "fish-audio": {
+        "name": "Fish Audio",
+        "description": "高质量 AI 语音合成服务，支持 400+ 预制音色和自定义音色克隆，流式传输，情感标记，多语言",
+        "fields": {
+          "apiKey": {
+            "label": "API Key",
+            "placeholder": "your_api_key",
+            "description": "从 Fish Audio 获取的 API 密钥（https://fish.audio/account/api-keys）"
+          },
+          "voiceId": {
+            "label": "音色 ID",
+            "placeholder": "802e3bc2b27e49c2995d23ef70e6ac89",
+            "description": "音色模型 ID，可从 https://fish.audio/discovery 获取。留空使用默认音色"
+          },
+          "model": {
+            "label": "TTS 模型",
+            "description": "TTS 引擎模型版本",
+            "options": {
+              "s1": "S1（最新，推荐）",
+              "speech-1.6": "Speech 1.6（稳定）",
+              "speech-1.5": "Speech 1.5（旧版）"
+            }
+          },
+          "format": {
+            "label": "音频格式",
+            "description": "输出音频格式",
+            "options": {
+              "mp3": "MP3",
+              "wav": "WAV",
+              "opus": "Opus",
+              "pcm": "PCM"
+            }
+          },
+          "latency": {
+            "label": "延迟模式",
+            "description": "延迟与质量的权衡",
+            "options": {
+              "normal": "标准（最佳质量）",
+              "balanced": "均衡（低延迟）"
+            }
+          },
+          "speed": {
+            "label": "语速",
+            "description": "语速调节，范围 0.5 - 2.0"
+          },
+          "timeout": {
+            "label": "超时时间（秒）",
+            "description": "请求超时时间"
+          },
+          "proxy": {
+            "label": "代理地址",
+            "placeholder": "http://127.0.0.1:7890",
+            "description": "HTTP/HTTPS 代理（如需使用）"
+          }
+        }
+      }
     },
     "tools": {
       "title": "Function 工具",

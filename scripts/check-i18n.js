@@ -116,6 +116,221 @@ function extractI18nKeysFromCode(filePath) {
   return Array.from(keys);
 }
 
+/**
+ * 检测 tProvider() 动态键模式
+ * tProvider(providerId, path, fallback) 生成键: agent.providers.{providerId}.{path}
+ * 扫描代码中的 tProvider 调用，提取 path 参数模式
+ */
+function extractProviderDynamicPaths(codeFiles) {
+  const paths = new Set();
+  
+  for (const filePath of codeFiles) {
+    const content = fs.readFileSync(filePath, 'utf-8');
+    // 匹配 tProvider(xxx, 'fields.apiKey.label', ...) 或 tProvider(pid, `fields.${field.key}.label`, ...)
+    // 静态 path 参数
+    const staticRegex = /tProvider\s*\([^,]+,\s*['"]([^'"]+)['"]/g;
+    let match;
+    while ((match = staticRegex.exec(content)) !== null) {
+      paths.add(match[1]);
+    }
+    // 模板字面量 path 参数，例如 `fields.${field.key}.label`
+    // 提取固定部分的后缀模式
+    const templateRegex = /tProvider\s*\([^,]+,\s*`([^`]+)`/g;
+    while ((match = templateRegex.exec(content)) !== null) {
+      const tpl = match[1];
+      // 提取最后的固定后缀，如 `fields.${field.key}.label` → '.label'
+      const suffixMatch = tpl.match(/\}\.([\w.]+)$/);
+      if (suffixMatch) {
+        paths.add(`*.${suffixMatch[1]}`);
+      }
+      // 提取固定前缀，如 `fields.${...}` → 'fields'
+      const prefixMatch = tpl.match(/^([\w.]+)\.\$\{/);
+      if (prefixMatch) {
+        paths.add(`${prefixMatch[1]}.*`);
+      }
+    }
+  }
+  
+  return paths;
+}
+
+/**
+ * 检测 tTTSProvider() 动态键模式
+ * tTTSProvider(providerId, path, fallback) 生成键: agent.ttsProviders.{providerId}.{path}
+ * 扫描代码中的 tTTSProvider 调用，提取 path 参数模式
+ */
+function extractTTSProviderDynamicPaths(codeFiles) {
+  const paths = new Set();
+  
+  for (const filePath of codeFiles) {
+    const content = fs.readFileSync(filePath, 'utf-8');
+    // 静态 path 参数
+    const staticRegex = /tTTSProvider\s*\([^,]+,\s*['"]([^'"]+)['"]/g;
+    let match;
+    while ((match = staticRegex.exec(content)) !== null) {
+      paths.add(match[1]);
+    }
+    // 模板字面量 path 参数
+    const templateRegex = /tTTSProvider\s*\([^,]+,\s*`([^`]+)`/g;
+    while ((match = templateRegex.exec(content)) !== null) {
+      const tpl = match[1];
+      const suffixMatch = tpl.match(/\}\.([\.\w]+)$/);
+      if (suffixMatch) {
+        paths.add(`*.${suffixMatch[1]}`);
+      }
+      const prefixMatch = tpl.match(/^([\.\w]+)\.\$\{/);
+      if (prefixMatch) {
+        paths.add(`${prefixMatch[1]}.*`);
+      }
+    }
+  }
+  
+  return paths;
+}
+
+/**
+ * 检查 Provider 元信息 i18n 键的完整性
+ * 约定结构: agent.providers.{providerId}.{name|description|fields.{key}.{label|description|placeholder|options.{value}}}
+ * 对照两个语言文件，检查结构是否一致
+ */
+function checkProviderI18nKeys(zhCN, enUS) {
+  const zhProviders = getNestedValue(zhCN, 'agent.providers') || {};
+  const enProviders = getNestedValue(enUS, 'agent.providers') || {};
+  
+  const zhIds = Object.keys(zhProviders);
+  const enIds = Object.keys(enProviders);
+  const allIds = [...new Set([...zhIds, ...enIds])];
+  
+  const issues = [];
+  
+  if (allIds.length === 0) {
+    return { issues, providerKeyCount: 0 };
+  }
+  
+  // 检查两语言文件中的 provider ID 是否一致
+  const onlyInZh = zhIds.filter(id => !enIds.includes(id));
+  const onlyInEn = enIds.filter(id => !zhIds.includes(id));
+  
+  for (const id of onlyInZh) {
+    issues.push({ type: 'missing', locale: 'en-US', key: `agent.providers.${id}`, message: `Provider "${id}" 仅存在于 zh-CN` });
+  }
+  for (const id of onlyInEn) {
+    issues.push({ type: 'missing', locale: 'zh-CN', key: `agent.providers.${id}`, message: `Provider "${id}" 仅存在于 en-US` });
+  }
+  
+  // 对每个 provider 检查键结构一致性
+  const commonIds = zhIds.filter(id => enIds.includes(id));
+  for (const pid of commonIds) {
+    const zhFlat = getFlattenedKeys(zhProviders[pid], `agent.providers.${pid}`);
+    const enFlat = getFlattenedKeys(enProviders[pid], `agent.providers.${pid}`);
+    
+    const zhSet = new Set(zhFlat);
+    const enSet = new Set(enFlat);
+    
+    for (const key of zhFlat) {
+      if (!enSet.has(key)) {
+        issues.push({ type: 'missing', locale: 'en-US', key, message: `Provider "${pid}" 键仅在 zh-CN 中存在` });
+      }
+    }
+    for (const key of enFlat) {
+      if (!zhSet.has(key)) {
+        issues.push({ type: 'missing', locale: 'zh-CN', key, message: `Provider "${pid}" 键仅在 en-US 中存在` });
+      }
+    }
+    
+    // 检查空值
+    for (const key of zhFlat) {
+      const val = getNestedValue(zhCN, key);
+      if (typeof val === 'string' && val === '') {
+        issues.push({ type: 'empty', locale: 'zh-CN', key, message: '空值' });
+      }
+    }
+    for (const key of enFlat) {
+      const val = getNestedValue(enUS, key);
+      if (typeof val === 'string' && val === '') {
+        issues.push({ type: 'empty', locale: 'en-US', key, message: '空值' });
+      }
+    }
+  }
+  
+  // 统计 provider 键总数
+  const allProviderKeys = new Set([
+    ...getFlattenedKeys(zhProviders, 'agent.providers'),
+    ...getFlattenedKeys(enProviders, 'agent.providers')
+  ]);
+  
+  return { issues, providerKeyCount: allProviderKeys.size };
+}
+
+/**
+ * 检查 TTS Provider 元信息 i18n 键的完整性
+ * 约定结构: agent.ttsProviders.{providerId}.{name|description|fields.{key}.{label|description|placeholder|options.{value}}}
+ */
+function checkTTSProviderI18nKeys(zhCN, enUS) {
+  const zhProviders = getNestedValue(zhCN, 'agent.ttsProviders') || {};
+  const enProviders = getNestedValue(enUS, 'agent.ttsProviders') || {};
+  
+  const zhIds = Object.keys(zhProviders);
+  const enIds = Object.keys(enProviders);
+  const allIds = [...new Set([...zhIds, ...enIds])];
+  
+  const issues = [];
+  
+  if (allIds.length === 0) {
+    return { issues, providerKeyCount: 0 };
+  }
+  
+  const onlyInZh = zhIds.filter(id => !enIds.includes(id));
+  const onlyInEn = enIds.filter(id => !zhIds.includes(id));
+  
+  for (const id of onlyInZh) {
+    issues.push({ type: 'missing', locale: 'en-US', key: `agent.ttsProviders.${id}`, message: `TTS Provider "${id}" 仅存在于 zh-CN` });
+  }
+  for (const id of onlyInEn) {
+    issues.push({ type: 'missing', locale: 'zh-CN', key: `agent.ttsProviders.${id}`, message: `TTS Provider "${id}" 仅存在于 en-US` });
+  }
+  
+  const commonIds = zhIds.filter(id => enIds.includes(id));
+  for (const pid of commonIds) {
+    const zhFlat = getFlattenedKeys(zhProviders[pid], `agent.ttsProviders.${pid}`);
+    const enFlat = getFlattenedKeys(enProviders[pid], `agent.ttsProviders.${pid}`);
+    
+    const zhSet = new Set(zhFlat);
+    const enSet = new Set(enFlat);
+    
+    for (const key of zhFlat) {
+      if (!enSet.has(key)) {
+        issues.push({ type: 'missing', locale: 'en-US', key, message: `TTS Provider "${pid}" 键仅在 zh-CN 中存在` });
+      }
+    }
+    for (const key of enFlat) {
+      if (!zhSet.has(key)) {
+        issues.push({ type: 'missing', locale: 'zh-CN', key, message: `TTS Provider "${pid}" 键仅在 en-US 中存在` });
+      }
+    }
+    
+    for (const key of zhFlat) {
+      const val = getNestedValue(zhCN, key);
+      if (typeof val === 'string' && val === '') {
+        issues.push({ type: 'empty', locale: 'zh-CN', key, message: '空值' });
+      }
+    }
+    for (const key of enFlat) {
+      const val = getNestedValue(enUS, key);
+      if (typeof val === 'string' && val === '') {
+        issues.push({ type: 'empty', locale: 'en-US', key, message: '空值' });
+      }
+    }
+  }
+  
+  const allProviderKeys = new Set([
+    ...getFlattenedKeys(zhProviders, 'agent.ttsProviders'),
+    ...getFlattenedKeys(enProviders, 'agent.ttsProviders')
+  ]);
+  
+  return { issues, providerKeyCount: allProviderKeys.size };
+}
+
 // 读取语言文件
 function loadLocaleFile(localePath) {
   try {
@@ -280,14 +495,17 @@ function checkI18n() {
     }
   }
 
-  // 6. 检查语言文件中未使用的键
+  // 6. 检查语言文件中未使用的键（排除 Provider 元信息动态键）
   log('\n🔍 检查未使用的键...', 'cyan');
   
   const zhCNKeys = getFlattenedKeys(zhCN);
   const enUSKeys = getFlattenedKeys(enUS);
   
-  const unusedInZhCN = zhCNKeys.filter(key => !usedKeys.includes(key));
-  const unusedInEnUS = enUSKeys.filter(key => !usedKeys.includes(key));
+  // agent.providers.* / agent.ttsProviders.* 下的键由 tProvider() / tTTSProvider() 动态拼接使用，不算作"未使用"
+  const isProviderKey = key => key.startsWith('agent.providers.') || key.startsWith('agent.ttsProviders.');
+  
+  const unusedInZhCN = zhCNKeys.filter(key => !usedKeys.includes(key) && !isProviderKey(key));
+  const unusedInEnUS = enUSKeys.filter(key => !usedKeys.includes(key) && !isProviderKey(key));
 
   if (unusedInZhCN.length > 0) {
     log(`  ⚠ zh-CN.json 中有 ${unusedInZhCN.length} 个未使用的键:`, 'yellow');
@@ -309,11 +527,12 @@ function checkI18n() {
     log('  ✓ 没有未使用的键', 'green');
   }
 
-  // 7. 检查两个语言文件之间的差异
+  // 7. 检查两个语言文件之间的差异（排除 Provider 键，Provider 键由专项检查覆盖）
   log('\n🔍 检查语言文件之间的差异...', 'cyan');
   
-  const onlyInZhCN = zhCNKeys.filter(key => !enUSKeys.includes(key));
-  const onlyInEnUS = enUSKeys.filter(key => !zhCNKeys.includes(key));
+  const onlyInZhCN = zhCNKeys.filter(key => !enUSKeys.includes(key) && !isProviderKey(key));
+  const onlyInEnUS = enUSKeys.filter(key => !zhCNKeys.includes(key) && !isProviderKey(key));
+
 
   if (onlyInZhCN.length > 0) {
     log(`  ⚠ 仅存在于 zh-CN.json 的键 (${onlyInZhCN.length}个):`, 'yellow');
@@ -361,7 +580,81 @@ function checkI18n() {
     log('  ✓ 所有使用的键都有有效值', 'green');
   }
 
-  // 9. 生成详细报告（可选）
+  // 9. Provider 元信息 i18n 专项检查
+  log('\n🧩 检查 Provider 元信息 i18n 键...', 'cyan');
+  
+  const providerDynamicPaths = extractProviderDynamicPaths(codeFiles);
+  const providerCheck = checkProviderI18nKeys(zhCN, enUS);
+  
+  if (providerCheck.providerKeyCount > 0) {
+    log(`  Provider i18n 键总数: ${providerCheck.providerKeyCount}`, 'blue');
+    
+    if (providerDynamicPaths.size > 0) {
+      log(`  tProvider() 使用的路径模式: ${Array.from(providerDynamicPaths).join(', ')}`, 'blue');
+    }
+  }
+  
+  if (providerCheck.issues.length > 0) {
+    const missingIssues = providerCheck.issues.filter(i => i.type === 'missing');
+    const emptyIssues = providerCheck.issues.filter(i => i.type === 'empty');
+    
+    if (missingIssues.length > 0) {
+      log(`  ✗ Provider 键两语言文件不一致 (${missingIssues.length} 处):`, 'red');
+      missingIssues.forEach(issue => {
+        log(`    - [${issue.locale}] ${issue.key} — ${issue.message}`, 'yellow');
+      });
+    }
+    
+    if (emptyIssues.length > 0) {
+      log(`  ⚠ Provider 键空值 (${emptyIssues.length} 处):`, 'yellow');
+      emptyIssues.forEach(issue => {
+        log(`    - [${issue.locale}] ${issue.key}`, 'yellow');
+      });
+    }
+  } else if (providerCheck.providerKeyCount > 0) {
+    log(`  ✓ 所有 Provider 元信息键在两个语言文件中一致且完整`, 'green');
+  } else {
+    log(`  - 暂无 Provider 元信息 i18n 键`, 'blue');
+  }
+
+  // 9.5. TTS Provider 元信息 i18n 专项检查
+  log('\n🔊 检查 TTS Provider 元信息 i18n 键...', 'cyan');
+  
+  const ttsProviderDynamicPaths = extractTTSProviderDynamicPaths(codeFiles);
+  const ttsProviderCheck = checkTTSProviderI18nKeys(zhCN, enUS);
+  
+  if (ttsProviderCheck.providerKeyCount > 0) {
+    log(`  TTS Provider i18n 键总数: ${ttsProviderCheck.providerKeyCount}`, 'blue');
+    
+    if (ttsProviderDynamicPaths.size > 0) {
+      log(`  tTTSProvider() 使用的路径模式: ${Array.from(ttsProviderDynamicPaths).join(', ')}`, 'blue');
+    }
+  }
+  
+  if (ttsProviderCheck.issues.length > 0) {
+    const missingIssues = ttsProviderCheck.issues.filter(i => i.type === 'missing');
+    const emptyIssues = ttsProviderCheck.issues.filter(i => i.type === 'empty');
+    
+    if (missingIssues.length > 0) {
+      log(`  ✗ TTS Provider 键两语言文件不一致 (${missingIssues.length} 处):`, 'red');
+      missingIssues.forEach(issue => {
+        log(`    - [${issue.locale}] ${issue.key} — ${issue.message}`, 'yellow');
+      });
+    }
+    
+    if (emptyIssues.length > 0) {
+      log(`  ⚠ TTS Provider 键空值 (${emptyIssues.length} 处):`, 'yellow');
+      emptyIssues.forEach(issue => {
+        log(`    - [${issue.locale}] ${issue.key}`, 'yellow');
+      });
+    }
+  } else if (ttsProviderCheck.providerKeyCount > 0) {
+    log(`  ✓ 所有 TTS Provider 元信息键在两个语言文件中一致且完整`, 'green');
+  } else {
+    log(`  - 暂无 TTS Provider 元信息 i18n 键`, 'blue');
+  }
+
+  // 10. 生成详细报告（可选）
   if (process.argv.includes('--detailed')) {
     log('\n📋 详细报告...', 'cyan');
     log('\n  HTML中使用的键:', 'magenta');
@@ -371,21 +664,54 @@ function checkI18n() {
       log('\n  代码中使用的键:', 'magenta');
       Array.from(allCodeKeys).sort().forEach(key => log(`    - ${key}`, 'blue'));
     }
+    
+    // Provider 键详细列表
+    const zhProviders = getNestedValue(zhCN, 'agent.providers') || {};
+    const providerIds = Object.keys(zhProviders);
+    if (providerIds.length > 0) {
+      log('\n  Provider 元信息键:', 'magenta');
+      for (const pid of providerIds) {
+        const keys = getFlattenedKeys(zhProviders[pid], `agent.providers.${pid}`);
+        log(`    [${pid}] ${keys.length} 个键`, 'blue');
+        keys.forEach(key => log(`      - ${key}`, 'blue'));
+      }
+    }
+    
+    // TTS Provider 键详细列表
+    const zhTTSProviders = getNestedValue(zhCN, 'agent.ttsProviders') || {};
+    const ttsProviderIds = Object.keys(zhTTSProviders);
+    if (ttsProviderIds.length > 0) {
+      log('\n  TTS Provider 元信息键:', 'magenta');
+      for (const pid of ttsProviderIds) {
+        const keys = getFlattenedKeys(zhTTSProviders[pid], `agent.ttsProviders.${pid}`);
+        log(`    [${pid}] ${keys.length} 个键`, 'blue');
+        keys.forEach(key => log(`      - ${key}`, 'blue'));
+      }
+    }
   }
 
-  // 10. 总结
+  // 11. 总结
   log('\n=== 检查总结 ===\n', 'bright');
   log(`📊 统计信息:`, 'cyan');
   log(`  - HTML中的键: ${htmlKeys.length}`, 'blue');
   log(`  - 代码中的键: ${allCodeKeys.size}`, 'blue');
   log(`  - 总唯一键数: ${usedKeys.length}`, 'blue');
+  log(`  - Provider动态键数: ${providerCheck.providerKeyCount}`, 'blue');
+  log(`  - TTS Provider动态键数: ${ttsProviderCheck.providerKeyCount}`, 'blue');
   log(`  - zh-CN.json总键数: ${zhCNKeys.length}`, 'blue');
   log(`  - en-US.json总键数: ${enUSKeys.length}`, 'blue');
   
+  const providerHasErrors = providerCheck.issues.some(i => i.type === 'missing');
+  const providerHasWarnings = providerCheck.issues.some(i => i.type === 'empty');
+  const ttsProviderHasErrors = ttsProviderCheck.issues.some(i => i.type === 'missing');
+  const ttsProviderHasWarnings = ttsProviderCheck.issues.some(i => i.type === 'empty');
+  
   const hasErrors = missingInZhCN.length > 0 || missingInEnUS.length > 0 || 
-                    emptyValuesZhCN.length > 0 || emptyValuesEnUS.length > 0;
+                    emptyValuesZhCN.length > 0 || emptyValuesEnUS.length > 0 ||
+                    providerHasErrors || ttsProviderHasErrors;
   const hasWarnings = unusedInZhCN.length > 0 || unusedInEnUS.length > 0 || 
-                      onlyInZhCN.length > 0 || onlyInEnUS.length > 0;
+                      onlyInZhCN.length > 0 || onlyInEnUS.length > 0 ||
+                      providerHasWarnings || ttsProviderHasWarnings;
 
   if (!hasErrors && !hasWarnings) {
     log('\n✅ 太棒了！所有i18n键都正确配置！', 'green');

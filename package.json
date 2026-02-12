@@ -1,6 +1,6 @@
 {
   "name": "nya-desk-pet",
-  "version": "1.0.0-beta-2602121459",
+  "version": "1.0.0-beta-2602122342",
   "description": "跨平台 Live2D 桌面宠物应用",
   "main": "dist/main.js",
   "scripts": {
@@ -54,15 +54,21 @@
     "appId": "com.nyadeskpet.app",
     "productName": "NyaDeskPet",
     "directories": {
-      "output": "dist"
+      "output": "release"
     },
     "files": [
       "dist/**/*",
       "renderer/**/*",
+      "!renderer/js/*.ts",
+      "!renderer/types/**/*",
       "models/**/*",
       "!models/live2d/nya",
       "plugins/**/*",
+      "!plugins/**/__pycache__/**",
+      "agent-plugins/**/*",
+      "!agent-plugins/**/__pycache__/**",
       "assets/**/*",
+      "i18n/**/*",
       "node_modules/sherpa-onnx-node/**/*",
       "node_modules/sherpa-onnx-darwin-arm64/**/*",
       "node_modules/sherpa-onnx-darwin-x64/**/*",
@@ -77,8 +83,10 @@
       "node_modules/sherpa-onnx-*/**/*.dylib",
       "node_modules/sherpa-onnx-*/**/*.so",
       "node_modules/sherpa-onnx-*/**/*.dll",
+      "node_modules/better-sqlite3/**/*",
       "models/**/*",
-      "plugins/**/*"
+      "plugins/**/*",
+      "agent-plugins/**/*"
     ],
     "win": {
       "target": [

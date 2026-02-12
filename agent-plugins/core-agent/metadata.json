@@ -1,0 +1,10 @@
+{
+  "name": "core-agent",
+  "author": "gameswu",
+  "desc": "内置核心 Agent 处理器 — 编排 personality、memory、protocol-adapter、plugin-tool-bridge 插件，处理用户输入、触碰事件等消息，支持完整的工具循环",
+  "version": "1.0.0",
+  "entry": "main.js",
+  "handlerPlugin": true,
+  "autoActivate": true,
+  "dependencies": ["personality", "memory", "protocol-adapter", "plugin-tool-bridge"]
+}

@@ -1,0 +1,8 @@
+{
+  "name": "personality",
+  "author": "gameswu",
+  "desc": "人格管理插件 — 构建结构化系统提示词，整合默认人格、用户自定义人格、模型能力信息和回复格式规范",
+  "version": "1.0.0",
+  "entry": "main.js",
+  "autoActivate": true
+}

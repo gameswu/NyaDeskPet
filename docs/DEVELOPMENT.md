@@ -457,6 +457,38 @@ toolManager.registerFunction(
   （循环，最多 10 次）
 ```
 
+#### Agent 插件系统 (`src/agent/agent-plugin.ts`)
+
+**设计模式**：插件容器 + 服务定位器
+
+Agent 插件运行在主进程中，通过 `AgentPlugin` 基类开发，支持注册 Function Calling 工具、拦截消息处理等能力。
+
+**核心组件**：
+- `AgentPlugin`：插件基类，提供生命周期钩子 (`initialize` / `terminate`) 和消息处理钩子 (`onUserInput` / `onTapEvent` 等)
+- `AgentPluginManager`：扫描、加载、管理插件，提供上下文注入、自动激活、依赖排序
+- `AgentPluginContext`：插件运行上下文，提供工具注册、LLM 调用、插件间通信等能力
+
+**多插件组合架构**：
+
+项目将桌宠 Agent 核心能力拆分为 5 个独立纯 JS 插件：
+
+```
+agent-plugins/
+├── personality/        # 人格系统（构建系统提示词）
+├── memory/             # 记忆管理（上下文 + 自动压缩）
+├── protocol-adapter/   # 协议适配（XML 标签 → 前端消息）
+├── plugin-tool-bridge/ # 前端插件 → Function Calling 桥接
+└── core-agent/         # Handler 插件（组合上述 4 个）
+```
+
+**插件间通信**：通过 `ctx.getPluginInstance(name)` 获取其他已激活插件的实例，直接调用其公开方法。
+
+**自动激活**：`metadata.json` 中设置 `autoActivate: true` + `dependencies` 数组，系统通过拓扑排序确保依赖先激活。
+
+**前端插件状态同步**：前端 `PluginConnector` 在插件连接/断开时发送 `plugin_status` 消息，后端 `plugin-tool-bridge` 据此注册/注销 Function Calling 工具。
+
+> 详细开发指南见 `docs/AGENT_PLUGINS.md`
+
 ### 插件系统架构
 
 **插件连接器** (plugin-connector.ts)：
