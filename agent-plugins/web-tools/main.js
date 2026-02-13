@@ -282,12 +282,15 @@ class WebToolsPlugin extends AgentPlugin {
   /**
    * 使用 Node.js 内置 https/http 模块发送 GET 请求
    */
-  _httpGet(url) {
+  _httpGet(url, redirectCount = 0) {
+    const MAX_REDIRECTS = 5;
+    const MAX_RESPONSE_SIZE = 5 * 1024 * 1024; // 5MB
+
     return new Promise((resolve, reject) => {
       const mod = url.startsWith('https') ? require('https') : require('http');
       const options = {
         headers: {
-          'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36',
           'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
           'Accept-Language': 'zh-CN,zh;q=0.9,en;q=0.8',
         },
@@ -295,10 +298,14 @@ class WebToolsPlugin extends AgentPlugin {
       };
 
       const req = mod.get(url, options, (res) => {
-        // 处理重定向
+        // 处理重定向（带上限）
         if (res.statusCode >= 300 && res.statusCode < 400 && res.headers.location) {
+          if (redirectCount >= MAX_REDIRECTS) {
+            reject(new Error(`重定向次数超过限制 (${MAX_REDIRECTS})`));
+            return;
+          }
           const redirectUrl = new URL(res.headers.location, url).href;
-          this._httpGet(redirectUrl).then(resolve).catch(reject);
+          this._httpGet(redirectUrl, redirectCount + 1).then(resolve).catch(reject);
           return;
         }
 
@@ -308,7 +315,16 @@ class WebToolsPlugin extends AgentPlugin {
         }
 
         const chunks = [];
-        res.on('data', chunk => chunks.push(chunk));
+        let totalSize = 0;
+        res.on('data', chunk => {
+          totalSize += chunk.length;
+          if (totalSize > MAX_RESPONSE_SIZE) {
+            res.destroy();
+            reject(new Error(`响应体超过大小限制 (${MAX_RESPONSE_SIZE / 1024 / 1024}MB)`));
+            return;
+          }
+          chunks.push(chunk);
+        });
         res.on('end', () => {
           const buffer = Buffer.concat(chunks);
           // 尝试从 Content-Type 获取编码
@@ -407,3 +423,4 @@ class WebToolsPlugin extends AgentPlugin {
 }
 
 module.exports = WebToolsPlugin;
+module.exports.default = WebToolsPlugin;

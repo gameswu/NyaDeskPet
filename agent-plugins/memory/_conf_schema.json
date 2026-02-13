@@ -18,5 +18,15 @@
     "type": "number",
     "description": "压缩摘要时 LLM 回复的最大 token 数。控制摘要的详细程度。",
     "default": 500
+  },
+  "compressionPrompt": {
+    "type": "string",
+    "description": "记忆压缩提示词。{history} 会被替换为对话历史文本。用于指导 LLM 如何压缩对话历史。留空使用内置默认值。",
+    "default": ""
+  },
+  "compressionSystemPrompt": {
+    "type": "string",
+    "description": "记忆压缩时的系统提示词。留空使用内置默认值。",
+    "default": ""
   }
 }

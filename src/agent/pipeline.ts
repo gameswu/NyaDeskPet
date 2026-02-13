@@ -17,6 +17,9 @@
 import { logger } from '../logger';
 import type { PipelineContext } from './context';
 
+/** 错误提示对话框时长（ms） */
+const PIPELINE_ERROR_DURATION = 5000;
+
 // ==================== Stage 基类 ====================
 
 /**
@@ -237,7 +240,7 @@ export class RespondStage extends Stage {
         type: 'dialogue',
         data: {
           text: `[内置Agent] 处理出错: ${ctx.error.message}`,
-          duration: 5000
+          duration: PIPELINE_ERROR_DURATION
         }
       });
     }

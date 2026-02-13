@@ -136,3 +136,4 @@ class InfoPlugin extends AgentPlugin {
 }
 
 module.exports = InfoPlugin;
+module.exports.default = InfoPlugin;

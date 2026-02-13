@@ -136,7 +136,7 @@ class AudioPlayer implements IAudioPlayer {
       if (!this.analyser || !this.dataArray) return;
       
       // 获取音频频率数据
-      this.analyser.getByteFrequencyData(this.dataArray as any);
+      this.analyser.getByteFrequencyData(this.dataArray as unknown as Uint8Array<ArrayBuffer>);
       
       // 计算平均音量
       let sum = 0;
@@ -274,8 +274,9 @@ class AudioPlayer implements IAudioPlayer {
     
     this.audioQueue.push(chunk);
     
-    // 如果还没开始播放，且队列中有足够的数据，尝试开始播放
-    if (!this.isPlaying && this.audioQueue.length >= 2 && this.currentAudio) {
+    // 如果还没开始播放，尝试开始播放
+    // 注意：某些 TTS Provider（如 Edge TTS）只产生 1 个音频块，因此不能等待多个块
+    if (!this.isPlaying && this.currentAudio) {
       this.currentAudio.play().catch(err => {
         window.logger.warn('[AudioPlayer] 自动播放失败:', err);
       });
@@ -336,6 +337,12 @@ class AudioPlayer implements IAudioPlayer {
           if (this.mediaSource && this.mediaSource.readyState === 'open') {
             this.mediaSource.endOfStream();
             window.logger.info('[AudioPlayer] 流式传输结束');
+            // 确保音频开始播放（某些 TTS 只产生单块音频，play 可能在 sourceBuffer 就绪前调用过早）
+            if (!this.isPlaying && this.currentAudio) {
+              this.currentAudio.play().catch(err => {
+                window.logger.warn('[AudioPlayer] endStream 播放失败:', err);
+              });
+            }
           }
         } catch (error) {
           window.logger.warn('[AudioPlayer] 结束流失败:', error);

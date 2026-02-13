@@ -147,30 +147,48 @@ class ProtocolAdapterPlugin extends AgentPlugin {
 
   // ==================== 内部方法 ====================
 
-  _actionToLive2DMessage(action) {
+  /** 默认值常量 */
+  static DEFAULT_MOTION_INDEX = 0;
+  static DEFAULT_MOTION_PRIORITY = 2;
+  static DEFAULT_PARAM_WEIGHT = 1.0;
+  static DEFAULT_EXPRESSION_ID = 'default';
+
+  /**
+   * 提取动作公共字段
+   * @param {object} action 
+   * @returns {{ type: string, [key: string]: unknown }}
+   */
+  _extractActionFields(action) {
     switch (action.type) {
       case 'expression':
-        return { type: 'live2d', data: { command: 'expression', expressionId: action.expressionId } };
+        return { type: 'expression', expressionId: action.expressionId };
       case 'motion':
-        return { type: 'live2d', data: { command: 'motion', group: action.group, index: action.index || 0, priority: action.priority || 2 } };
+        return {
+          type: 'motion',
+          group: action.group,
+          index: action.index ?? ProtocolAdapterPlugin.DEFAULT_MOTION_INDEX,
+          priority: action.priority ?? ProtocolAdapterPlugin.DEFAULT_MOTION_PRIORITY
+        };
       case 'parameter':
-        return { type: 'live2d', data: { command: 'parameter', parameterId: action.parameterId, value: action.value, weight: action.weight || 1.0 } };
+        return {
+          type: 'parameter',
+          parameterId: action.parameterId,
+          value: action.value,
+          weight: action.weight ?? ProtocolAdapterPlugin.DEFAULT_PARAM_WEIGHT
+        };
       default:
-        return { type: 'live2d', data: { command: 'expression', expressionId: 'default' } };
+        return { type: 'expression', expressionId: ProtocolAdapterPlugin.DEFAULT_EXPRESSION_ID };
     }
   }
 
+  _actionToLive2DMessage(action) {
+    const fields = this._extractActionFields(action);
+    return { type: 'live2d', data: { command: fields.type, ...fields } };
+  }
+
   _actionToSyncAction(action) {
-    switch (action.type) {
-      case 'expression':
-        return { type: 'expression', expressionId: action.expressionId, waitComplete: false };
-      case 'motion':
-        return { type: 'motion', group: action.group, index: action.index || 0, priority: action.priority || 2, waitComplete: false };
-      case 'parameter':
-        return { type: 'parameter', parameterId: action.parameterId, value: action.value, weight: action.weight || 1.0, waitComplete: false };
-      default:
-        return { type: 'expression', expressionId: 'default', waitComplete: false };
-    }
+    const fields = this._extractActionFields(action);
+    return { ...fields, waitComplete: false };
   }
 
   _calculateDuration(text) {

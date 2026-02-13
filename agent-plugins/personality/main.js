@@ -16,27 +16,22 @@
 
 const { AgentPlugin } = require('../../dist/agent/agent-plugin');
 
-// ==================== 重要参数列表 ====================
-
-const IMPORTANT_PARAM_PREFIXES = [
-  'ParamEyeLOpen', 'ParamEyeROpen',
-  'ParamMouthOpenY', 'ParamMouthForm',
-  'ParamAngleX', 'ParamAngleY', 'ParamAngleZ',
-  'ParamEyeBallX', 'ParamEyeBallY',
-  'ParamBrowLY', 'ParamBrowRY',
-  'ParamBodyAngleX', 'ParamBodyAngleY', 'ParamBodyAngleZ'
-];
-
 class PersonalityPlugin extends AgentPlugin {
 
   /** 默认基础人格 */
-  defaultPersonality = '你是一个可爱的桌面宠物助手，名叫"小喵"。你活泼开朗，说话带有猫咪的口癖（如"喵~"），喜欢和用户互动。你会根据对话内容做出各种表情和动作来回应用户。';
+  defaultPersonality = '你是一个可爱的桌面宠物助手。你活泼开朗，喜欢和用户互动。你会根据对话内容做出各种表情和动作来回应用户。';
 
   /** 是否在系统提示词中包含模型能力信息 */
   includeModelCapabilities = true;
 
   /** 是否在系统提示词中包含回复格式规范 */
   includeResponseFormat = true;
+
+  /** 自定义回复格式提示词（空字符串使用内置默认） */
+  responseFormatPrompt = '';
+
+  /** 自定义工具使用引导提示词（空字符串使用内置默认） */
+  toolsGuidancePrompt = '';
 
   /** 当前模型能力信息 */
   modelInfo = null;
@@ -58,6 +53,12 @@ class PersonalityPlugin extends AgentPlugin {
     }
     if (config.includeResponseFormat !== undefined) {
       this.includeResponseFormat = config.includeResponseFormat;
+    }
+    if (config.responseFormatPrompt) {
+      this.responseFormatPrompt = config.responseFormatPrompt;
+    }
+    if (config.toolsGuidancePrompt) {
+      this.toolsGuidancePrompt = config.toolsGuidancePrompt;
     }
 
     // 注册一个工具：让 LLM 可以动态修改人格
@@ -185,19 +186,20 @@ class PersonalityPlugin extends AgentPlugin {
     }
 
     if (this.modelInfo.availableParameters && this.modelInfo.availableParameters.length > 0) {
-      const importantParams = this.modelInfo.availableParameters
-        .filter(p => IMPORTANT_PARAM_PREFIXES.some(prefix => p.id.startsWith(prefix)))
+      const paramList = this.modelInfo.availableParameters
         .map(p => `  - ${p.id}: ${p.min} ~ ${p.max}（默认 ${p.default}）`)
         .join('\n');
-      if (importantParams) {
-        parts.push(`\n**可控参数（部分）**:\n${importantParams}`);
-      }
+      parts.push(`\n**可控参数**:\n${paramList}`);
     }
 
     return parts.join('');
   }
 
   _buildResponseFormatSection() {
+    if (this.responseFormatPrompt) {
+      return this.responseFormatPrompt;
+    }
+
     return `## 回复格式规范
 
 你的回复可以包含文字对话和动作/表情指令。请按以下格式输出：
@@ -230,6 +232,9 @@ class PersonalityPlugin extends AgentPlugin {
   }
 
   _buildToolsGuidanceSection() {
+    if (this.toolsGuidancePrompt) {
+      return this.toolsGuidancePrompt.replace('{tools}', this.availableToolsHint);
+    }
     return `## 工具使用说明\n${this.availableToolsHint}\n\n当需要执行操作时，请通过 function calling 调用对应的工具。调用工具后，等待工具结果再继续回复用户。`;
   }
 }

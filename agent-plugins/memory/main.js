@@ -25,7 +25,8 @@ const DEFAULT_CONFIG = {
 对话历史：
 {history}
 
-请输出摘要：`
+请输出摘要：`,
+  compressionSystemPrompt: '你是一个对话摘要助手，请简洁准确地总结对话内容。'
 };
 
 class MemoryPlugin extends AgentPlugin {
@@ -43,6 +44,8 @@ class MemoryPlugin extends AgentPlugin {
     if (pluginConfig.compressionThreshold) this.config.compressionThreshold = pluginConfig.compressionThreshold;
     if (pluginConfig.maxTokenEstimate) this.config.maxTokenEstimate = pluginConfig.maxTokenEstimate;
     if (pluginConfig.compressionMaxTokens) this.config.compressionMaxTokens = pluginConfig.compressionMaxTokens;
+    if (pluginConfig.compressionPrompt) this.config.compressionPrompt = pluginConfig.compressionPrompt;
+    if (pluginConfig.compressionSystemPrompt) this.config.compressionSystemPrompt = pluginConfig.compressionSystemPrompt;
 
     // 注册工具：清除记忆
     this.ctx.registerTool(
@@ -240,7 +243,7 @@ class MemoryPlugin extends AgentPlugin {
 
       const request = {
         messages: [{ role: 'user', content: prompt }],
-        systemPrompt: '你是一个对话摘要助手，请简洁准确地总结对话内容。',
+        systemPrompt: this.config.compressionSystemPrompt,
         maxTokens: this.config.compressionMaxTokens
       };
 

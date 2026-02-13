@@ -18,7 +18,7 @@ import { agentDb, type MessageRecord, type MessageType } from './database';
 export interface IncomingMessage {
   type: string;
   text?: string;
-  data?: any;
+  data?: unknown;
   timestamp?: number;
   action?: string;
   position?: { x: number; y: number };
@@ -71,7 +71,7 @@ export class PipelineContext {
   public error: Error | null = null;
 
   /** 通用键值存储，Stage 之间传递数据 */
-  public state: Map<string, any> = new Map();
+  public state: Map<string, unknown> = new Map();
 
   /** 发送函数（由 AgentServer 注入） */
   private sendFn: (ws: WebSocket, msg: object) => void;
@@ -133,7 +133,7 @@ interface SessionRuntime {
   /** 当前对话 ID */
   currentConversationId: string;
   /** 扩展数据 */
-  metadata: Record<string, any>;
+  metadata: Record<string, unknown>;
 }
 
 /**
@@ -308,13 +308,13 @@ export class SessionManager {
   }
 
   /** 设置会话元数据 */
-  setMetadata(sessionId: string, key: string, value: any): void {
+  setMetadata(sessionId: string, key: string, value: unknown): void {
     const session = this.getOrCreateSession(sessionId);
     session.metadata[key] = value;
   }
 
   /** 获取会话元数据 */
-  getMetadata(sessionId: string, key: string): any {
+  getMetadata(sessionId: string, key: string): unknown {
     return this.sessions.get(sessionId)?.metadata[key];
   }
 
@@ -327,7 +327,7 @@ export class SessionManager {
       content: record.content
     };
 
-    let extra: Record<string, any> = {};
+    let extra: Record<string, unknown> = {};
     try {
       extra = JSON.parse(record.extra || '{}');
     } catch {
@@ -336,7 +336,7 @@ export class SessionManager {
 
     // 恢复附件
     if (record.type === 'image' || record.type === 'file') {
-      msg.attachment = extra.attachment;
+      msg.attachment = extra.attachment as ChatMessage['attachment'];
     }
 
     // 恢复 tool_calls（assistant 消息）
@@ -346,10 +346,10 @@ export class SessionManager {
 
     // 恢复 tool_call_id（tool 消息）
     if (extra.toolCallId) {
-      msg.toolCallId = extra.toolCallId;
+      msg.toolCallId = extra.toolCallId as string;
     }
     if (extra.toolName) {
-      msg.toolName = extra.toolName;
+      msg.toolName = extra.toolName as string;
     }
 
     return msg;

@@ -1523,6 +1523,34 @@ details.reasoning-block[open] > .reasoning-summary::after {
   font-weight: 500;
 }
 
+/* Provider 配置字段 Toggle 开关（boolean 类型字段） */
+.provider-field-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  cursor: pointer;
+  user-select: none;
+  padding: 4px 0;
+}
+
+.provider-field-toggle input[type="checkbox"] {
+  display: none;
+}
+
+.provider-field-toggle input[type="checkbox"]:checked + .provider-toggle-slider {
+  background: #4a9eff;
+}
+
+.provider-field-toggle input[type="checkbox"]:checked + .provider-toggle-slider::after {
+  transform: translateX(16px);
+}
+
+.provider-field-toggle .provider-toggle-label {
+  font-size: 13px;
+  color: #555;
+  font-weight: 500;
+}
+
 /* Provider 配置弹窗 */
 .provider-dialog-overlay {
   position: fixed;
@@ -1602,7 +1630,7 @@ details.reasoning-block[open] > .reasoning-summary::after {
   margin-bottom: 10px;
 }
 
-.provider-dialog-body > .provider-field label {
+.provider-dialog-body > .provider-field label:not(.provider-field-toggle) {
   display: block;
   font-size: 13px;
   color: #555;
@@ -1610,7 +1638,7 @@ details.reasoning-block[open] > .reasoning-summary::after {
   font-weight: 500;
 }
 
-.provider-dialog-body > .provider-field input,
+.provider-dialog-body > .provider-field input:not([type="checkbox"]),
 .provider-dialog-body > .provider-field select {
   width: 100%;
   padding: 9px 12px;
@@ -1709,7 +1737,7 @@ details.reasoning-block[open] > .reasoning-summary::after {
   margin-bottom: 10px;
 }
 
-.agent-provider-config .provider-field label {
+.agent-provider-config .provider-field label:not(.provider-field-toggle) {
   display: block;
   font-size: 12px;
   color: #666;
@@ -1717,7 +1745,7 @@ details.reasoning-block[open] > .reasoning-summary::after {
   font-weight: 500;
 }
 
-.agent-provider-config .provider-field input,
+.agent-provider-config .provider-field input:not([type="checkbox"]),
 .agent-provider-config .provider-field select {
   width: 100%;
   padding: 9px 12px;
@@ -3136,6 +3164,10 @@ body.dark-theme {
   color: #999;
 }
 
+.dark-theme .provider-field-toggle .provider-toggle-label {
+  color: #bbb;
+}
+
 .dark-theme .agent-provider-instance-desc {
   color: #888;
 }
@@ -3174,7 +3206,7 @@ body.dark-theme {
   background: rgba(255, 255, 255, 0.1);
 }
 
-.dark-theme .provider-dialog-body > .provider-field label {
+.dark-theme .provider-dialog-body > .provider-field label:not(.provider-field-toggle) {
   color: #999;
 }
 
@@ -3233,7 +3265,7 @@ body.dark-theme {
   border-top-color: #444;
 }
 
-.dark-theme .agent-provider-config .provider-field label {
+.dark-theme .agent-provider-config .provider-field label:not(.provider-field-toggle) {
   color: #999;
 }
 

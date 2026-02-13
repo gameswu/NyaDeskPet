@@ -192,24 +192,37 @@ class PluginToolBridgePlugin extends AgentPlugin {
       return { toolCallId: '', content: '插件调用系统未初始化', success: false };
     }
 
+    // 解析目标插件和动作
     const mapping = ACTION_MAPPINGS[toolName];
-    if (!mapping) {
+    let pluginId, action, params;
+    if (mapping) {
+      pluginId = mapping.pluginId;
+      action = mapping.action;
+      params = mapping.paramMapper(args);
+    } else {
       const parts = toolName.split('_');
-      const pluginId = parts[0];
-      const action = parts.slice(1).join('_');
-
-      try {
-        const result = await this.invokeSender(pluginId, action, args);
-        return { toolCallId: '', content: result.success ? this._formatPluginResult(result) : (result.error || '插件执行失败'), success: result.success };
-      } catch (error) {
-        return { toolCallId: '', content: `插件调用失败: ${error.message}`, success: false };
-      }
+      pluginId = parts[0];
+      action = parts.slice(1).join('_');
+      params = args;
     }
 
+    return this._invokePlugin(pluginId, action, params);
+  }
+
+  /**
+   * 统一的插件调用方法
+   * @param {string} pluginId 
+   * @param {string} action 
+   * @param {object} params 
+   */
+  async _invokePlugin(pluginId, action, params) {
     try {
-      const mappedParams = mapping.paramMapper(args);
-      const result = await this.invokeSender(mapping.pluginId, mapping.action, mappedParams);
-      return { toolCallId: '', content: result.success ? this._formatPluginResult(result) : (result.error || '插件执行失败'), success: result.success };
+      const result = await this.invokeSender(pluginId, action, params);
+      return {
+        toolCallId: '',
+        content: result.success ? this._formatPluginResult(result) : (result.error || '插件执行失败'),
+        success: result.success
+      };
     } catch (error) {
       return { toolCallId: '', content: `插件调用失败: ${error.message}`, success: false };
     }

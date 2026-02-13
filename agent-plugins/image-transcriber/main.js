@@ -188,3 +188,4 @@ class ImageTranscriberPlugin extends AgentPlugin {
 }
 
 module.exports = ImageTranscriberPlugin;
+module.exports.default = ImageTranscriberPlugin;

@@ -18,6 +18,52 @@ let isUIVisible: boolean = true;
 // 发送锁：防止连续发送消息导致后端并发处理错乱
 let isSendingMessage: boolean = false;
 
+// ==================== Provider UI 缓存 ====================
+
+/** LLM Provider 类型缓存 */
+let providerTypesCache: AgentProviderMetadata[] | null = null;
+
+/** TTS Provider 类型缓存 */
+let ttsTypesCache: AgentProviderMetadata[] | null = null;
+
+/** 当前编辑中的 LLM Provider 元数据 */
+let currentProviderMetadata: AgentProviderMetadata | undefined = undefined;
+
+/** 当前编辑中的 TTS Provider 元数据 */
+let currentTTSMetadata: AgentProviderMetadata | undefined = undefined;
+
+// ==================== UI 常量 ====================
+
+/** 鼠标移动节流间隔（ms） */
+const MOUSE_THROTTLE_MS = 50;
+
+/** 欢迎消息延迟（ms） */
+const WELCOME_DELAY_MS = 1000;
+
+/** 欢迎消息展示时长（ms） */
+const WELCOME_DURATION_MS = 5000;
+
+/** 弹窗状态提示自动隐藏延迟（ms） */
+const DIALOG_STATUS_HIDE_DELAY_MS = 3000;
+
+/** 文本字段使用 textarea 的长度阈值 */
+const TEXTAREA_LENGTH_THRESHOLD = 80;
+
+/** 对话列表延迟刷新（ms） */
+const CONVERSATION_REFRESH_DELAY_MS = 500;
+
+/** 指令建议延迟隐藏（ms） */
+const COMMAND_SUGGESTION_HIDE_DELAY_MS = 200;
+
+/** 文件最大大小（MB） */
+const MAX_FILE_SIZE_MB = 100;
+
+/** 大文件提示阈值（MB） */
+const LARGE_FILE_WARN_MB = 10;
+
+/** 错误消息默认展示时长（ms） */
+const ERROR_MESSAGE_DURATION_MS = 5000;
+
 /**
  * 切换UI显示/隐藏
  */
@@ -127,7 +173,7 @@ async function initializeApp(): Promise<void> {
     // 7. 初始化 ASR 服务
     window.logger.info('初始化 ASR 服务...');
     try {
-      const asrResult = await (window as any).electronAPI.asrInitialize();
+      const asrResult = await window.electronAPI.asrInitialize();
       if (asrResult.success) {
         window.logger.info('ASR 服务初始化成功');
         window.logger.info('ASR语音识别服务初始化成功');
@@ -205,9 +251,9 @@ async function initializeApp(): Promise<void> {
     setTimeout(() => {
       window.dialogueManager.showDialogue(
         window.i18nManager.t('messages.welcome'),
-        5000
+        WELCOME_DURATION_MS
       );
-    }, 1000);
+    }, WELCOME_DELAY_MS);
 
   } catch (error) {
     window.logger.error('应用初始化失败:', error);
@@ -253,7 +299,7 @@ function setupEventListeners(): void {
       
       window.live2dManager.lookAt(x, y);
       mouseMoveThrottle = null;
-    }, 50);
+    }, MOUSE_THROTTLE_MS);
   });
   
   // 摄像头设备选择
@@ -288,7 +334,7 @@ function setupEventListeners(): void {
   window.backendClient.onMessage((message) => {
     window.logger.info('收到后端消息:', message);
     if (message.type === 'dialogue') {
-      const data = message.data as any;
+      const data = message.data as { text: string; attachment?: { type: 'image' | 'file'; url: string; name?: string }; reasoningContent?: string };
       addChatMessage(data.text, false, { attachment: data.attachment, reasoningContent: data.reasoningContent });
     }
   });
@@ -508,9 +554,9 @@ async function initAgentProviderUI(): Promise<void> {
     const typeSelect = document.getElementById('provider-form-type') as HTMLSelectElement;
     if (typeSelect) {
       typeSelect.onchange = () => {
-        const info = (window as any).__providerTypesCache as any[];
+        const info = providerTypesCache;
         if (info) {
-          const selectedMeta = info.find((p: any) => p.id === typeSelect.value);
+          const selectedMeta = info.find((p) => p.id === typeSelect.value);
           renderProviderConfigFields(selectedMeta, undefined, 'provider-form-config');
         }
       };
@@ -529,7 +575,7 @@ async function initAgentProviderUI(): Promise<void> {
 async function refreshProviderInstances(): Promise<void> {
   try {
     const info = await window.electronAPI.agentGetProviders();
-    (window as any).__providerTypesCache = info.providerTypes;
+    providerTypesCache = info.providerTypes;
 
     const container = document.getElementById('agent-provider-list');
     if (!container) return;
@@ -647,8 +693,8 @@ async function refreshProviderInstances(): Promise<void> {
     }
 
     // 刷新 lucide 图标
-    if ((window as any).lucide) {
-      (window as any).lucide.createIcons();
+    if (window.lucide) {
+      window.lucide.createIcons();
     }
   } catch (error) {
     window.logger.error('刷新 Provider 列表失败:', error);
@@ -665,7 +711,7 @@ function showProviderDialog(inst?: any): void {
   const titleSpan = document.querySelector('#provider-dialog-title span');
   const nameInput = document.getElementById('provider-form-name') as HTMLInputElement;
   const typeSelect = document.getElementById('provider-form-type') as HTMLSelectElement;
-  const types = (window as any).__providerTypesCache as any[];
+  const types = providerTypesCache;
 
   if (inst) {
     // 编辑模式
@@ -718,8 +764,8 @@ function showProviderDialog(inst?: any): void {
   hideProviderDialogStatus();
 
   // 刷新弹窗内图标
-  if ((window as any).lucide) {
-    (window as any).lucide.createIcons();
+  if (window.lucide) {
+    window.lucide.createIcons();
   }
 }
 
@@ -807,7 +853,7 @@ function renderProviderConfigFields(metadata: any, savedConfig?: Record<string, 
   container.innerHTML = '';
 
   // 保存当前 metadata，供 collectProviderConfig 回退 default 值
-  (window as any).__currentProviderMetadata = metadata;
+  currentProviderMetadata = metadata;
 
   if (!metadata || !metadata.configSchema || metadata.configSchema.length === 0) {
     const hint = document.createElement('p');
@@ -825,15 +871,18 @@ function renderProviderConfigFields(metadata: any, savedConfig?: Record<string, 
     const div = document.createElement('div');
     div.className = 'provider-field';
 
-    const label = document.createElement('label');
-    label.textContent = tProvider(pid, `fields.${field.key}.label`, field.label);
-    if (field.required) {
-      const asterisk = document.createElement('span');
-      asterisk.textContent = ' *';
-      asterisk.style.color = '#dc3545';
-      label.appendChild(asterisk);
+    // boolean 类型使用 Toggle 内含标签，不需要外部 label
+    if (field.type !== 'boolean') {
+      const label = document.createElement('label');
+      label.textContent = tProvider(pid, `fields.${field.key}.label`, field.label);
+      if (field.required) {
+        const asterisk = document.createElement('span');
+        asterisk.textContent = ' *';
+        asterisk.style.color = '#dc3545';
+        label.appendChild(asterisk);
+      }
+      div.appendChild(label);
     }
-    div.appendChild(label);
 
     // 获取字段值：已保存值 → default → undefined
     const getValue = () => {
@@ -858,12 +907,27 @@ function renderProviderConfigFields(metadata: any, savedConfig?: Record<string, 
         input.appendChild(option);
       }
     } else if (field.type === 'boolean') {
+      // 使用 Toggle 开关样式
+      const toggleLabel = document.createElement('label');
+      toggleLabel.className = 'provider-field-toggle';
+      
       const checkbox = document.createElement('input');
       checkbox.type = 'checkbox';
       const val = getValue();
       checkbox.checked = val === true || val === 'true';
       checkbox.dataset.providerField = field.key;
-      div.appendChild(checkbox);
+      toggleLabel.appendChild(checkbox);
+      
+      const slider = document.createElement('span');
+      slider.className = 'provider-toggle-slider';
+      toggleLabel.appendChild(slider);
+      
+      const toggleText = document.createElement('span');
+      toggleText.className = 'provider-toggle-label';
+      toggleText.textContent = tProvider(pid, `fields.${field.key}.label`, field.label);
+      toggleLabel.appendChild(toggleText);
+      
+      div.appendChild(toggleLabel);
       if (field.description) {
         const hint = document.createElement('div');
         hint.className = 'field-hint';
@@ -908,7 +972,7 @@ function collectProviderConfig(providerId: string, containerId: string = 'provid
   if (!container) return config;
 
   // 获取当前选中的 provider 元信息，用于回退 default 值
-  const metadata = (window as any).__currentProviderMetadata as AgentProviderMetadata | undefined;
+  const metadata = currentProviderMetadata;
   const schemaMap = new Map<string, any>();
   if (metadata?.configSchema) {
     for (const field of metadata.configSchema) {
@@ -948,7 +1012,7 @@ function showProviderDialogStatus(message: string, type: 'success' | 'error' | '
   el.className = `agent-provider-status ${type}`;
   el.classList.remove('hidden');
   if (type === 'success' || type === 'info') {
-    setTimeout(() => hideProviderDialogStatus(), 3000);
+    setTimeout(() => hideProviderDialogStatus(), DIALOG_STATUS_HIDE_DELAY_MS);
   }
 }
 
@@ -999,9 +1063,9 @@ async function initAgentTTSUI(): Promise<void> {
     const typeSelect = document.getElementById('tts-form-type') as HTMLSelectElement;
     if (typeSelect) {
       typeSelect.onchange = () => {
-        const info = (window as any).__ttsTypesCache as any[];
+        const info = ttsTypesCache;
         if (info) {
-          const selectedMeta = info.find((p: any) => p.id === typeSelect.value);
+          const selectedMeta = info.find((p) => p.id === typeSelect.value);
           renderTTSConfigFields(selectedMeta, undefined);
         }
       };
@@ -1032,7 +1096,7 @@ function renderTTSConfigFields(metadata: any, savedConfig?: Record<string, unkno
   }
 
   // 存储 metadata 引用
-  (window as any).__currentTTSMetadata = metadata;
+  currentTTSMetadata = metadata;
 
   container.innerHTML = '';
 
@@ -1042,15 +1106,18 @@ function renderTTSConfigFields(metadata: any, savedConfig?: Record<string, unkno
     const div = document.createElement('div');
     div.className = 'provider-field';
 
-    const label = document.createElement('label');
-    label.textContent = tTTSProvider(pid, `fields.${field.key}.label`, field.label);
-    if (field.required) {
-      const asterisk = document.createElement('span');
-      asterisk.textContent = ' *';
-      asterisk.style.color = '#dc3545';
-      label.appendChild(asterisk);
+    // boolean 类型使用 Toggle 内含标签，不需要外部 label
+    if (field.type !== 'boolean') {
+      const label = document.createElement('label');
+      label.textContent = tTTSProvider(pid, `fields.${field.key}.label`, field.label);
+      if (field.required) {
+        const asterisk = document.createElement('span');
+        asterisk.textContent = ' *';
+        asterisk.style.color = '#dc3545';
+        label.appendChild(asterisk);
+      }
+      div.appendChild(label);
     }
-    div.appendChild(label);
 
     // 获取字段值：已保存值 → default → undefined
     const getValue = (): any => {
@@ -1075,12 +1142,27 @@ function renderTTSConfigFields(metadata: any, savedConfig?: Record<string, unkno
         input.appendChild(option);
       }
     } else if (field.type === 'boolean') {
+      // 使用 Toggle 开关样式
+      const toggleLabel = document.createElement('label');
+      toggleLabel.className = 'provider-field-toggle';
+      
       const checkbox = document.createElement('input');
       checkbox.type = 'checkbox';
       const val = getValue();
       checkbox.checked = val === true || val === 'true';
       checkbox.dataset.providerField = field.key;
-      div.appendChild(checkbox);
+      toggleLabel.appendChild(checkbox);
+      
+      const slider = document.createElement('span');
+      slider.className = 'provider-toggle-slider';
+      toggleLabel.appendChild(slider);
+      
+      const toggleText = document.createElement('span');
+      toggleText.className = 'provider-toggle-label';
+      toggleText.textContent = tTTSProvider(pid, `fields.${field.key}.label`, field.label);
+      toggleLabel.appendChild(toggleText);
+      
+      div.appendChild(toggleLabel);
       if (field.description) {
         const hint = document.createElement('div');
         hint.className = 'field-hint';
@@ -1126,7 +1208,7 @@ function collectTTSConfig(providerId: string): any {
   if (!container) return {};
 
   const config: any = { id: providerId, name: providerId };
-  const metadata = (window as any).__currentTTSMetadata;
+  const metadata = currentTTSMetadata;
   const schemaMap = new Map<string, any>();
   if (metadata?.configSchema) {
     for (const field of metadata.configSchema) {
@@ -1161,7 +1243,7 @@ function collectTTSConfig(providerId: string): any {
 async function refreshTTSInstances(): Promise<void> {
   try {
     const info = await window.electronAPI.agentGetTTSProviders();
-    (window as any).__ttsTypesCache = info.providerTypes;
+    ttsTypesCache = info.providerTypes;
 
     const container = document.getElementById('agent-tts-list');
     if (!container) return;
@@ -1275,8 +1357,8 @@ async function refreshTTSInstances(): Promise<void> {
       container.appendChild(card);
     }
 
-    if ((window as any).lucide) {
-      (window as any).lucide.createIcons();
+    if (window.lucide) {
+      window.lucide.createIcons();
     }
   } catch (error) {
     window.logger.error('刷新 TTS 列表失败:', error);
@@ -1293,7 +1375,7 @@ function showTTSDialog(inst?: any): void {
   const titleSpan = document.querySelector('#tts-dialog-title span');
   const nameInput = document.getElementById('tts-form-name') as HTMLInputElement;
   const typeSelect = document.getElementById('tts-form-type') as HTMLSelectElement;
-  const types = (window as any).__ttsTypesCache as any[];
+  const types = ttsTypesCache;
 
   if (inst) {
     if (titleSpan) titleSpan.textContent = window.i18nManager.t('agent.tts.editTitle');
@@ -1336,8 +1418,8 @@ function showTTSDialog(inst?: any): void {
   overlay.classList.remove('hidden');
   hideTTSDialogStatus();
 
-  if ((window as any).lucide) {
-    (window as any).lucide.createIcons();
+  if (window.lucide) {
+    window.lucide.createIcons();
   }
 }
 
@@ -1402,7 +1484,7 @@ function showTTSDialogStatus(message: string, type: 'success' | 'error' | 'info'
   el.className = `agent-provider-status ${type}`;
   el.classList.remove('hidden');
   if (type === 'success' || type === 'info') {
-    setTimeout(() => hideTTSDialogStatus(), 3000);
+    setTimeout(() => hideTTSDialogStatus(), DIALOG_STATUS_HIDE_DELAY_MS);
   }
 }
 
@@ -2020,7 +2102,7 @@ function showPluginConfigDialog(plugin: any): void {
       inputHtml = `<select class="plugin-config-input" data-config-key="${key}">${optionsHtml}</select>`;
     } else if (field.type === 'number') {
       inputHtml = `<input type="number" class="plugin-config-input" data-config-key="${key}" value="${currentValue !== undefined ? currentValue : ''}">`;
-    } else if (field.type === 'string' && String(currentValue || '').length > 80) {
+    } else if (field.type === 'string' && String(currentValue || '').length > TEXTAREA_LENGTH_THRESHOLD) {
       inputHtml = `<textarea class="plugin-config-textarea" data-config-key="${key}" rows="4">${currentValue ?? ''}</textarea>`;
     } else {
       inputHtml = `<input type="text" class="plugin-config-input" data-config-key="${key}" value="${currentValue !== undefined ? String(currentValue).replace(/"/g, '&quot;') : ''}">`;
@@ -2150,11 +2232,11 @@ async function refreshAgentCommands(): Promise<void> {
     }
 
     container.innerHTML = '';
-    commands.forEach((cmd: any) => {
+    commands.forEach((cmd) => {
       const item = document.createElement('div');
       item.className = 'agent-command-item';
 
-      const paramsHtml = cmd.params?.map((p: any) =>
+      const paramsHtml = cmd.params?.map((p) =>
         `<span class="agent-command-param">${escapeHtml(p.name)}${p.required ? '' : '?'}</span>`
       ).join('') || '';
 
@@ -2436,7 +2518,7 @@ async function sendChatMessage(): Promise<void> {
   try {
     await sendUserMessage(text);
     // 延迟刷新对话列表（等待后端保存消息并更新标题）
-    setTimeout(() => loadConversations(), 500);
+    setTimeout(() => loadConversations(), CONVERSATION_REFRESH_DELAY_MS);
   } catch (error) {
     window.logger.error('发送消息失败:', error);
     addChatMessage(window.i18nManager.t('messages.sendFailed'), false);
@@ -2949,7 +3031,7 @@ function initializeChatWindow(): void {
 
     // 失焦时延迟隐藏（让 click 事件有机会触发）
     chatInput.addEventListener('blur', () => {
-      setTimeout(() => hideCommandSuggestions(), 200);
+      setTimeout(() => hideCommandSuggestions(), COMMAND_SUGGESTION_HIDE_DELAY_MS);
     });
   }
 
@@ -3030,7 +3112,7 @@ function initializeChatWindow(): void {
       for (let i = 0; i < files.length; i++) {
         const file = files[i];
         const fileSizeMB = file.size / (1024 * 1024);
-        const maxSizeMB = 100;
+        const maxSizeMB = MAX_FILE_SIZE_MB;
         
         // 检查文件大小
         if (fileSizeMB > maxSizeMB) {
@@ -3070,7 +3152,7 @@ function initializeChatWindow(): void {
         };
         
         // 对于大文件显示加载提示
-        if (fileSizeMB > 10) {
+        if (fileSizeMB > LARGE_FILE_WARN_MB) {
           window.dialogueManager?.showQuick(
             `正在加载文件 ${file.name} (${fileSizeMB.toFixed(1)}MB)，请稍候...`,
             2000
@@ -3821,7 +3903,7 @@ async function sendFileToBackend(file: File, base64Data: string): Promise<void> 
     });
     
     // 对于大文件显示发送提示
-    if (fileSizeMB > 10) {
+    if (fileSizeMB > LARGE_FILE_WARN_MB) {
       window.dialogueManager?.showQuick(
         `正在发送文件 ${file.name} (${fileSizeMB.toFixed(1)}MB)，请稍候...`,
         3000
@@ -3845,7 +3927,7 @@ async function sendFileToBackend(file: File, base64Data: string): Promise<void> 
     window.logger?.info('文件发送成功', { fileName: file.name });
     
     // 大文件发送成功后显示提示
-    if (fileSizeMB > 10) {
+    if (fileSizeMB > LARGE_FILE_WARN_MB) {
       window.dialogueManager?.showQuick(
         `文件 ${file.name} 发送成功`,
         2000
@@ -3860,7 +3942,7 @@ async function sendFileToBackend(file: File, base64Data: string): Promise<void> 
 /**
  * 显示错误消息
  */
-function showError(message: string, duration: number = 5000): void {
+function showError(message: string, duration: number = ERROR_MESSAGE_DURATION_MS): void {
   window.logger.error(message);
   window.dialogueManager?.showDialogue(`❌ ${message}`, duration);
 }

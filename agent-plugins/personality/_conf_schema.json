@@ -2,7 +2,7 @@
   "defaultPersonality": {
     "type": "string",
     "description": "默认基础人格设定文本。当用户未自定义角色信息时使用此人格。",
-    "default": "你是一个可爱的桌面宠物助手，名叫\"小喵\"。你活泼开朗，说话带有猫咪的口癖（如\"喵~\"），喜欢和用户互动。你会根据对话内容做出各种表情和动作来回应用户。"
+    "default": "你是一个可爱的桌面宠物助手。你活泼开朗，喜欢和用户互动。你会根据对话内容做出各种表情和动作来回应用户。"
   },
   "includeModelCapabilities": {
     "type": "boolean",
@@ -13,5 +13,15 @@
     "type": "boolean",
     "description": "是否在系统提示词中包含回复格式规范（XML 标签使用说明）。关闭后 LLM 将只输出纯文本。",
     "default": true
+  },
+  "responseFormatPrompt": {
+    "type": "string",
+    "description": "自定义回复格式规范提示词。用于引导 LLM 使用 XML 标签控制 Live2D 动作/表情/参数。留空使用内置默认值。",
+    "default": ""
+  },
+  "toolsGuidancePrompt": {
+    "type": "string",
+    "description": "自定义工具使用引导提示词。{tools} 会被替换为可用工具描述。留空使用内置默认值。",
+    "default": ""
   }
 }

@@ -49,6 +49,8 @@ class Live2DManager implements ILive2DManager {
   private mouseY: number = 0;
   private eyeTrackingTimer: number | null = null;
   private isPlayingMotion: boolean = false;  // 标记是否正在播放动作
+  private isAnimatingParams: boolean = false;  // 标记是否正在执行参数动画（优先于视线跟随）
+  private animatingParamsTimer: ReturnType<typeof setTimeout> | null = null;  // 参数动画抑制计时器
 
   constructor(canvasId: string) {
     const canvas = document.getElementById(canvasId) as HTMLCanvasElement;
@@ -769,6 +771,11 @@ class Live2DManager implements ILive2DManager {
           window.dialogueManager.showDialogue(action.text, action.duration || 5000);
         }
         break;
+      case 'parameter':
+        if (action.parameters && action.parameters.length > 0) {
+          this.setParameters(action.parameters);
+        }
+        break;
       default:
         window.logger?.warn('Live2D未知动作类型', { type: action.type });
     }
@@ -813,8 +820,8 @@ class Live2DManager implements ILive2DManager {
     if (!this.eyeTrackingEnabled) return;
     
     try {
-      // 如果正在播放动作，跳过视线更新（动作优先）
-      if (!this.isPlayingMotion) {
+      // 如果正在播放动作或参数动画，跳过视线更新（模型控制优先）
+      if (!this.isPlayingMotion && !this.isAnimatingParams) {
         // 获取鼠标在屏幕上的绝对坐标
         const cursorPos = await window.electronAPI.getCursorScreenPoint();
         
@@ -848,6 +855,31 @@ class Live2DManager implements ILive2DManager {
   }
 
   /**
+   * 暂时抑制视线跟随（参数动画期间）
+   * 每次调用重置 500ms 计时器，保证参数动画结束后自动恢复
+   */
+  private suppressEyeTracking(): void {
+    this.isAnimatingParams = true;
+    if (this.animatingParamsTimer) {
+      clearTimeout(this.animatingParamsTimer);
+    }
+    this.animatingParamsTimer = setTimeout(() => {
+      this.isAnimatingParams = false;
+      this.animatingParamsTimer = null;
+    }, 500);
+  }
+
+  /**
+   * 与视线跟随相关的参数前缀
+   * 当这些参数被模型控制设置时，暂时抑制视线跟随
+   */
+  private static readonly EYE_TRACKING_PARAM_PREFIXES = [
+    'ParamAngleX', 'ParamAngleY', 'ParamAngleZ',
+    'ParamEyeBallX', 'ParamEyeBallY',
+    'ParamBodyAngleX', 'ParamBodyAngleY', 'ParamBodyAngleZ'
+  ];
+
+  /**
    * 设置模型参数
    * @param parameterId 参数ID（如 ParamEyeLOpen, ParamMouthOpenY）
    * @param value 参数值
@@ -866,6 +898,11 @@ class Live2DManager implements ILive2DManager {
       if (!coreModel) {
         window.logger.warn('[Live2D] 无法访问模型内部结构');
         return;
+      }
+
+      // 当设置与视线跟随相关的参数时，暂时抑制视线跟随
+      if (Live2DManager.EYE_TRACKING_PARAM_PREFIXES.some(prefix => parameterId.startsWith(prefix))) {
+        this.suppressEyeTracking();
       }
 
       // 使用 addParameterValueById 带权重设置参数

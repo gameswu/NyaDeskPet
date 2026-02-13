@@ -110,11 +110,17 @@ class MCPConnection {
         throw new Error(`不支持的传输类型: ${this.config.transport}`);
       }
 
-      // 创建客户端
+      // 动态读取 package.json 版本
+      let appVersion = '1.0.0';
+      try {
+        const pkgPath = require('path').join(require('electron').app.getAppPath(), 'package.json');
+        appVersion = require(pkgPath).version || appVersion;
+      } catch { /* 忽略 */ }
+
       this.client = new Client(
         {
           name: 'NyaDeskPet',
-          version: '1.0.0'
+          version: appVersion
         },
         {
           capabilities: {}

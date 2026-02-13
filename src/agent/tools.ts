@@ -13,6 +13,12 @@
 import { logger } from '../logger';
 import { agentDb } from './database';
 
+/** 单个工具默认超时（ms） */
+const DEFAULT_TOOL_TIMEOUT = 60000;
+
+/** 批量工具整体超时（ms） */
+const DEFAULT_BATCH_TIMEOUT = 120000;
+
 // ==================== 核心类型 ====================
 
 /** 工具的 JSON Schema（OpenAI function calling 格式） */
@@ -284,7 +290,7 @@ export class ToolManager {
    * @param toolCall LLM 返回的工具调用请求
    * @param timeout 超时时间（毫秒），默认 60 秒
    */
-  async executeTool(toolCall: ToolCall, timeout: number = 60000): Promise<ToolResult> {
+  async executeTool(toolCall: ToolCall, timeout: number = DEFAULT_TOOL_TIMEOUT): Promise<ToolResult> {
     const tool = this.getToolByName(toolCall.name);
 
     if (!tool) {
@@ -354,7 +360,7 @@ export class ToolManager {
    * @param timeout 单个工具超时（毫秒），默认 60 秒
    * @param overallTimeout 整体超时（毫秒），默认 120 秒
    */
-  async executeToolCalls(toolCalls: ToolCall[], timeout: number = 60000, overallTimeout: number = 120000): Promise<ToolResult[]> {
+  async executeToolCalls(toolCalls: ToolCall[], timeout: number = DEFAULT_TOOL_TIMEOUT, overallTimeout: number = DEFAULT_BATCH_TIMEOUT): Promise<ToolResult[]> {
     const results: ToolResult[] = [];
     const startTime = Date.now();
     for (const tc of toolCalls) {

@@ -43,6 +43,9 @@ class CoreAgentPlugin extends AgentPlugin {
   enableTTS = true;
   enableToolCalling = true;
 
+  /** 自定义触碰反应提示词（空字符串使用内置默认） */
+  tapReactionPrompt = '';
+
   async initialize() {
     this.ctx.logger.info('Core Agent 处理器正在初始化...');
 
@@ -51,6 +54,7 @@ class CoreAgentPlugin extends AgentPlugin {
     if (config.tapMaxTokens) this.tapMaxTokens = config.tapMaxTokens;
     if (config.enableTTS !== undefined) this.enableTTS = config.enableTTS;
     if (config.enableToolCalling !== undefined) this.enableToolCalling = config.enableToolCalling;
+    if (config.tapReactionPrompt) this.tapReactionPrompt = config.tapReactionPrompt;
 
     // 获取依赖的基础插件实例
     this.personality = this.ctx.getPluginInstance('personality');
@@ -114,18 +118,14 @@ class CoreAgentPlugin extends AgentPlugin {
       const collected = await this.inputCollector.collectInput(mctx.sessionId, text);
       if (collected === null) {
         this.ctx.logger.info('[Core Agent] 输入已被收集器缓冲，等待更多输入...');
-        return true; // 返回 true 表示已处理（跳过后续流程）
+        return true;
       }
       text = collected;
       this.ctx.logger.info(`[Core Agent] 收集器合并输出: ${text}`);
     }
 
-    // 检查是否有可用的 LLM Provider
-    const providers = this.ctx.getProviders();
-    const primaryId = this.ctx.getPrimaryProviderId();
-    const primaryProvider = providers.find(p => p.instanceId === primaryId);
-
-    if (!primaryId || !primaryProvider || primaryProvider.status !== 'connected') {
+    // 检查 Provider 可用性
+    if (!this._getPrimaryProvider()) {
       mctx.addReply({
         type: 'dialogue',
         data: { text: '[Core Agent] 未配置或未激活主 LLM Provider', duration: 5000 }
@@ -133,95 +133,10 @@ class CoreAgentPlugin extends AgentPlugin {
       return true;
     }
 
-    // Echo 类型不使用高级功能
-    if (primaryProvider.providerId === 'echo') {
-      return false;
-    }
-
     const sessions = this.ctx.getSessions();
-
-    // 追加用户消息到会话历史
     sessions.addMessage(mctx.sessionId, { role: 'user', content: text });
 
-    // 1. 同步信息到人格管理器，构建系统提示词
-    this._syncInfoToPlugins();
-    const systemPrompt = this.personality.buildSystemPrompt();
-
-    // 2. 构建上下文消息（摘要 + 近期历史，自动压缩旧消息）
-    let compressionProvider = null;
-    try {
-      compressionProvider = {
-        chat: (req) => this.ctx.callProvider('primary', req)
-      };
-    } catch {
-      // 忽略
-    }
-
-    const contextMessages = await this.memory.buildContextMessages(
-      mctx.sessionId,
-      sessions,
-      compressionProvider
-    );
-
-    // 确保当前用户消息在上下文中
-    const lastMsg = contextMessages[contextMessages.length - 1];
-    if (!lastMsg || lastMsg.role !== 'user' || lastMsg.content !== text) {
-      contextMessages.push({ role: 'user', content: text });
-    }
-
-    // 3. 构建 LLM 请求
-    const request = {
-      messages: contextMessages,
-      systemPrompt,
-      sessionId: mctx.sessionId
-    };
-
-    // 添加工具
-    if (this.enableToolCalling && this.ctx.isToolCallingEnabled() && this.ctx.hasEnabledTools()) {
-      request.tools = this.ctx.getOpenAITools();
-      request.toolChoice = 'auto';
-    }
-
-    // 更新插件工具桥接的调用器
-    const sender = this.ctx.getPluginInvokeSender();
-    if (sender) {
-      this.pluginToolBridge.setInvokeSender(sender);
-    }
-
-    try {
-      // 4. 工具循环执行（使用 handler 的 executeWithToolLoop）
-      const response = await this.ctx.executeWithToolLoop(request, mctx);
-
-      // 追加助手回复到历史
-      sessions.addMessage(mctx.sessionId, {
-        role: 'assistant',
-        content: response.text
-      });
-
-      // 5. 协议适配：解析 LLM 回复，提取 Live2D 指令
-      const parsed = this.protocolAdapter.parseResponse(response.text, response.reasoningContent);
-
-      // 6. 转换为前端期望的协议消息
-      const outgoingMessages = this.protocolAdapter.toOutgoingMessages(parsed);
-
-      for (const msg of outgoingMessages) {
-        mctx.addReply(msg);
-      }
-
-      // 7. TTS 合成（使用纯文本，不含 XML 标签）
-      if (this.enableTTS && this.ctx.hasTTS() && parsed.text) {
-        this.ctx.synthesizeAndStream(parsed.text, mctx).catch(err => {
-          this.ctx.logger.warn(`TTS 合成失败（非致命）: ${err}`);
-        });
-      }
-    } catch (error) {
-      this.ctx.logger.error(`LLM 调用失败: ${error}`);
-      mctx.addReply({
-        type: 'dialogue',
-        data: { text: `[Core Agent] AI 回复失败: ${error.message}`, duration: 5000 }
-      });
-    }
-
+    await this._callLLMAndRespond(mctx, text, 'LLM');
     return true;
   }
 
@@ -236,12 +151,7 @@ class CoreAgentPlugin extends AgentPlugin {
     const pluginLabel = data.pluginName || data.pluginId || '未知插件';
     const userContent = `[插件 ${pluginLabel}] ${data.text}`;
 
-    // 检查 LLM 是否可用
-    const providers = this.ctx.getProviders();
-    const primaryId = this.ctx.getPrimaryProviderId();
-    const primaryProvider = providers.find(p => p.instanceId === primaryId);
-
-    if (!primaryId || !primaryProvider || primaryProvider.status !== 'connected') {
+    if (!this._getPrimaryProvider()) {
       // 无 Provider 时仅持久化
       const sessions = this.ctx.getSessions();
       sessions.addMessage(mctx.sessionId, { role: 'user', content: userContent });
@@ -252,67 +162,10 @@ class CoreAgentPlugin extends AgentPlugin {
       return true;
     }
 
-    if (primaryProvider.providerId === 'echo') {
-      return false;
-    }
-
     const sessions = this.ctx.getSessions();
     sessions.addMessage(mctx.sessionId, { role: 'user', content: userContent });
 
-    this._syncInfoToPlugins();
-    const systemPrompt = this.personality.buildSystemPrompt();
-
-    let compressionProvider = null;
-    try {
-      compressionProvider = { chat: (req) => this.ctx.callProvider('primary', req) };
-    } catch { /* 忽略 */ }
-
-    const contextMessages = await this.memory.buildContextMessages(
-      mctx.sessionId, sessions, compressionProvider
-    );
-
-    const lastMsg = contextMessages[contextMessages.length - 1];
-    if (!lastMsg || lastMsg.content !== userContent) {
-      contextMessages.push({ role: 'user', content: userContent });
-    }
-
-    const request = { messages: contextMessages, systemPrompt, sessionId: mctx.sessionId };
-
-    if (this.enableToolCalling && this.ctx.isToolCallingEnabled() && this.ctx.hasEnabledTools()) {
-      request.tools = this.ctx.getOpenAITools();
-      request.toolChoice = 'auto';
-    }
-
-    const sender = this.ctx.getPluginInvokeSender();
-    if (sender) {
-      this.pluginToolBridge.setInvokeSender(sender);
-    }
-
-    try {
-      const response = await this.ctx.executeWithToolLoop(request, mctx);
-      sessions.addMessage(mctx.sessionId, { role: 'assistant', content: response.text });
-
-      const parsed = this.protocolAdapter.parseResponse(response.text, response.reasoningContent);
-      const outgoingMessages = this.protocolAdapter.toOutgoingMessages(parsed);
-      for (const msg of outgoingMessages) {
-        mctx.addReply(msg);
-      }
-
-      if (this.enableTTS && this.ctx.hasTTS() && parsed.text) {
-        this.ctx.synthesizeAndStream(parsed.text, mctx).catch(err => {
-          this.ctx.logger.warn(`插件消息 TTS 合成失败（非致命）: ${err}`);
-        });
-      }
-    } catch (error) {
-      this.ctx.logger.error(`插件消息 LLM 处理失败: ${error}`);
-      const errText = `处理插件消息失败: ${error}`;
-      sessions.addMessage(mctx.sessionId, { role: 'assistant', content: errText });
-      mctx.addReply({
-        type: 'dialogue',
-        data: { text: errText, duration: 5000 }
-      });
-    }
-
+    await this._callLLMAndRespond(mctx, userContent, '插件消息');
     return true;
   }
 
@@ -323,22 +176,16 @@ class CoreAgentPlugin extends AgentPlugin {
     const data = mctx.message.data;
     if (!data?.hitArea) return false;
 
-    // 检查 LLM 是否可用
-    const providers = this.ctx.getProviders();
-    const primaryId = this.ctx.getPrimaryProviderId();
-    const primaryProvider = providers.find(p => p.instanceId === primaryId);
-
-    if (!primaryId || !primaryProvider || primaryProvider.status !== 'connected' || primaryProvider.providerId === 'echo') {
-      return false;
-    }
+    if (!this._getPrimaryProvider()) return false;
 
     const sessions = this.ctx.getSessions();
-
-    // 持久化触碰用户消息
     sessions.addMessage(mctx.sessionId, { role: 'user', content: `[触碰] 用户触碰了 "${data.hitArea}" 部位` });
 
     this._syncInfoToPlugins();
-    const prompt = `用户触碰了你的 "${data.hitArea}" 部位，请给出一个简短可爱的反应（1-2句话）。你可以使用表情和动作来表达。`;
+    const defaultTapPrompt = `用户触碰了你的 "${data.hitArea}" 部位，请给出一个简短可爱的反应（1-2句话）。你可以使用表情和动作来表达。`;
+    const prompt = this.tapReactionPrompt
+      ? this.tapReactionPrompt.replace(/\{hitArea\}/g, data.hitArea)
+      : defaultTapPrompt;
 
     try {
       const response = await this.ctx.callProvider('primary', {
@@ -347,12 +194,10 @@ class CoreAgentPlugin extends AgentPlugin {
         maxTokens: this.tapMaxTokens
       });
 
-      // 持久化 AI 回复
       sessions.addMessage(mctx.sessionId, { role: 'assistant', content: response.text });
 
       const parsed = this.protocolAdapter.parseResponse(response.text);
       const outgoingMessages = this.protocolAdapter.toOutgoingMessages(parsed);
-
       for (const msg of outgoingMessages) {
         mctx.addReply(msg);
       }
@@ -396,52 +241,11 @@ class CoreAgentPlugin extends AgentPlugin {
       try {
         const result = await this.imageTranscriber.transcribeImage(data.fileData, data.fileType);
         if (result.success && result.description) {
-          // 将图片描述作为用户输入追加到会话，交给 LLM 进一步处理
           const sessions = this.ctx.getSessions();
           const imageContext = `[用户上传了图片: ${data.fileName}]\n\n图片描述: ${result.description}`;
           sessions.addMessage(mctx.sessionId, { role: 'user', content: imageContext });
 
-          // 构建 LLM 请求让 AI 对图片做出反应
-          this._syncInfoToPlugins();
-          const systemPrompt = this.personality.buildSystemPrompt();
-
-          let compressionProvider = null;
-          try {
-            compressionProvider = { chat: (req) => this.ctx.callProvider('primary', req) };
-          } catch { /* 忽略 */ }
-
-          const contextMessages = await this.memory.buildContextMessages(
-            mctx.sessionId, sessions, compressionProvider
-          );
-
-          const lastMsg = contextMessages[contextMessages.length - 1];
-          if (!lastMsg || lastMsg.content !== imageContext) {
-            contextMessages.push({ role: 'user', content: imageContext });
-          }
-
-          const request = { messages: contextMessages, systemPrompt, sessionId: mctx.sessionId };
-
-          if (this.enableToolCalling && this.ctx.isToolCallingEnabled() && this.ctx.hasEnabledTools()) {
-            request.tools = this.ctx.getOpenAITools();
-            request.toolChoice = 'auto';
-          }
-
-          const response = await this.ctx.executeWithToolLoop(request, mctx);
-
-          sessions.addMessage(mctx.sessionId, { role: 'assistant', content: response.text });
-
-          const parsed = this.protocolAdapter.parseResponse(response.text, response.reasoningContent);
-          const outgoingMessages = this.protocolAdapter.toOutgoingMessages(parsed);
-          for (const msg of outgoingMessages) {
-            mctx.addReply(msg);
-          }
-
-          if (this.enableTTS && this.ctx.hasTTS() && parsed.text) {
-            this.ctx.synthesizeAndStream(parsed.text, mctx).catch(err => {
-              this.ctx.logger.warn(`图片回复 TTS 合成失败（非致命）: ${err}`);
-            });
-          }
-
+          await this._callLLMAndRespond(mctx, imageContext, '图片回复');
           return true;
         } else {
           this.ctx.logger.warn(`图片转述失败: ${result.error}`);
@@ -509,6 +313,83 @@ class CoreAgentPlugin extends AgentPlugin {
   }
 
   // ==================== 内部方法 ====================
+
+  /**
+   * 获取主 Provider（若不可用返回 null）
+   */
+  _getPrimaryProvider() {
+    const providers = this.ctx.getProviders();
+    const primaryId = this.ctx.getPrimaryProviderId();
+    const provider = providers.find(p => p.instanceId === primaryId);
+    if (!primaryId || !provider || provider.status !== 'connected') return null;
+    if (provider.providerId === 'echo') return null;
+    return provider;
+  }
+
+  /**
+   * 通用 LLM 调用 + 响应处理 + TTS 合成流程
+   *
+   * @param {object} mctx 消息上下文
+   * @param {string} userContent 用户消息内容（已持久化）
+   * @param {string} [errorLabel='LLM'] 日志标签
+   */
+  async _callLLMAndRespond(mctx, userContent, errorLabel = 'LLM') {
+    const sessions = this.ctx.getSessions();
+
+    this._syncInfoToPlugins();
+    const systemPrompt = this.personality.buildSystemPrompt();
+
+    const compressionProvider = {
+      chat: (req) => this.ctx.callProvider('primary', req)
+    };
+
+    const contextMessages = await this.memory.buildContextMessages(
+      mctx.sessionId, sessions, compressionProvider
+    );
+
+    // 确保当前用户消息在上下文中
+    const lastMsg = contextMessages[contextMessages.length - 1];
+    if (!lastMsg || lastMsg.content !== userContent) {
+      contextMessages.push({ role: 'user', content: userContent });
+    }
+
+    const request = { messages: contextMessages, systemPrompt, sessionId: mctx.sessionId };
+
+    if (this.enableToolCalling && this.ctx.isToolCallingEnabled() && this.ctx.hasEnabledTools()) {
+      request.tools = this.ctx.getOpenAITools();
+      request.toolChoice = 'auto';
+    }
+
+    const sender = this.ctx.getPluginInvokeSender();
+    if (sender) {
+      this.pluginToolBridge.setInvokeSender(sender);
+    }
+
+    try {
+      const response = await this.ctx.executeWithToolLoop(request, mctx);
+      sessions.addMessage(mctx.sessionId, { role: 'assistant', content: response.text });
+
+      const parsed = this.protocolAdapter.parseResponse(response.text, response.reasoningContent);
+      const outgoingMessages = this.protocolAdapter.toOutgoingMessages(parsed);
+      for (const msg of outgoingMessages) {
+        mctx.addReply(msg);
+      }
+
+      if (this.enableTTS && this.ctx.hasTTS() && parsed.text) {
+        this.ctx.synthesizeAndStream(parsed.text, mctx).catch(err => {
+          this.ctx.logger.warn(`${errorLabel} TTS 合成失败（非致命）: ${err}`);
+        });
+      }
+    } catch (error) {
+      this.ctx.logger.error(`${errorLabel} 调用失败: ${error}`);
+      const errText = `[Core Agent] ${errorLabel} 回复失败: ${error.message}`;
+      sessions.addMessage(mctx.sessionId, { role: 'assistant', content: errText });
+      mctx.addReply({
+        type: 'dialogue',
+        data: { text: errText, duration: 5000 }
+      });
+    }
+  }
 
   /**
    * 将 handler 中的 modelInfo / characterInfo 同步到人格管理器

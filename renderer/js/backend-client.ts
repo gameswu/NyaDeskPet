@@ -374,8 +374,8 @@ class BackendClient implements IBackendClient {
    * 处理同步指令
    */
   public handleSyncCommand(data: unknown): void {
-    if (window.live2dManager && typeof (window.live2dManager as any).executeSyncCommand === 'function') {
-      (window.live2dManager as any).executeSyncCommand(data);
+    if (window.live2dManager && typeof window.live2dManager.executeSyncCommand === 'function') {
+      window.live2dManager.executeSyncCommand(data as import('../types/global').SyncCommandData);
     } else {
       window.logger.warn('Live2D管理器不支持同步指令');
     }
