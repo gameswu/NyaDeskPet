@@ -1289,11 +1289,12 @@ export class AgentHandler {
 
       logger.info(`[AgentHandler] 工具循环 #${iterations}: ${response.toolCalls.length} 个工具调用`);
 
-      // 将 assistant 的 tool_calls 消息追加到历史
+      // 将 assistant 的 tool_calls 消息追加到历史（保留 reasoningContent 供 DeepSeek thinking mode）
       const assistantMsg: ChatMessage = {
         role: 'assistant',
         content: response.text || '',
-        toolCalls: response.toolCalls
+        toolCalls: response.toolCalls,
+        ...(response.reasoningContent !== undefined && { reasoningContent: response.reasoningContent })
       };
       currentRequest.messages.push(assistantMsg);
       this.sessions.addMessage(ctx.sessionId, assistantMsg);
@@ -1547,11 +1548,12 @@ export class AgentHandler {
         toolCallInfos.push({ id: tc.id, name: tc.name, arguments: tc.arguments });
       }
 
-      // 将 assistant 的 tool_calls 消息追加到历史
+      // 将 assistant 的 tool_calls 消息追加到历史（保留 reasoningContent 供 DeepSeek thinking mode）
       const assistantMsg: ChatMessage = {
         role: 'assistant',
         content: fullText || '',
-        toolCalls: toolCallInfos
+        toolCalls: toolCallInfos,
+        ...(fullReasoning && { reasoningContent: fullReasoning })
       };
       currentRequest.messages.push(assistantMsg);
       this.sessions.addMessage(ctx.sessionId, assistantMsg);

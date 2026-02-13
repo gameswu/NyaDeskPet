@@ -96,7 +96,9 @@
       "version": "Version",
       "checkUpdate": "Check for Updates",
       "updateSource": "Update Source",
-      "updateSourcePlaceholder": "https://github.com/owner/repo"
+      "updateSourcePlaceholder": "https://github.com/owner/repo",
+      "projectRepo": "Project Repo",
+      "donate": "Donate"
     },
     "logs": {
       "title": "Log Management",

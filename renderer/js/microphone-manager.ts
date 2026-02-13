@@ -121,9 +121,13 @@ class MicrophoneManager implements IMicrophoneManager {
   public stopListening(): void {
     this.isListening = false;
     
+    // 清空录音数据，防止 MediaRecorder.onstop 异步触发残留的 ASR 回调
+    this.recordedChunks = [];
+    
     if (this.mediaRecorder && this.mediaRecorder.state === 'recording') {
       this.mediaRecorder.stop();
     }
+    this.mediaRecorder = null;
 
     if (this.stream) {
       this.stream.getTracks().forEach(track => track.stop());
@@ -131,12 +135,15 @@ class MicrophoneManager implements IMicrophoneManager {
     }
 
     if (this.audioContext) {
-      this.audioContext.close();
+      this.audioContext.close().catch((err: unknown) => {
+        window.logger.warn('AudioContext 关闭失败:', err);
+      });
       this.audioContext = null;
     }
 
     this.analyser = null;
     this.isSpeaking = false;
+    this.isRecording = false;
     
     if (this.silenceTimer) {
       clearTimeout(this.silenceTimer);

@@ -52,6 +52,8 @@ export interface ChatMessage {
     mimeType?: string;
     fileName?: string;
   };
+  /** 思维链/推理内容（DeepSeek thinking mode 等） */
+  reasoningContent?: string;
   /** 工具调用列表（role=assistant 时，模型请求调用工具） */
   toolCalls?: ToolCallInfo[];
   /** 工具调用 ID（role=tool 时，标识这是哪个调用的结果） */

@@ -2730,6 +2730,79 @@ details.reasoning-block[open] > .reasoning-summary::after {
   color: #e65100;
 }
 
+/* 关于页面链接卡片 */
+.about-cards {
+  display: flex;
+  gap: 8px;
+  margin-top: 12px;
+}
+
+.about-card {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 7px 12px;
+  border-radius: 8px;
+  text-decoration: none;
+  color: inherit;
+  transition: all 0.2s ease;
+  cursor: pointer;
+  border: 1px solid var(--border-color, #e0e0e0);
+  background: var(--card-bg, #fafafa);
+  font-size: 12px;
+}
+
+.about-card:hover {
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
+}
+
+.about-card-github:hover {
+  border-color: #333;
+  background: #f6f8fa;
+}
+
+.about-card-donate:hover {
+  border-color: #946ce6;
+  background: #f8f4ff;
+}
+
+.about-card-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 26px;
+  border-radius: 6px;
+  flex-shrink: 0;
+}
+
+.about-card-github .about-card-icon {
+  background: #24292e;
+  color: #fff;
+}
+
+.about-card-donate .about-card-icon {
+  background: #946ce6;
+  color: #fff;
+}
+
+.about-card-title {
+  font-size: 12px;
+  font-weight: 500;
+}
+
+.about-card-arrow {
+  width: 12px;
+  height: 12px;
+  opacity: 0.3;
+  flex-shrink: 0;
+  transition: opacity 0.2s;
+}
+
+.about-card:hover .about-card-arrow {
+  opacity: 0.7;
+}
+
 .update-status.no-update {
   background: #e8f5e9;
   color: #2e7d32;
@@ -3704,6 +3777,22 @@ body.dark-theme {
 .dark-theme .update-status.error {
   background: rgba(244, 67, 54, 0.2);
   color: #e57373;
+}
+
+.dark-theme .about-card {
+  border-color: #444;
+  background: #2a2a2a;
+  color: #e0e0e0;
+}
+
+.dark-theme .about-card-github:hover {
+  border-color: #888;
+  background: #333;
+}
+
+.dark-theme .about-card-donate:hover {
+  border-color: #a07de8;
+  background: #332a45;
 }
 
 /* 自定义对话框 */

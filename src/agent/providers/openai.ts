@@ -27,6 +27,8 @@ import { logger } from '../../logger';
 interface OpenAIMessage {
   role: 'system' | 'user' | 'assistant' | 'tool';
   content: string | OpenAIContentPart[] | null;
+  /** 思维链/推理内容（DeepSeek thinking mode） */
+  reasoning_content?: string | null;
   /** 工具调用列表（assistant 角色） */
   tool_calls?: OpenAIToolCall[];
   /** 工具调用 ID（tool 角色） */
@@ -214,7 +216,7 @@ export class OpenAIProvider extends LLMProvider {
 
       // 助手消息带 tool_calls
       if (msg.role === 'assistant' && msg.toolCalls && msg.toolCalls.length > 0) {
-        result.push({
+        const assistantMsg: OpenAIMessage = {
           role: 'assistant',
           content: msg.content || null,
           tool_calls: msg.toolCalls.map(tc => ({
@@ -225,7 +227,12 @@ export class OpenAIProvider extends LLMProvider {
               arguments: typeof tc.arguments === 'string' ? tc.arguments : JSON.stringify(tc.arguments)
             }
           }))
-        });
+        };
+        // DeepSeek thinking mode 要求 assistant 消息必须包含 reasoning_content 字段
+        if (msg.reasoningContent !== undefined) {
+          assistantMsg.reasoning_content = msg.reasoningContent || null;
+        }
+        result.push(assistantMsg);
         continue;
       }
 
@@ -257,6 +264,9 @@ export class OpenAIProvider extends LLMProvider {
         }
 
         result.push({ role: msg.role, content: parts });
+      } else if (msg.role === 'assistant' && msg.reasoningContent !== undefined) {
+        // 助手消息带 reasoning_content（DeepSeek thinking mode）
+        result.push({ role: msg.role, content: msg.content, reasoning_content: msg.reasoningContent || null });
       } else {
         // 普通文本消息
         result.push({ role: msg.role, content: msg.content });

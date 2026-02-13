@@ -3045,6 +3045,9 @@ function initializeChatWindow(): void {
           // 停止监听
           window.microphoneManager.stopListening();
           btnVoice.classList.remove('active');
+          // 将焦点还给输入框
+          const chatInput = document.getElementById('chat-input') as HTMLTextAreaElement;
+          chatInput?.focus();
           window.logger.info('麦克风已停止');
         } else {
           // 启动监听
@@ -3461,6 +3464,22 @@ function initializeSettingsPanel(): void {
   const btnCheckUpdate = document.getElementById('btn-check-update');
   if (btnCheckUpdate) {
     btnCheckUpdate.addEventListener('click', checkForUpdates);
+  }
+
+  // 关于页面外部链接
+  const linkGithub = document.getElementById('link-github');
+  if (linkGithub) {
+    linkGithub.addEventListener('click', (e: Event) => {
+      e.preventDefault();
+      window.electronAPI.openExternal('https://github.com/gameswu/NyaDeskPet');
+    });
+  }
+  const linkDonate = document.getElementById('link-donate');
+  if (linkDonate) {
+    linkDonate.addEventListener('click', (e: Event) => {
+      e.preventDefault();
+      window.electronAPI.openExternal('https://afdian.com/a/gameswu');
+    });
   }
 
   // 获取并显示当前版本

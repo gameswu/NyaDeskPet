@@ -115,17 +115,16 @@ function createWindow(): void {
   // 设置窗口可拖拽
   mainWindow.setIgnoreMouseEvents(false);
 
-  // 窗口关闭时隐藏而不是退出（除非在开发模式或正在退出）
-  mainWindow.on('close', (event) => {
-    if (!isDev && !isQuitting) {
-      event.preventDefault();
-      mainWindow?.hide();
-    } else if (isDev) {
+  // 窗口关闭时退出应用
+  mainWindow.on('close', () => {
+    if (isDev) {
       // 开发模式：关闭 detached DevTools 窗口，防止残留
       if (mainWindow?.webContents.isDevToolsOpened()) {
         mainWindow.webContents.closeDevTools();
       }
     }
+    isQuitting = true;
+    app.quit();
   });
 
   // 窗口销毁后清空引用
