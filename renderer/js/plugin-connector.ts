@@ -403,6 +403,11 @@ class PluginConnector {
       if (message.type === 'plugin_response' && message.requestId) {
         this.forwardPluginResponseToBackend(name, message);
       }
+
+      // 插件主动发送消息：转发到后端 Agent 处理并持久化
+      if (message.type === 'plugin_message' && message.text) {
+        this.forwardPluginMessageToBackend(name, message);
+      }
       
       // 触发自定义事件，让其他模块处理
       const event = new CustomEvent('plugin-message', {
@@ -429,14 +434,23 @@ class PluginConnector {
   /**
    * 调用插件功能
    */
-  public async callPlugin<T = unknown>(name: string, action: string, params: Record<string, unknown> = {}): Promise<T> {
-    const plugin = this.plugins.get(name);
+  public async callPlugin<T = unknown>(nameOrId: string, action: string, params: Record<string, unknown> = {}): Promise<T> {
+    // 优先通过 name（Map key）查找，再通过 manifest.id 查找
+    let plugin = this.plugins.get(nameOrId);
     if (!plugin) {
-      throw new Error(`插件 ${name} 不存在`);
+      for (const [, info] of this.plugins) {
+        if (info.manifest.id === nameOrId) {
+          plugin = info;
+          break;
+        }
+      }
+    }
+    if (!plugin) {
+      throw new Error(`插件 ${nameOrId} 不存在`);
     }
 
     if (plugin.status !== 'connected' || !plugin.ws || plugin.ws.readyState !== WebSocket.OPEN) {
-      throw new Error(`插件 ${name} 未连接`);
+      throw new Error(`插件 ${nameOrId} 未连接`);
     }
 
     return new Promise((resolve, reject) => {
@@ -482,6 +496,34 @@ class PluginConnector {
    */
   private generateRequestId(): string {
     return `${Date.now()}-${Math.random().toString(36).substring(2, 9)}`;
+  }
+
+  /**
+   * 转发插件主动消息到后端 Agent（非工具调用响应，而是插件自主发起的消息）
+   * 后端将其作为会话消息处理并持久化
+   */
+  private forwardPluginMessageToBackend(pluginName: string, message: any): void {
+    if (!window.backendClient) {
+      window.logger?.warn('插件系统：后端客户端未初始化，无法转发插件消息');
+      return;
+    }
+
+    const plugin = this.plugins.get(pluginName);
+    const pluginId = plugin?.manifest?.id || pluginName;
+
+    const data: import('../types/global').PluginMessageData = {
+      pluginId,
+      pluginName,
+      text: String(message.text || ''),
+      metadata: message.metadata
+    };
+
+    window.backendClient.sendMessage({
+      type: 'plugin_message',
+      data
+    });
+
+    window.logger?.info('插件系统：已转发插件主动消息到后端', { pluginName, textLen: data.text.length });
   }
 
   /**

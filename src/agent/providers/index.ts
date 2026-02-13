@@ -5,10 +5,7 @@
  * 注意：导入 Provider 文件时会自动触发 registerProvider() 注册
  */
 
-// ==================== 内置 Provider ====================
-export { EchoProvider, ECHO_METADATA } from './echo';
-
-// ==================== OpenAI 兼容 Provider ====================
+// ==================== OpenAI 兼容 Provider ==
 export { OpenAIProvider, OPENAI_METADATA } from './openai';
 
 // ==================== DeepSeek Provider ====================
@@ -16,6 +13,9 @@ export { DeepSeekProvider, DEEPSEEK_METADATA } from './deepseek';
 
 // ==================== OpenRouter Provider ====================
 export { OpenRouterProvider, OPENROUTER_METADATA } from './openrouter';
+
+// ==================== SiliconFlow Provider ====================
+export { SiliconFlowProvider, SILICONFLOW_METADATA } from './siliconflow';
 
 // ==================== 后续可添加更多 Provider ====================
 // export { AnthropicProvider, ANTHROPIC_METADATA } from './anthropic';

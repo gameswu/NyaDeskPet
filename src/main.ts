@@ -9,6 +9,7 @@ import { logger } from './logger';
 import { AgentServer } from './agent-server';
 import { agentDb } from './agent/database';
 import { agentPluginManager } from './agent/agent-plugin';
+import { commandRegistry } from './agent/commands';
 import { mcpManager } from './agent/mcp-client';
 import { toolManager } from './agent/tools';
 
@@ -1465,7 +1466,8 @@ ipcMain.handle('agent:get-tools', () => {
     parameters: t.schema.parameters,
     source: t.source,
     mcpServer: t.mcpServer,
-    enabled: t.enabled
+    enabled: t.enabled,
+    i18n: t.schema.i18n
   }));
 });
 
@@ -1637,4 +1639,161 @@ ipcMain.handle('agent:open-plugins-dir', () => {
   const pluginsDir = agentPluginManager.getPluginsDir();
   shell.openPath(pluginsDir);
   return { success: true };
+});
+
+/**
+ * 打开 Agent 插件数据目录
+ */
+ipcMain.handle('agent:open-plugin-data-dir', async (_event, name: string) => {
+  try {
+    const dataDir = agentPluginManager.getPluginDataDir(name);
+    if (!fs.existsSync(dataDir)) {
+      fs.mkdirSync(dataDir, { recursive: true });
+    }
+    await shell.openPath(dataDir);
+    return { success: true };
+  } catch (error) {
+    return { success: false, error: (error as Error).message };
+  }
+});
+
+/**
+ * 清除 Agent 插件数据
+ */
+ipcMain.handle('agent:clear-plugin-data', async (_event, name: string) => {
+  try {
+    agentPluginManager.clearPluginData(name);
+    return { success: true };
+  } catch (error) {
+    return { success: false, error: (error as Error).message };
+  }
+});
+
+// ==================== 指令系统 IPC ====================
+
+/**
+ * 获取所有已注册指令
+ */
+ipcMain.handle('agent:get-commands', () => {
+  return commandRegistry.getAllDefinitions();
+});
+
+/**
+ * 设置指令启用状态
+ */
+ipcMain.handle('agent:set-command-enabled', (_event, name: string, enabled: boolean) => {
+  const result = commandRegistry.setEnabled(name, enabled);
+  return { success: result };
+});
+
+// ==================== 对话管理 IPC ====================
+
+/**
+ * 获取对话列表（全局，不限于特定会话）
+ */
+ipcMain.handle('agent:get-conversations', (_event, limit?: number) => {
+  try {
+    const { conversations } = agentDb.getAllConversations(limit || 50);
+    return conversations.map(c => ({
+      id: c.id,
+      title: c.title || '新对话',
+      createdAt: c.createdAt,
+      updatedAt: c.updatedAt
+    }));
+  } catch {
+    return [];
+  }
+});
+
+/**
+ * 获取对话的消息列表
+ */
+ipcMain.handle('agent:get-messages', (_event, conversationId: string) => {
+  try {
+    const messages = agentDb.getMessages(conversationId, 200);
+    return messages.map(m => ({
+      role: m.role,
+      type: m.type,
+      content: m.content,
+      extra: m.extra,
+      createdAt: m.createdAt
+    }));
+  } catch {
+    return [];
+  }
+});
+
+/**
+ * 创建新对话并切换到该对话
+ */
+ipcMain.handle('agent:new-conversation', () => {
+  try {
+    const handler = agentServer.getHandler();
+    const sessions = handler.sessions;
+    // 直接在数据库中创建对话，使用固定的 session 'builtin'
+    const conv = agentDb.createConversation('builtin');
+    
+    // 切换会话管理器的当前对话
+    try {
+      sessions.switchConversation('builtin', conv.id);
+    } catch {
+      // 忽略 — 会在下次 getOrCreateSession 时自动恢复
+    }
+
+    return { success: true, conversationId: conv.id };
+  } catch (error) {
+    return { success: false, error: (error as Error).message };
+  }
+});
+
+/**
+ * 切换到指定对话
+ */
+ipcMain.handle('agent:switch-conversation', (_event, conversationId: string) => {
+  try {
+    const handler = agentServer.getHandler();
+    const sessions = handler.sessions;
+    // 尝试切换会话
+    const result = sessions.switchConversation('builtin', conversationId);
+    if (!result) {
+      // 如果会话管理器里没有 builtin session，直接检查对话是否存在
+      const conv = agentDb.getConversation(conversationId);
+      if (conv) {
+        // 强制创建 session 并切换
+        sessions.getOrCreateSession('builtin');
+        sessions.switchConversation('builtin', conversationId);
+        return { success: true };
+      }
+      return { success: false, error: '对话不存在' };
+    }
+    return { success: true };
+  } catch (error) {
+    return { success: false, error: (error as Error).message };
+  }
+});
+
+/**
+ * 删除对话
+ */
+ipcMain.handle('agent:delete-conversation', (_event, conversationId: string) => {
+  try {
+    const handler = agentServer.getHandler();
+    handler.sessions.deleteConversation('builtin', conversationId);
+    return { success: true };
+  } catch (error) {
+    return { success: false, error: (error as Error).message };
+  }
+});
+
+/**
+ * 获取当前对话 ID
+ */
+ipcMain.handle('agent:get-current-conversation', () => {
+  try {
+    const handler = agentServer.getHandler();
+    const convId = handler.sessions.getCurrentConversationId('builtin');
+    return { conversationId: convId };
+  } catch {
+    return { conversationId: null };
+  }
 });

@@ -33,6 +33,8 @@ export interface ToolSchema {
     }>;
     required?: string[];
   };
+  /** 国际化（可选，按 locale 提供 description 的翻译） */
+  i18n?: Record<string, { description?: string }>;
 }
 
 /** 工具定义（注册到系统中） */
@@ -348,11 +350,29 @@ export class ToolManager {
 
   /**
    * 批量执行工具调用
+   * @param toolCalls 工具调用列表
+   * @param timeout 单个工具超时（毫秒），默认 60 秒
+   * @param overallTimeout 整体超时（毫秒），默认 120 秒
    */
-  async executeToolCalls(toolCalls: ToolCall[], timeout: number = 60000): Promise<ToolResult[]> {
+  async executeToolCalls(toolCalls: ToolCall[], timeout: number = 60000, overallTimeout: number = 120000): Promise<ToolResult[]> {
     const results: ToolResult[] = [];
+    const startTime = Date.now();
     for (const tc of toolCalls) {
-      const result = await this.executeTool(tc, timeout);
+      // 检查整体超时
+      const elapsed = Date.now() - startTime;
+      if (elapsed >= overallTimeout) {
+        logger.warn(`[ToolManager] 批量工具执行整体超时 (${overallTimeout}ms)，跳过剩余工具`);
+        results.push({
+          toolCallId: tc.id,
+          content: `Error: Batch tool execution overall timeout (${overallTimeout}ms)`,
+          success: false
+        });
+        continue;
+      }
+      // 单个工具超时不超过剩余时间
+      const remainingTime = overallTimeout - elapsed;
+      const effectiveTimeout = Math.min(timeout, remainingTime);
+      const result = await this.executeTool(tc, effectiveTimeout);
       results.push(result);
     }
     return results;

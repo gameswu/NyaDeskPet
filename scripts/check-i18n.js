@@ -86,7 +86,8 @@ function extractI18nKeysFromHTML(htmlPath) {
 }
 
 // 从代码文件中提取 i18n 键
-function extractI18nKeysFromCode(filePath) {
+// dynamicPrefixes: 收集模板字面量中的动态前缀（如 `topBar.${status}` → "topBar"）
+function extractI18nKeysFromCode(filePath, dynamicPrefixes = new Set()) {
   const content = fs.readFileSync(filePath, 'utf-8');
   const keys = new Set();
   
@@ -95,6 +96,32 @@ function extractI18nKeysFromCode(filePath) {
   let match;
   while ((match = tFunctionRegex.exec(content)) !== null) {
     keys.add(match[1]);
+  }
+  
+  // 匹配模板字面量动态键: .t(`prefix.${variable}`) 或 .t(`prefix.${expr}`)
+  // 以及间接用法: const key = `prefix.${variable}`; ... .t(key)
+  const tTemplateLiteralRegex = /\b(?:i18nManager|i18n)?\.?t\s*\(\s*`([^`]+)`\s*\)/g;
+  while ((match = tTemplateLiteralRegex.exec(content)) !== null) {
+    const tpl = match[1];
+    if (tpl.includes('${')) {
+      const prefixMatch = tpl.match(/^([^$]+)\.\$\{/);
+      if (prefixMatch) {
+        dynamicPrefixes.add(prefixMatch[1]);
+      }
+    }
+  }
+
+  // 检测间接赋值模式: const/let/var key = `prefix.${...}`
+  // 变量之后可能用于 .t(key) 调用
+  const assignTemplateLiteralRegex = /(?:const|let|var)\s+\w+\s*=\s*`([^`]+)`/g;
+  while ((match = assignTemplateLiteralRegex.exec(content)) !== null) {
+    const tpl = match[1];
+    if (tpl.includes('${') && tpl.includes('.')) {
+      const prefixMatch = tpl.match(/^([a-zA-Z][\w.]*)\.\$\{/);
+      if (prefixMatch) {
+        dynamicPrefixes.add(prefixMatch[1]);
+      }
+    }
   }
   
   // 匹配 i18nManager.translate('key') 或类似方法
@@ -402,9 +429,10 @@ function checkI18n() {
   const codeFiles = getAllFiles(jsDir, ['.ts', '.js']);
   const codeKeysMap = new Map(); // 文件路径 -> 键数组
   const allCodeKeys = new Set();
+  const dynamicPrefixes = new Set(); // 收集动态模板字面量的前缀
   
   codeFiles.forEach(filePath => {
-    const keys = extractI18nKeysFromCode(filePath);
+    const keys = extractI18nKeysFromCode(filePath, dynamicPrefixes);
     if (keys.length > 0) {
       const relativePath = path.relative(projectRoot, filePath);
       codeKeysMap.set(relativePath, keys);
@@ -430,6 +458,9 @@ function checkI18n() {
   log(`📊 总计使用的唯一键: ${usedKeys.length}`, 'cyan');
   log(`  - HTML: ${htmlKeys.length}`, 'blue');
   log(`  - 代码: ${allCodeKeys.size}`, 'blue');
+  if (dynamicPrefixes.size > 0) {
+    log(`  - 动态前缀: ${Array.from(dynamicPrefixes).join(', ')}`, 'blue');
+  }
   log('');
 
   // 4. 加载语言文件
@@ -503,9 +534,16 @@ function checkI18n() {
   
   // agent.providers.* / agent.ttsProviders.* 下的键由 tProvider() / tTTSProvider() 动态拼接使用，不算作"未使用"
   const isProviderKey = key => key.startsWith('agent.providers.') || key.startsWith('agent.ttsProviders.');
+  // 动态模板字面量生成的键（如 topBar.${status} 展开的 topBar.connected 等）不算作“未使用”
+  const isDynamicKey = key => {
+    for (const prefix of dynamicPrefixes) {
+      if (key.startsWith(prefix + '.')) return true;
+    }
+    return false;
+  };
   
-  const unusedInZhCN = zhCNKeys.filter(key => !usedKeys.includes(key) && !isProviderKey(key));
-  const unusedInEnUS = enUSKeys.filter(key => !usedKeys.includes(key) && !isProviderKey(key));
+  const unusedInZhCN = zhCNKeys.filter(key => !usedKeys.includes(key) && !isProviderKey(key) && !isDynamicKey(key));
+  const unusedInEnUS = enUSKeys.filter(key => !usedKeys.includes(key) && !isProviderKey(key) && !isDynamicKey(key));
 
   if (unusedInZhCN.length > 0) {
     log(`  ⚠ zh-CN.json 中有 ${unusedInZhCN.length} 个未使用的键:`, 'yellow');

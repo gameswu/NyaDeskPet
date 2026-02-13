@@ -4,5 +4,9 @@
   "desc": "协议适配插件 — 将 LLM 的文本回复解析为前端期望的结构化消息格式",
   "version": "1.0.0",
   "entry": "main.js",
-  "autoActivate": true
+  "autoActivate": true,
+  "i18n": {
+    "zh-CN": { "desc": "协议适配插件 — 将 LLM 的文本回复解析为前端期望的结构化消息格式" },
+    "en-US": { "desc": "Protocol adapter plugin — parses LLM text replies into structured message formats expected by the frontend" }
+  }
 }

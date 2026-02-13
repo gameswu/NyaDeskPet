@@ -1,0 +1,22 @@
+{
+  "enabled": {
+    "type": "boolean",
+    "description": "是否启用输入合并。关闭后每条消息都会立即处理。",
+    "default": true
+  },
+  "debounceMs": {
+    "type": "number",
+    "description": "抖动等待时间（毫秒）。用户停止输入超过此时间后，将合并的消息发送给 Agent 处理。",
+    "default": 1500
+  },
+  "maxWaitMs": {
+    "type": "number",
+    "description": "最大等待时间（毫秒）。即使用户持续输入，也不会等待超过此时间。防止无限等待。",
+    "default": 10000
+  },
+  "separator": {
+    "type": "string",
+    "description": "多条消息的合并分隔符。",
+    "default": "\n"
+  }
+}

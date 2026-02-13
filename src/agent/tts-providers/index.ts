@@ -8,6 +8,8 @@
 // ==================== Fish Audio TTS Provider ====================
 export { FishAudioProvider, FISH_AUDIO_METADATA } from './fish-audio';
 
+// ==================== Edge TTS Provider ====================
+export { EdgeTTSProvider, EDGE_TTS_METADATA } from './edge-tts';
+
 // ==================== 后续可添加更多 TTS Provider ====================
-// export { EdgeTTSProvider, EDGE_TTS_METADATA } from './edge-tts';
 // export { OpenAITTSProvider, OPENAI_TTS_METADATA } from './openai-tts';

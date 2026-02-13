@@ -3,6 +3,8 @@
     "toggleUI": "隐藏/显示UI"
   },
   "topBar": {
+    "connected": "已连接",
+    "connecting": "连接中...",
     "disconnected": "未连接",
     "plugins": "插件管理",
     "agent": "Agent 管理",
@@ -14,16 +16,17 @@
     "openChat": "打开对话"
   },
   "chatWindow": {
-    "title": "与桌宠对话",
     "placeholder": "输入消息...",
     "send": "发送",
     "voice": "语音输入",
     "camera": "摄像头",
     "attach": "发送文件",
     "close": "关闭",
-    "conversations": "对话记录",
     "newChat": "新对话",
-    "reasoning": "思考过程"
+    "reasoning": "思考过程",
+    "deleteConversation": "删除对话",
+    "noConversations": "暂无对话记录",
+    "toggleConversations": "展开/收起对话列表"
   },
   "settings": {
     "title": "设置",
@@ -134,7 +137,8 @@
     "reloadConfirm": "设置已保存！部分设置需要重新加载才能生效，是否立即重新加载？",
     "resetConfirm": "确定要恢复默认设置吗？",
     "confirmClose": "确定要关闭桌面宠物吗？",
-    "sendFailed": "发送失败，请检查连接"
+    "sendFailed": "发送失败，请检查连接",
+    "welcome": "你好！我是你的桌面宠物喵~ 来跟我聊天吧！"
   },
   "camera": {
     "preview": "摄像头预览",
@@ -167,7 +171,13 @@
     "tabs": {
       "overview": "概览",
       "tools": "工具",
-      "plugins": "插件"
+      "plugins": "插件",
+      "commands": "指令"
+    },
+    "commands": {
+      "title": "指令管理",
+      "description": "管理已注册的斜杠指令，可启用或禁用指令",
+      "empty": "暂无已注册的指令"
     },
     "serverStatus": "服务状态",
     "status": "状态",
@@ -236,6 +246,10 @@
             "label": "代理地址",
             "placeholder": "http://127.0.0.1:7890",
             "description": "HTTP/HTTPS 代理（如需翻墙访问）"
+          },
+          "stream": {
+            "label": "流式输出",
+            "description": "启用后 LLM 回复将逐字流式显示，提升响应速度体验。关闭则等待完整回复后一次性显示"
           }
         }
       },
@@ -268,6 +282,10 @@
             "label": "代理地址",
             "placeholder": "http://127.0.0.1:7890",
             "description": "HTTP/HTTPS 代理（如需使用）"
+          },
+          "stream": {
+            "label": "流式输出",
+            "description": "启用后 LLM 回复将逐字流式显示，提升响应速度体验"
           }
         }
       },
@@ -293,12 +311,54 @@
             "label": "代理地址",
             "placeholder": "http://127.0.0.1:7890",
             "description": "HTTP/HTTPS 代理（如需使用）"
+          },
+          "stream": {
+            "label": "流式输出",
+            "description": "启用后 LLM 回复将逐字流式显示，提升响应速度体验"
           }
         }
       },
-      "echo": {
-        "name": "Echo（内置）",
-        "description": "回显输入消息，不调用任何 AI 服务。用于测试或无 LLM 时的兖底。"
+      "siliconflow": {
+        "name": "SiliconFlow（硅基流动）",
+        "description": "硅基流动一站式云服务平台，集合 DeepSeek、Qwen、GLM 等顶尖大模型，部分模型免费使用，支持 Function Calling",
+        "fields": {
+          "apiKey": {
+            "label": "API Key",
+            "placeholder": "sk-...",
+            "description": "从 SiliconFlow 平台获取的 API 密钥（https://cloud.siliconflow.cn/account/ak）"
+          },
+          "baseUrl": {
+            "label": "API Base URL",
+            "description": "SiliconFlow API 地址，通常无需修改"
+          },
+          "model": {
+            "label": "模型",
+            "description": "选择模型。支持自定义输入模型 ID，完整列表见 https://cloud.siliconflow.cn/models",
+            "options": {
+              "Qwen/Qwen2.5-7B-Instruct": "Qwen2.5-7B-Instruct（免费）",
+              "Qwen/Qwen3-8B": "Qwen3-8B",
+              "Qwen/Qwen3-32B": "Qwen3-32B",
+              "Pro/zai-org/GLM-4.7": "GLM-4.7（Pro）",
+              "deepseek-ai/DeepSeek-V3": "DeepSeek-V3",
+              "deepseek-ai/DeepSeek-R1": "DeepSeek-R1",
+              "Pro/deepseek-ai/DeepSeek-V3": "DeepSeek-V3（Pro）",
+              "Pro/deepseek-ai/DeepSeek-R1": "DeepSeek-R1（Pro）"
+            }
+          },
+          "timeout": {
+            "label": "超时时间（秒）",
+            "description": "请求超时时间，推理模型建议适当增大"
+          },
+          "proxy": {
+            "label": "代理地址",
+            "placeholder": "http://127.0.0.1:7890",
+            "description": "HTTP/HTTPS 代理（如需使用）"
+          },
+          "stream": {
+            "label": "流式输出",
+            "description": "启用后 LLM 回复将逐字流式显示，提升响应速度体验"
+          }
+        }
       }
     },
     "tts": {

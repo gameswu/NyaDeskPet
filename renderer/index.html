@@ -78,23 +78,23 @@
   <!-- 对话窗口 (侧栏) -->
   <div id="chat-window" class="chat-sidebar hidden">
     <div class="chat-sidebar-header">
-      <h3>
-        <i data-lucide="message-square" style="width: 18px; height: 18px;"></i>
-        <span data-i18n="chatWindow.title">对话</span>
-      </h3>
-      <button id="btn-close-chat" class="btn-icon" data-i18n-title="chatWindow.close">
-        <i data-lucide="x"></i>
-      </button>
-    </div>
-    
-    <!-- 对话历史列表 -->
-    <div class="chat-history">
-      <div class="chat-history-header">
-        <span data-i18n="chatWindow.conversations">对话记录</span>
-        <button id="btn-new-chat" class="btn-icon-small" data-i18n-title="chatWindow.newChat">
-          <i data-lucide="plus" style="width: 16px; height: 16px;"></i>
+      <div id="chat-title-bar" class="chat-title-bar" data-i18n-title="chatWindow.toggleConversations">
+        <i data-lucide="message-square" style="width: 18px; height: 18px; flex-shrink: 0;"></i>
+        <span id="chat-current-title" class="chat-current-title" data-i18n="chatWindow.newChat">新对话</span>
+        <i data-lucide="chevron-down" class="chat-title-chevron" style="width: 16px; height: 16px; flex-shrink: 0;"></i>
+      </div>
+      <div class="chat-header-actions">
+        <button id="btn-new-chat" class="btn-icon-header" data-i18n-title="chatWindow.newChat">
+          <i data-lucide="plus" style="width: 18px; height: 18px;"></i>
+        </button>
+        <button id="btn-close-chat" class="btn-icon-header" data-i18n-title="chatWindow.close">
+          <i data-lucide="x" style="width: 18px; height: 18px;"></i>
         </button>
       </div>
+    </div>
+    
+    <!-- 对话历史下拉面板（默认隐藏） -->
+    <div id="conversation-dropdown" class="conversation-dropdown hidden">
       <div id="conversation-list" class="conversation-list">
         <!-- 对话列表由后端管理，动态加载 -->
       </div>
@@ -491,6 +491,10 @@
           <i data-lucide="blocks" style="width: 16px; height: 16px;"></i>
           <span data-i18n="agent.tabs.plugins">插件</span>
         </button>
+        <button class="agent-tab" data-agent-tab="commands">
+          <i data-lucide="terminal" style="width: 16px; height: 16px;"></i>
+          <span data-i18n="agent.tabs.commands">指令</span>
+        </button>
       </div>
       
       <div class="agent-body">
@@ -690,6 +694,30 @@
           <!-- Agent 插件配置弹窗通过 JS 动态创建 -->
         </div>
 
+        <!-- 指令标签页 -->
+        <div class="agent-tab-content" data-agent-tab-content="commands">
+          <div class="agent-section">
+            <h3>
+              <i data-lucide="terminal" style="width: 15px; height: 15px;"></i>
+              <span data-i18n="agent.commands.title">斜杠指令</span>
+            </h3>
+            <p class="agent-plugins-description" data-i18n="agent.commands.description">
+              管理已注册的斜杠指令，在对话输入框中输入 / 触发补全
+            </p>
+            <div class="agent-commands-header">
+              <span id="agent-commands-count" class="agent-commands-stats">0 个指令</span>
+              <button id="btn-commands-refresh" class="btn-icon-small" title="刷新">
+                <i data-lucide="refresh-cw" style="width: 14px; height: 14px;"></i>
+              </button>
+            </div>
+          </div>
+          <div id="agent-command-list" class="agent-command-list">
+            <div class="agent-command-empty" data-i18n="agent.commands.empty">
+              暂无已注册的指令
+            </div>
+          </div>
+        </div>
+
       </div>
     </div>
   </div>
@@ -752,6 +780,7 @@
   <script type="module" src="js/plugin-config-ui.js"></script>
   <script type="module" src="js/plugin-permission-manager.js"></script>
   <script type="module" src="js/live2d-manager.js"></script>
+  <script type="module" src="js/response-controller.js"></script>
   <script type="module" src="js/backend-client.js"></script>
   <script type="module" src="js/dialogue-manager.js"></script>
   <script type="module" src="js/audio-player.js"></script>

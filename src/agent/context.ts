@@ -6,6 +6,7 @@
  * SessionManager：会话/对话历史管理，基于 SQLite 持久化
  */
 
+import { randomUUID } from 'crypto';
 import { WebSocket } from 'ws';
 import { logger } from '../logger';
 import type { ChatMessage, ToolCallInfo } from './provider';
@@ -26,8 +27,24 @@ export interface IncomingMessage {
 /** 回复消息（发送到前端） */
 export interface OutgoingMessage {
   type: string;
-  data?: any;
-  [key: string]: any;
+  data?: unknown;
+  /** 响应会话 ID（同一次回复的所有消息共享相同 ID） */
+  responseId?: string;
+  /** 响应优先级（用于前端中断判断） */
+  priority?: number;
+  [key: string]: unknown;
+}
+
+/**
+ * 可发送消息的最小接口
+ * 供 synthesizeAndStream / executeWithToolLoop 等方法使用，
+ * PipelineContext 和 MessageContext 代理均可满足
+ */
+export interface Sendable {
+  /** 会话 ID */
+  sessionId: string;
+  /** 立即发送消息 */
+  send(msg: object): void;
 }
 
 /**
@@ -59,6 +76,18 @@ export class PipelineContext {
   /** 发送函数（由 AgentServer 注入） */
   private sendFn: (ws: WebSocket, msg: object) => void;
 
+  /**
+   * 响应会话 ID（同一次管线处理产生的所有消息共享）
+   * 前端据此将多条消息归为同一组，统一管理中断
+   */
+  public responseId: string;
+
+  /**
+   * 响应优先级（PreProcessStage 根据消息类型自动设置）
+   * 前端据此判断新响应是否能中断当前正在播放的响应
+   */
+  public responsePriority: number = 0;
+
   constructor(
     message: IncomingMessage,
     ws: WebSocket,
@@ -69,16 +98,26 @@ export class PipelineContext {
     this.ws = ws;
     this.sessionId = sessionId;
     this.sendFn = sendFn;
+    this.responseId = randomUUID();
   }
 
-  /** 添加回复到缓冲（Respond 阶段统一发送） */
+  /** 添加回复到缓冲（Respond 阶段统一发送），自动注入 responseId 和 priority */
   addReply(msg: OutgoingMessage): void {
+    msg.responseId = this.responseId;
+    msg.priority = this.responsePriority;
     this.replies.push(msg);
   }
 
-  /** 立即发送消息（不经过缓冲，用于流式场景） */
+  /** 立即发送消息（不经过缓冲，用于流式场景），自动注入 responseId 和 priority */
   send(msg: object): void {
-    this.sendFn(this.ws, msg);
+    const envelope = msg as Record<string, unknown>;
+    if (envelope.responseId === undefined) {
+      envelope.responseId = this.responseId;
+    }
+    if (envelope.priority === undefined) {
+      envelope.priority = this.responsePriority;
+    }
+    this.sendFn(this.ws, envelope);
   }
 
   /** 中止管线（后续 Stage 不再执行） */

@@ -1,0 +1,27 @@
+{
+  "searchEngine": {
+    "type": "select",
+    "description": "搜索引擎。search_web 工具使用的搜索引擎。",
+    "default": "bing",
+    "options": [
+      { "value": "bing", "label": "Bing" },
+      { "value": "google", "label": "Google" },
+      { "value": "duckduckgo", "label": "DuckDuckGo" }
+    ]
+  },
+  "maxContentLength": {
+    "type": "number",
+    "description": "fetch_url 返回给 LLM 的最大字符数。过大会消耗大量 token。",
+    "default": 8000
+  },
+  "requestTimeout": {
+    "type": "number",
+    "description": "HTTP 请求超时时间（毫秒）。",
+    "default": 15000
+  },
+  "searchResultCount": {
+    "type": "number",
+    "description": "搜索结果返回条数。",
+    "default": 5
+  }
+}

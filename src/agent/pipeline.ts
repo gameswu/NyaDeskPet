@@ -116,9 +116,28 @@ import type { AgentHandler } from './handler';
  * PreProcess 阶段
  * - 消息日志记录
  * - 消息标准化
+ * - 根据消息类型分配响应优先级
  */
 export class PreProcessStage extends Stage {
   readonly name = 'preprocess';
+
+  /**
+   * 消息类型 → 响应优先级映射
+   * 优先级越高，越能中断当前正在播放的响应
+   */
+  private static readonly PRIORITY_MAP: Record<string, number> = {
+    'user_input':   10,  // 用户主动输入 — 最高优先级
+    'file_upload':  10,  // 文件上传 — 同等于用户输入
+    'command_execute': 10, // 指令执行 — 同等于用户输入
+    'tap_event':     8,  // 用户触碰 — 高优先级
+    'plugin_message': 6,  // 前端插件主动消息 — 中优先级
+    // 以下为系统/插件触发，优先级较低
+    'plugin_status': 0,  // 不产生可见回复，无需中断
+    'model_info':    0,
+    'character_info': 0,
+    'plugin_response': 0,
+    'tool_confirm_response': 0,  // 工具确认响应，不产生可见回复
+  };
 
   async process(ctx: PipelineContext, next: () => Promise<void>): Promise<void> {
     logger.info(`[PreProcess] 收到消息: type=${ctx.message.type}`);
@@ -127,6 +146,9 @@ export class PreProcessStage extends Stage {
     if (!ctx.message.timestamp) {
       ctx.message.timestamp = Date.now();
     }
+
+    // 分配响应优先级
+    ctx.responsePriority = PreProcessStage.PRIORITY_MAP[ctx.message.type] ?? 5;
 
     await next();
   }
@@ -172,12 +194,24 @@ export class ProcessStage extends Stage {
         await this.handler.processFileUpload(ctx);
         break;
 
+      case 'command_execute':
+        await this.handler.processCommandExecute(ctx);
+        break;
+
       case 'plugin_response':
         this.handler.processPluginResponse(ctx);
         break;
 
       case 'plugin_status':
         this.handler.processPluginStatus(ctx);
+        break;
+
+      case 'plugin_message':
+        await this.handler.processPluginMessage(ctx);
+        break;
+
+      case 'tool_confirm_response':
+        this.handler.processToolConfirmResponse(ctx);
         break;
 
       default:

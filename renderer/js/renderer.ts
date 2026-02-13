@@ -15,6 +15,9 @@ const appState: AppState = {
 // UI显示状态
 let isUIVisible: boolean = true;
 
+// 发送锁：防止连续发送消息导致后端并发处理错乱
+let isSendingMessage: boolean = false;
+
 /**
  * 切换UI显示/隐藏
  */
@@ -201,7 +204,7 @@ async function initializeApp(): Promise<void> {
     // 显示欢迎消息
     setTimeout(() => {
       window.dialogueManager.showDialogue(
-        '你好！我是你的桌面宠物喵~ 点击我可以和我互动哦！',
+        window.i18nManager.t('messages.welcome'),
         5000
       );
     }, 1000);
@@ -234,14 +237,8 @@ function setupEventListeners(): void {
     const y = e.clientY - rect.top;
     
     window.logger.info('点击了宠物');
+    // Live2D tap 会触发 hitTest，命中时由 live2d-manager 发送 tap_event 到后端
     window.live2dManager.tap(x, y);
-    
-    // 发送点击事件到后端
-    window.backendClient.sendMessage({
-      type: 'interaction',
-      action: 'tap',
-      position: { x, y }
-    });
   });
 
   // 鼠标移动事件 - Live2D 视线跟随
@@ -461,6 +458,9 @@ function showAgentPanel(): void {
 
   // 初始化 Agent 插件 UI
   initAgentPluginUI();
+
+  // 初始化指令管理 UI
+  initAgentCommandsUI();
 
   // 初始化标签页切换
   initAgentTabs();
@@ -1456,6 +1456,10 @@ async function refreshToolList(): Promise<void> {
       const item = document.createElement('div');
       item.className = 'agent-tool-item';
 
+      // i18n: 优先使用当前 locale 的描述
+      const locale = window.i18nManager?.currentLocale || 'zh-CN';
+      const toolDesc = tool.i18n?.[locale]?.description || tool.description || '';
+
       const sourceIcon = tool.source === 'mcp' ? '🔌' : tool.source === 'plugin' ? '🧩' : '⚡';
       const sourceLabel = tool.source === 'mcp' ? 'MCP' : tool.source === 'plugin' ? 'Plugin' : 'Func';
       const mcpInfo = tool.mcpServer ? ` · ${tool.mcpServer}` : '';
@@ -1469,7 +1473,7 @@ async function refreshToolList(): Promise<void> {
             ${escapeHtml(tool.name)}
             <span class="agent-tool-source-badge ${tool.source}">${sourceLabel}${mcpInfo}</span>
           </div>
-          <div class="agent-tool-desc" title="${escapeHtml(tool.description || '')}">${escapeHtml(tool.description || '')}</div>
+          <div class="agent-tool-desc" title="${escapeHtml(toolDesc)}">${escapeHtml(toolDesc)}</div>
         </div>
         <div class="agent-tool-toggle">
           <label class="toggle-switch">
@@ -1788,6 +1792,11 @@ function initAgentTabs(): void {
       if (tabName === 'plugins') {
         refreshAgentPlugins();
       }
+
+      // 如果是指令标签，刷新指令列表
+      if (tabName === 'commands') {
+        refreshAgentCommands();
+      }
     });
   });
 }
@@ -1833,6 +1842,10 @@ async function refreshAgentPlugins(): Promise<void> {
       const card = document.createElement('div');
       card.className = 'agent-plugin-card';
 
+      // i18n: 优先使用当前 locale 的描述
+      const locale = window.i18nManager?.currentLocale || 'zh-CN';
+      const pluginDesc = plugin.i18n?.[locale]?.desc || plugin.desc;
+
       const statusLabels: Record<string, string> = {
         loaded: window.i18nManager.t('agent.agentPlugins.statusLoaded'),
         active: window.i18nManager.t('agent.agentPlugins.statusActive'),
@@ -1852,7 +1865,7 @@ async function refreshAgentPlugins(): Promise<void> {
             <div class="agent-plugin-author">${window.i18nManager.t('agent.agentPlugins.author')}: ${escapeHtml(plugin.author)}</div>
           </div>
         </div>
-        <div class="agent-plugin-desc">${escapeHtml(plugin.desc)}</div>
+        <div class="agent-plugin-desc">${escapeHtml(pluginDesc)}</div>
         <div class="agent-plugin-meta">
           <span class="agent-plugin-tool-count">
             <i data-lucide="wrench" style="width: 12px; height: 12px;"></i>
@@ -1882,6 +1895,12 @@ async function refreshAgentPlugins(): Promise<void> {
             <i data-lucide="settings" style="width: 12px; height: 12px;"></i>
             ${window.i18nManager.t('agent.agentPlugins.config')}
           </button>` : ''}
+          <button class="btn-small" data-action="open-data-dir" data-plugin="${escapeHtml(plugin.name)}" title="${window.i18nManager?.t('plugin.openDataDirectory') || '打开数据目录'}">
+            <i data-lucide="database" style="width: 12px; height: 12px;"></i>
+          </button>
+          <button class="btn-small btn-danger" data-action="clear-data" data-plugin="${escapeHtml(plugin.name)}" title="${window.i18nManager?.t('plugin.clearData') || '清除数据'}">
+            <i data-lucide="eraser" style="width: 12px; height: 12px;"></i>
+          </button>
           <button class="btn-small btn-danger" data-action="uninstall" data-plugin="${escapeHtml(plugin.name)}">
             <i data-lucide="trash-2" style="width: 12px; height: 12px;"></i>
             ${window.i18nManager.t('agent.agentPlugins.uninstall')}
@@ -1922,6 +1941,23 @@ async function refreshAgentPlugins(): Promise<void> {
               }
             } else if (action === 'config') {
               showPluginConfigDialog(plugin);
+            } else if (action === 'open-data-dir') {
+              const result = await window.electronAPI.agentOpenPluginDataDir(name);
+              if (!result.success) {
+                window.logger.error(`打开插件 ${name} 数据目录失败:`, result.error);
+              }
+              return; // 不需要刷新列表
+            } else if (action === 'clear-data') {
+              if (confirm(`确定要清除插件 "${name}" 的所有持久化数据吗？配置将会保留，但此操作不可撤销。`)) {
+                const result = await window.electronAPI.agentClearPluginData(name);
+                if (result.success) {
+                  alert('插件数据已清除');
+                } else {
+                  window.logger.error(`清除插件 ${name} 数据失败:`, result.error);
+                  alert(`清除失败: ${result.error || '未知错误'}`);
+                }
+              }
+              return; // 不需要刷新列表
             }
             await refreshAgentPlugins();
             await refreshToolList();
@@ -2082,6 +2118,83 @@ function hidePluginConfigDialog(): void {
   if (overlay) overlay.remove();
 }
 
+// ==================== 指令管理 ====================
+
+/**
+ * 初始化指令管理 UI
+ */
+function initAgentCommandsUI(): void {
+  const btnRefresh = document.getElementById('btn-commands-refresh');
+  if (btnRefresh) {
+    btnRefresh.onclick = () => refreshAgentCommands();
+  }
+}
+
+/**
+ * 刷新指令列表
+ */
+async function refreshAgentCommands(): Promise<void> {
+  try {
+    const commands = await window.electronAPI.agentGetCommands();
+    const container = document.getElementById('agent-command-list');
+    const countEl = document.getElementById('agent-commands-count');
+    if (!container) return;
+
+    if (countEl) {
+      countEl.textContent = `${commands.length} 个指令`;
+    }
+
+    if (!commands || commands.length === 0) {
+      container.innerHTML = `<div class="agent-command-empty">${window.i18nManager?.t('agent.commands.empty') || '暂无已注册的指令'}</div>`;
+      return;
+    }
+
+    container.innerHTML = '';
+    commands.forEach((cmd: any) => {
+      const item = document.createElement('div');
+      item.className = 'agent-command-item';
+
+      const paramsHtml = cmd.params?.map((p: any) =>
+        `<span class="agent-command-param">${escapeHtml(p.name)}${p.required ? '' : '?'}</span>`
+      ).join('') || '';
+
+      item.innerHTML = `
+        <div class="agent-command-info">
+          <div class="agent-command-name">/${escapeHtml(cmd.name)}</div>
+          <div class="agent-command-desc">${escapeHtml(cmd.description)}</div>
+          <div class="agent-command-meta">
+            ${cmd.source ? `<span class="agent-command-source">${escapeHtml(cmd.source)}</span>` : ''}
+            ${paramsHtml ? `<div class="agent-command-params">${paramsHtml}</div>` : ''}
+          </div>
+        </div>
+        <label class="toggle-switch-small">
+          <input type="checkbox" ${cmd.enabled !== false ? 'checked' : ''} data-command="${escapeHtml(cmd.name)}">
+          <span class="toggle-slider-small"></span>
+        </label>
+      `;
+
+      // 绑定启用/禁用切换
+      const toggle = item.querySelector('input[type="checkbox"]') as HTMLInputElement;
+      if (toggle) {
+        toggle.addEventListener('change', async () => {
+          const cmdName = toggle.getAttribute('data-command');
+          if (cmdName) {
+            await window.electronAPI.agentSetCommandEnabled(cmdName, toggle.checked);
+          }
+        });
+      }
+
+      container.appendChild(item);
+    });
+
+    if (window.lucide) {
+      window.lucide.createIcons();
+    }
+  } catch (error) {
+    window.logger.error('加载指令列表失败:', error);
+  }
+}
+
 /**
  * 隐藏 Agent 管理面板
  */
@@ -2172,6 +2285,12 @@ function showChatWindow(): void {
     chatInput?.focus();
     // 通知主进程对话窗口已打开
     window.electronAPI.updateUIState({ chatOpen: true });
+    // 加载对话列表，并恢复当前对话的消息
+    loadConversations().then(() => {
+      if (currentConversationId) {
+        loadConversationMessages(currentConversationId);
+      }
+    });
   }
 }
 
@@ -2182,6 +2301,8 @@ function hideChatWindow(): void {
   const chatWindow = document.getElementById('chat-window');
   if (chatWindow) {
     chatWindow.classList.add('hidden');
+    // 收起对话列表下拉
+    hideConversationDropdown();
     // 通知主进程对话窗口已关闭
     window.electronAPI.updateUIState({ chatOpen: false });
   }
@@ -2274,6 +2395,7 @@ function addChatMessage(text: string, isUser: boolean, options?: { attachment?: 
 
 /**
  * 发送聊天消息
+ * 支持指令系统：以 / 开头的消息会被解析为指令
  */
 async function sendChatMessage(): Promise<void> {
   const chatInput = document.getElementById('chat-input') as HTMLTextAreaElement;
@@ -2281,6 +2403,29 @@ async function sendChatMessage(): Promise<void> {
 
   const text = chatInput.value.trim();
   if (!text) return;
+
+  // 关闭指令建议面板
+  hideCommandSuggestions();
+
+  // 指令检测：以 / 开头
+  if (text.startsWith('/')) {
+    const parsed = parseCommandInput(text);
+    if (parsed) {
+      // 显示用户指令
+      addChatMessage(text, true);
+      chatInput.value = '';
+      chatInput.style.height = 'auto';
+
+      // 发送指令执行请求
+      try {
+        await window.backendClient.executeCommand(parsed.command, parsed.args);
+      } catch (error) {
+        window.logger.error('指令执行失败:', error);
+        addChatMessage('指令执行失败', false);
+      }
+      return;
+    }
+  }
 
   // 添加用户消息到界面
   addChatMessage(text, true);
@@ -2290,10 +2435,455 @@ async function sendChatMessage(): Promise<void> {
   // 发送到后端
   try {
     await sendUserMessage(text);
+    // 延迟刷新对话列表（等待后端保存消息并更新标题）
+    setTimeout(() => loadConversations(), 500);
   } catch (error) {
     window.logger.error('发送消息失败:', error);
     addChatMessage(window.i18nManager.t('messages.sendFailed'), false);
   }
+}
+
+// ==================== 对话管理 ====================
+
+/** 当前活跃对话 ID */
+let currentConversationId: string | null = null;
+
+/**
+ * 加载对话列表
+ */
+async function loadConversations(): Promise<void> {
+  try {
+    const conversations = await window.electronAPI.agentGetConversations(50);
+    const currentResult = await window.electronAPI.agentGetCurrentConversation();
+    currentConversationId = currentResult.conversationId;
+
+    // 更新顶部标题栏
+    updateChatTitleBar(conversations);
+
+    const container = document.getElementById('conversation-list');
+    if (!container) return;
+
+    if (!conversations || conversations.length === 0) {
+      container.innerHTML = `<div class="conversation-empty">${window.i18nManager?.t('chatWindow.noConversations') || '暂无对话记录'}</div>`;
+      return;
+    }
+
+    container.innerHTML = '';
+    conversations.forEach((conv: any) => {
+      const item = document.createElement('div');
+      item.className = `conversation-item${conv.id === currentConversationId ? ' active' : ''}`;
+      item.setAttribute('data-conversation-id', conv.id);
+
+      const title = document.createElement('div');
+      title.className = 'conversation-item-title';
+      title.textContent = conv.title || window.i18nManager?.t('chatWindow.newChat') || '新对话';
+      item.appendChild(title);
+
+      const time = document.createElement('div');
+      time.className = 'conversation-item-time';
+      time.textContent = formatConversationTime(conv.updatedAt);
+      item.appendChild(time);
+
+      // 删除按钮
+      const deleteBtn = document.createElement('button');
+      deleteBtn.className = 'conversation-delete-btn';
+      deleteBtn.innerHTML = '<i data-lucide="trash-2" style="width: 12px; height: 12px;"></i>';
+      deleteBtn.title = window.i18nManager?.t('chatWindow.deleteConversation') || '删除对话';
+      deleteBtn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        deleteConversation(conv.id);
+      });
+      item.appendChild(deleteBtn);
+
+      // 点击切换到该对话并收起下拉
+      item.addEventListener('click', () => {
+        switchConversation(conv.id);
+        hideConversationDropdown();
+      });
+
+      container.appendChild(item);
+    });
+
+    if (window.lucide) {
+      window.lucide.createIcons();
+    }
+  } catch (error) {
+    window.logger.error('加载对话列表失败:', error);
+  }
+}
+
+/**
+ * 更新顶部标题栏显示当前对话标题
+ */
+function updateChatTitleBar(conversations?: any[]): void {
+  const titleEl = document.getElementById('chat-current-title');
+  if (!titleEl) return;
+
+  if (currentConversationId && conversations) {
+    const current = conversations.find((c: any) => c.id === currentConversationId);
+    titleEl.textContent = current?.title || window.i18nManager?.t('chatWindow.newChat') || '新对话';
+  } else {
+    titleEl.textContent = window.i18nManager?.t('chatWindow.newChat') || '新对话';
+  }
+}
+
+/**
+ * 切换对话列表下拉面板的显示/隐藏
+ */
+function toggleConversationDropdown(): void {
+  const dropdown = document.getElementById('conversation-dropdown');
+  const titleBar = document.getElementById('chat-title-bar');
+  if (!dropdown) return;
+
+  const isHidden = dropdown.classList.contains('hidden');
+  if (isHidden) {
+    dropdown.classList.remove('hidden');
+    titleBar?.classList.add('expanded');
+  } else {
+    hideConversationDropdown();
+  }
+}
+
+/**
+ * 隐藏对话列表下拉面板
+ */
+function hideConversationDropdown(): void {
+  const dropdown = document.getElementById('conversation-dropdown');
+  const titleBar = document.getElementById('chat-title-bar');
+  dropdown?.classList.add('hidden');
+  titleBar?.classList.remove('expanded');
+}
+
+/**
+ * 创建新对话
+ */
+async function createNewConversation(): Promise<void> {
+  try {
+    const result = await window.electronAPI.agentNewConversation();
+    if (result.success && result.conversationId) {
+      currentConversationId = result.conversationId;
+      // 清空当前消息区域
+      const messagesContainer = document.getElementById('chat-messages');
+      if (messagesContainer) {
+        messagesContainer.innerHTML = '';
+      }
+      // 收起下拉面板并刷新
+      hideConversationDropdown();
+      await loadConversations();
+    }
+  } catch (error) {
+    window.logger.error('创建新对话失败:', error);
+  }
+}
+
+/**
+ * 切换到指定对话
+ */
+async function switchConversation(conversationId: string): Promise<void> {
+  // 如果已是当前对话且消息区有内容，无需重新加载
+  const messagesContainer = document.getElementById('chat-messages');
+  if (conversationId === currentConversationId && messagesContainer && messagesContainer.children.length > 0) return;
+
+  try {
+    const result = await window.electronAPI.agentSwitchConversation(conversationId);
+    if (result.success) {
+      currentConversationId = conversationId;
+      // 加载该对话的消息
+      await loadConversationMessages(conversationId);
+      // 刷新列表高亮
+      await loadConversations();
+    }
+  } catch (error) {
+    window.logger.error('切换对话失败:', error);
+  }
+}
+
+/**
+ * 删除对话
+ */
+async function deleteConversation(conversationId: string): Promise<void> {
+  try {
+    const result = await window.electronAPI.agentDeleteConversation(conversationId);
+    if (result.success) {
+      // 如果删除的是当前对话，清空消息区
+      if (conversationId === currentConversationId) {
+        const messagesContainer = document.getElementById('chat-messages');
+        if (messagesContainer) {
+          messagesContainer.innerHTML = '';
+        }
+        currentConversationId = null;
+      }
+      // 刷新对话列表
+      await loadConversations();
+    }
+  } catch (error) {
+    window.logger.error('删除对话失败:', error);
+  }
+}
+
+/**
+ * 加载对话的消息记录
+ */
+async function loadConversationMessages(conversationId: string): Promise<void> {
+  const messagesContainer = document.getElementById('chat-messages');
+  if (!messagesContainer) return;
+
+  messagesContainer.innerHTML = '';
+
+  try {
+    const messages = await window.electronAPI.agentGetMessages(conversationId);
+    if (!messages || messages.length === 0) return;
+
+    messages.forEach((msg: any) => {
+      // 跳过 system 和 tool 消息
+      if (msg.role === 'system' || msg.role === 'tool') return;
+
+      // 跳过 tool_call 类型（助手发起的工具调用请求）
+      if (msg.type === 'tool_call' || msg.type === 'tool_result') return;
+
+      const isUser = msg.role === 'user';
+      const messageDiv = document.createElement('div');
+      messageDiv.className = `chat-message ${isUser ? 'user' : 'assistant'}`;
+
+      // 解析 extra 数据
+      let extra: Record<string, any> = {};
+      try {
+        extra = JSON.parse(msg.extra || '{}');
+      } catch {
+        // 忽略
+      }
+
+      // 附件
+      if (extra.attachment && extra.attachment.type === 'image') {
+        const img = document.createElement('img');
+        img.src = extra.attachment.data || extra.attachment.url || '';
+        img.className = 'message-image';
+        if (img.src) {
+          messageDiv.appendChild(img);
+        }
+      }
+
+      if (msg.content) {
+        const textNode = document.createElement('div');
+        textNode.textContent = msg.content;
+        messageDiv.appendChild(textNode);
+      }
+
+      messagesContainer.appendChild(messageDiv);
+    });
+
+    messagesContainer.scrollTop = messagesContainer.scrollHeight;
+  } catch (error) {
+    window.logger.error('加载对话消息失败:', error);
+  }
+}
+
+/**
+ * 格式化对话时间
+ */
+function formatConversationTime(timestamp: number): string {
+  const now = Date.now();
+  const diff = now - timestamp;
+  const minute = 60 * 1000;
+  const hour = 60 * minute;
+  const day = 24 * hour;
+
+  if (diff < minute) return '刚刚';
+  if (diff < hour) return `${Math.floor(diff / minute)} 分钟前`;
+  if (diff < day) return `${Math.floor(diff / hour)} 小时前`;
+  if (diff < 7 * day) return `${Math.floor(diff / day)} 天前`;
+
+  const date = new Date(timestamp);
+  return `${date.getMonth() + 1}/${date.getDate()}`;
+}
+
+// ==================== 指令系统 ====================
+
+/** 当前选中的指令建议索引 */
+let commandSelectedIndex = -1;
+
+/**
+ * 解析指令输入
+ * 支持格式：/command arg1 arg2 或 /command key:value
+ */
+function parseCommandInput(text: string): { command: string; args: Record<string, unknown> } | null {
+  const match = text.match(/^\/(\S+)\s*(.*)?$/);
+  if (!match) return null;
+
+  const commandName = match[1].toLowerCase();
+  const argString = (match[2] || '').trim();
+
+  // 检查指令是否已注册
+  const commands = window.backendClient.getRegisteredCommands();
+  const cmdDef = commands.find(c => c.name === commandName);
+  if (!cmdDef) return null;
+
+  const args: Record<string, unknown> = {};
+
+  if (argString && cmdDef.params && cmdDef.params.length > 0) {
+    // 尝试按位置参数解析
+    const parts = argString.split(/\s+/);
+    cmdDef.params.forEach((param, i) => {
+      if (i < parts.length) {
+        if (param.type === 'number') {
+          args[param.name] = Number(parts[i]);
+        } else if (param.type === 'boolean') {
+          args[param.name] = parts[i] === 'true';
+        } else {
+          // 最后一个字符串参数吃掉剩余所有文本
+          if (i === cmdDef.params!.length - 1) {
+            args[param.name] = parts.slice(i).join(' ');
+          } else {
+            args[param.name] = parts[i];
+          }
+        }
+      }
+    });
+  } else if (argString && (!cmdDef.params || cmdDef.params.length === 0)) {
+    // 无参指令但有多余文本 — 忽略
+  }
+
+  return { command: commandName, args };
+}
+
+/**
+ * 显示指令建议面板
+ */
+function showCommandSuggestions(filter: string): void {
+  const commands = window.backendClient.getRegisteredCommands();
+  if (!commands || commands.length === 0) return;
+
+  const query = filter.toLowerCase().replace(/^\//, '');
+  const filtered = commands.filter(c =>
+    c.name.toLowerCase().includes(query) ||
+    c.description.toLowerCase().includes(query)
+  );
+
+  if (filtered.length === 0) {
+    hideCommandSuggestions();
+    return;
+  }
+
+  let popup = document.getElementById('command-suggestions');
+  if (!popup) {
+    popup = document.createElement('div');
+    popup.id = 'command-suggestions';
+    popup.className = 'command-suggestions';
+
+    const inputWrapper = document.querySelector('.input-wrapper') as HTMLElement | null;
+    if (inputWrapper) {
+      inputWrapper.style.position = 'relative';
+      inputWrapper.appendChild(popup);
+    }
+  }
+
+  commandSelectedIndex = 0;
+
+  popup.innerHTML = filtered.map((cmd, i) => {
+    const paramHints = cmd.params?.map(p =>
+      `<span class="cmd-param ${p.required ? 'required' : 'optional'}">${p.name}${p.required ? '' : '?'}</span>`
+    ).join(' ') || '';
+
+    return `<div class="command-suggestion-item ${i === 0 ? 'selected' : ''}" data-command="${cmd.name}">
+      <div class="cmd-name-row">
+        <span class="cmd-name">/${cmd.name}</span>
+        ${paramHints}
+      </div>
+      <div class="cmd-desc">${cmd.description}</div>
+      ${cmd.source ? `<span class="cmd-source">${cmd.source}</span>` : ''}
+    </div>`;
+  }).join('');
+
+  popup.classList.remove('hidden');
+
+  // 点击选中指令
+  popup.querySelectorAll('.command-suggestion-item').forEach(item => {
+    item.addEventListener('click', () => {
+      const cmdName = item.getAttribute('data-command');
+      if (cmdName) {
+        selectCommandSuggestion(cmdName);
+      }
+    });
+  });
+}
+
+/**
+ * 隐藏指令建议面板
+ */
+function hideCommandSuggestions(): void {
+  const popup = document.getElementById('command-suggestions');
+  if (popup) {
+    popup.classList.add('hidden');
+  }
+  commandSelectedIndex = -1;
+}
+
+/**
+ * 选中指令建议（填入输入框）
+ */
+function selectCommandSuggestion(commandName: string): void {
+  const chatInput = document.getElementById('chat-input') as HTMLTextAreaElement;
+  if (!chatInput) return;
+
+  const commands = window.backendClient.getRegisteredCommands();
+  const cmd = commands.find(c => c.name === commandName);
+  if (!cmd) return;
+
+  // 如果指令有参数，填入指令名 + 空格，等待用户输入参数
+  if (cmd.params && cmd.params.length > 0) {
+    chatInput.value = `/${commandName} `;
+  } else {
+    chatInput.value = `/${commandName}`;
+  }
+  chatInput.focus();
+  hideCommandSuggestions();
+}
+
+/**
+ * 处理指令建议的键盘导航
+ */
+function handleCommandKeyNav(e: KeyboardEvent): boolean {
+  const popup = document.getElementById('command-suggestions');
+  if (!popup || popup.classList.contains('hidden')) return false;
+
+  const items = popup.querySelectorAll('.command-suggestion-item');
+  if (items.length === 0) return false;
+
+  if (e.key === 'ArrowUp') {
+    e.preventDefault();
+    commandSelectedIndex = Math.max(0, commandSelectedIndex - 1);
+    items.forEach((item, i) => item.classList.toggle('selected', i === commandSelectedIndex));
+    items[commandSelectedIndex]?.scrollIntoView({ block: 'nearest' });
+    return true;
+  }
+
+  if (e.key === 'ArrowDown') {
+    e.preventDefault();
+    commandSelectedIndex = Math.min(items.length - 1, commandSelectedIndex + 1);
+    items.forEach((item, i) => item.classList.toggle('selected', i === commandSelectedIndex));
+    items[commandSelectedIndex]?.scrollIntoView({ block: 'nearest' });
+    return true;
+  }
+
+  if (e.key === 'Tab' || (e.key === 'Enter' && commandSelectedIndex >= 0)) {
+    e.preventDefault();
+    const selected = items[commandSelectedIndex];
+    if (selected) {
+      const cmdName = selected.getAttribute('data-command');
+      if (cmdName) {
+        selectCommandSuggestion(cmdName);
+        return true;
+      }
+    }
+  }
+
+  if (e.key === 'Escape') {
+    e.preventDefault();
+    hideCommandSuggestions();
+    return true;
+  }
+
+  return false;
 }
 
 /**
@@ -2312,6 +2902,18 @@ function initializeChatWindow(): void {
     btnCloseChat.addEventListener('click', hideChatWindow);
   }
 
+  // 标题栏点击展开/收起对话列表
+  const chatTitleBar = document.getElementById('chat-title-bar');
+  if (chatTitleBar) {
+    chatTitleBar.addEventListener('click', toggleConversationDropdown);
+  }
+
+  // 新建对话按钮
+  const btnNewChat = document.getElementById('btn-new-chat');
+  if (btnNewChat) {
+    btnNewChat.addEventListener('click', createNewConversation);
+  }
+
   // 发送按钮
   const btnSend = document.getElementById('btn-send');
   if (btnSend) {
@@ -2322,16 +2924,32 @@ function initializeChatWindow(): void {
   const chatInput = document.getElementById('chat-input') as HTMLTextAreaElement;
   if (chatInput) {
     chatInput.addEventListener('keydown', (e: KeyboardEvent) => {
+      // 先检查指令建议导航
+      if (handleCommandKeyNav(e)) return;
+
       if (e.key === 'Enter' && !e.shiftKey) {
         e.preventDefault();
         sendChatMessage();
       }
     });
 
-    // 自动调整输入框高度
+    // 输入监听：指令自动补全 + 高度调整
     chatInput.addEventListener('input', () => {
       chatInput.style.height = 'auto';
       chatInput.style.height = chatInput.scrollHeight + 'px';
+
+      // 指令建议
+      const text = chatInput.value;
+      if (text.startsWith('/') && !text.includes('\n')) {
+        showCommandSuggestions(text);
+      } else {
+        hideCommandSuggestions();
+      }
+    });
+
+    // 失焦时延迟隐藏（让 click 事件有机会触发）
+    chatInput.addEventListener('blur', () => {
+      setTimeout(() => hideCommandSuggestions(), 200);
     });
   }
 
@@ -2649,6 +3267,7 @@ async function saveSettings(): Promise<void> {
   window.microphoneManager.setVolumeThreshold(micVolumeThreshold);
   window.microphoneManager.setBackgroundMode(micBackgroundMode);
   window.live2dManager.enableEyeTracking(enableEyeTracking);
+  window.themeManager.setTheme(theme);
   
   // 更新日志配置
   await window.logger.updateConfig({
@@ -2807,14 +3426,14 @@ function initializeSettingsPanel(): void {
     });
   }
 
-  // 主题切换 - 移除实时切换，仅在保存时生效
-  // const themeSelect = document.getElementById('setting-theme') as HTMLSelectElement;
-  // if (themeSelect) {
-  //   themeSelect.addEventListener('change', (e: Event) => {
-  //     const newTheme = (e.target as HTMLSelectElement).value as ThemeMode;
-  //     window.themeManager.setTheme(newTheme);
-  //   });
-  // }
+  // 主题切换 - 选择时即时预览
+  const themeSelect = document.getElementById('setting-theme') as HTMLSelectElement;
+  if (themeSelect) {
+    themeSelect.addEventListener('change', (e: Event) => {
+      const newTheme = (e.target as HTMLSelectElement).value as ThemeMode;
+      window.themeManager.setTheme(newTheme);
+    });
+  }
 
   // 点击背景关闭
   const panel = document.getElementById('settings-panel');
@@ -3150,6 +3769,13 @@ async function sendUserMessage(text: string): Promise<void> {
     return;
   }
 
+  // 防止连续发送：上一条消息还在处理时跳过
+  if (isSendingMessage) {
+    window.logger.warn('上一条消息仍在处理中，请稍候');
+    return;
+  }
+
+  isSendingMessage = true;
   try {
     const message: BackendMessage = {
       type: 'user_input',
@@ -3176,6 +3802,8 @@ async function sendUserMessage(text: string): Promise<void> {
   } catch (error) {
     window.logger.error('发送消息失败:', error);
     window.dialogueManager.showDialogue('发送消息失败，请检查网络连接', 3000);
+  } finally {
+    isSendingMessage = false;
   }
 }
 

@@ -307,9 +307,26 @@ class AudioPlayer implements IAudioPlayer {
   public endStream(): void {
     if (!this.isStreamMode || !this.mediaSource) return;
     
-    // 等待所有数据处理完毕
+    // 等待所有数据处理完毕，最多重试 50 次（5 秒）
+    const MAX_END_RETRIES = 50;
+    let retryCount = 0;
+    
     const tryEnd = () => {
       if (this.audioQueue.length > 0) {
+        retryCount++;
+        if (retryCount >= MAX_END_RETRIES) {
+          window.logger.warn(`[AudioPlayer] endStream 重试超过上限 (${MAX_END_RETRIES})，强制结束`);
+          this.audioQueue = [];
+          // 强制结束流
+          try {
+            if (this.mediaSource && this.mediaSource.readyState === 'open') {
+              this.mediaSource.endOfStream();
+            }
+          } catch (error) {
+            window.logger.warn('[AudioPlayer] 强制结束流失败:', error);
+          }
+          return;
+        }
         setTimeout(tryEnd, 100);
         return;
       }

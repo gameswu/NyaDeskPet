@@ -120,6 +120,20 @@ export interface ElectronAPI {
   agentUninstallPlugin: (name: string) => Promise<{ success: boolean; error?: string }>;
   agentSavePluginConfig: (name: string, config: Record<string, unknown>) => Promise<{ success: boolean; error?: string }>;
   agentOpenPluginsDir: () => Promise<{ success: boolean }>;
+  agentOpenPluginDataDir: (name: string) => Promise<{ success: boolean; error?: string }>;
+  agentClearPluginData: (name: string) => Promise<{ success: boolean; error?: string }>;
+  
+  // 指令系统
+  agentGetCommands: () => Promise<CommandDefinition[]>;
+  agentSetCommandEnabled: (name: string, enabled: boolean) => Promise<{ success: boolean }>;
+  
+  // 对话管理
+  agentGetConversations: (limit?: number) => Promise<ConversationItem[]>;
+  agentGetMessages: (conversationId: string) => Promise<ConversationMessage[]>;
+  agentNewConversation: () => Promise<{ success: boolean; conversationId?: string; error?: string }>;
+  agentSwitchConversation: (conversationId: string) => Promise<{ success: boolean; error?: string }>;
+  agentDeleteConversation: (conversationId: string) => Promise<{ success: boolean; error?: string }>;
+  agentGetCurrentConversation: () => Promise<{ conversationId: string | null }>;
   
   // 通用 IPC 调用（用于插件管理等扩展功能）
   invoke: (channel: string, ...args: any[]) => Promise<any>;
@@ -151,6 +165,7 @@ declare global {
     pluginPermissionManager: PluginPermissionManager;
     cameraManager: CameraManager;
     microphoneManager: MicrophoneManager;
+    responseController: ResponseController;
     logger: any;
     app: AppDebugInterface;
     PIXI: typeof import('pixi.js');
@@ -372,6 +387,16 @@ export interface PluginStatusData {
   }>;
 }
 
+/** 前端插件主动发送的消息（插件主动发起，交给后端 Agent 处理并持久化） */
+export interface PluginMessageData {
+  pluginId: string;
+  pluginName?: string;
+  /** 插件消息文本内容 */
+  text: string;
+  /** 可选：插件提供的额外结构化数据 */
+  metadata?: Record<string, unknown>;
+}
+
 // Tap配置记录类型
 export interface TapConfigRecord {
   [modelPath: string]: TapConfig;
@@ -561,12 +586,16 @@ export interface BackendConfig {
 }
 
 export interface BackendMessage {
-  type: 'dialogue' | 'live2d' | 'system' | 'user_input' | 'interaction' | 'model_info' | 'tap_event' | 'sync_command' | 'character_info' | 'audio_stream_start' | 'audio_chunk' | 'audio_stream_end' | 'file_upload' | 'plugin_invoke' | 'plugin_response' | 'plugin_status';
-  data?: DialogueData | Live2DCommandData | AudioStreamStartData | AudioChunkData | AudioStreamEndData | SyncCommandData | ModelInfo | CharacterInfo | FileUploadData | PluginInvokeData | PluginResponseData | PluginStatusData | unknown;
+  type: 'dialogue' | 'dialogue_stream_start' | 'dialogue_stream_chunk' | 'dialogue_stream_end' | 'live2d' | 'system' | 'user_input' | 'model_info' | 'tap_event' | 'sync_command' | 'character_info' | 'audio_stream_start' | 'audio_chunk' | 'audio_stream_end' | 'file_upload' | 'plugin_invoke' | 'plugin_response' | 'plugin_status' | 'plugin_message' | 'tool_confirm' | 'tool_confirm_response' | 'commands_register' | 'command_execute' | 'command_response';
+  data?: DialogueData | DialogueStreamStartData | DialogueStreamChunkData | DialogueStreamEndData | Live2DCommandData | AudioStreamStartData | AudioChunkData | AudioStreamEndData | SyncCommandData | ModelInfo | CharacterInfo | FileUploadData | PluginInvokeData | PluginResponseData | PluginStatusData | PluginMessageData | ToolConfirmData | ToolConfirmResponseData | CommandsRegisterData | CommandExecuteData | CommandResponseData | unknown;
   text?: string;
   timestamp?: number;
   action?: string;
   position?: { x: number; y: number };
+  /** 响应会话 ID（同一次回复的所有消息共享相同 ID） */
+  responseId?: string;
+  /** 响应优先级（用于中断判断） */
+  priority?: number;
   attachment?: {
     type: 'image' | 'file';
     url?: string;
@@ -585,6 +614,117 @@ export interface DialogueData {
     url: string;
     name?: string;
   };
+}
+
+/** 流式对话开始 */
+export interface DialogueStreamStartData {
+  /** 流式会话 ID */
+  streamId: string;
+}
+
+/** 流式对话增量块 */
+export interface DialogueStreamChunkData {
+  streamId: string;
+  /** 增量文本 */
+  delta: string;
+  /** 思维链增量（如有） */
+  reasoningDelta?: string;
+}
+
+/** 流式对话结束 */
+export interface DialogueStreamEndData {
+  streamId: string;
+  /** 完整文本（可选，用于校验） */
+  fullText?: string;
+  /** 显示时长 */
+  duration?: number;
+}
+
+/** 工具调用确认请求（后端→前端） */
+export interface ToolConfirmData {
+  /** 确认请求 ID */
+  confirmId: string;
+  /** 工具调用列表 */
+  toolCalls: Array<{
+    id: string;
+    name: string;
+    arguments: Record<string, unknown>;
+    /** 工具来源 */
+    source: 'function' | 'mcp' | 'plugin';
+    /** 工具描述 */
+    description?: string;
+  }>;
+  /** 超时时间（毫秒），超时自动拒绝 */
+  timeout: number;
+}
+
+/** 工具调用确认响应（前端→后端） */
+export interface ToolConfirmResponseData {
+  confirmId: string;
+  /** 是否批准 */
+  approved: boolean;
+  /** 用户是否选择「记住此操作」 */
+  remember?: boolean;
+}
+
+// ============ 对话管理类型 ============
+
+/** 对话列表项 */
+export interface ConversationItem {
+  id: string;
+  title: string;
+  createdAt: number;
+  updatedAt: number;
+}
+
+/** 对话消息 */
+export interface ConversationMessage {
+  role: 'system' | 'user' | 'assistant' | 'tool';
+  type: string;
+  content: string;
+  extra: string;
+  createdAt: number;
+}
+
+// ============ 指令系统类型 ============
+
+/** 指令参数定义 */
+export interface CommandParam {
+  name: string;
+  description: string;
+  type: 'string' | 'number' | 'boolean';
+  required?: boolean;
+  default?: unknown;
+  choices?: Array<{ name: string; value: string | number }>;
+}
+
+/** 指令定义 */
+export interface CommandDefinition {
+  name: string;
+  description: string;
+  params?: CommandParam[];
+  category?: string;
+  source?: string;
+  enabled?: boolean;
+}
+
+/** 指令注册消息数据（后端→前端） */
+export interface CommandsRegisterData {
+  commands: CommandDefinition[];
+}
+
+/** 指令执行请求（前端→后端） */
+export interface CommandExecuteData {
+  command: string;
+  args: Record<string, unknown>;
+}
+
+/** 指令执行结果（后端→前端） */
+export interface CommandResponseData {
+  command: string;
+  success: boolean;
+  text?: string;
+  error?: string;
 }
 
 export interface AudioStreamStartData {
@@ -637,6 +777,8 @@ export interface BackendClient {
   scheduleReconnect(): void;
   clearReconnectTimer(): void;
   disconnect(): void;
+  getRegisteredCommands(): CommandDefinition[];
+  executeCommand(command: string, args?: Record<string, unknown>): Promise<void>;
 }
 
 // 对话管理器类型
@@ -841,6 +983,7 @@ export interface AgentToolInfo {
   source: 'function' | 'mcp' | 'plugin';
   mcpServer?: string;
   enabled: boolean;
+  i18n?: Record<string, { description?: string }>;
 }
 
 // ============ MCP 服务器接口 ============
@@ -862,6 +1005,22 @@ export interface MCPServerStatusInfo {
   toolCount: number;
   error?: string;
   lastConnectedAt?: string;
+}
+
+// ============ 响应控制器接口 ============
+export interface ResponseSession {
+  responseId: string;
+  priority: number;
+  startTime: number;
+  hasActiveAudio: boolean;
+}
+
+export interface ResponseController {
+  shouldAccept(responseId: string, priority: number): boolean;
+  isActive(responseId: string | undefined): boolean;
+  markAudioActive(): void;
+  notifyComplete(responseId?: string): void;
+  getCurrentSession(): ResponseSession | null;
 }
 
 // ============ Agent 插件接口 ============
@@ -888,6 +1047,7 @@ export interface AgentPluginInfo {
   config?: Record<string, unknown>;
   toolCount: number;
   dirName: string;
+  i18n?: Record<string, { desc?: string }>;
 }
 
 // ============ 摄像头管理器接口 ============

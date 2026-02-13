@@ -24,3 +24,4 @@ renderer/js/*.js.map
 # 用户需要根据文档说明自行下载
 models/live2d/*/
 models/asr/*/
+!models/live2d/mao_pro_zh/

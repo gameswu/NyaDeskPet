@@ -54,7 +54,6 @@ export class AgentServer {
 
   /** WebSocket → sessionId 映射 */
   private sessionMap: WeakMap<WebSocket, string> = new WeakMap();
-  private sessionCounter: number = 0;
 
   constructor(config: AgentServerConfig = { port: 8765 }) {
     this.config = {
@@ -122,28 +121,32 @@ export class AgentServer {
 
         this.wss.on('connection', (ws: WebSocket) => {
           this.clients.add(ws);
-          const sessionId = `session_${++this.sessionCounter}_${Date.now()}`;
+          // 使用固定的 sessionId 'builtin'，使对话历史在重连后可恢复
+          const sessionId = 'builtin';
           this.sessionMap.set(ws, sessionId);
           this.handler.sessions.getOrCreateSession(sessionId);
           logger.info(`[AgentServer] 客户端已连接 (会话: ${sessionId}, 当前: ${this.clients.size})`);
 
+          // 发送已注册的指令列表到前端
+          this.handler.sendCommandsRegister(ws);
+
           ws.on('message', (data: RawData) => {
-            this.handleMessage(ws, data);
+            this.handleMessage(ws, data).catch(err =>
+              logger.error('[AgentServer] 消息处理未捕获异常:', err)
+            );
           });
 
           ws.on('close', () => {
-            const sid = this.sessionMap.get(ws);
             this.clients.delete(ws);
             this.handler.clearActiveConnection(ws);
-            if (sid) {
-              this.handler.sessions.removeSession(sid);
-            }
+            // 不移除 session 运行时状态，保持对话上下文在重连后可用
             logger.info(`[AgentServer] 客户端已断开 (当前: ${this.clients.size})`);
           });
 
           ws.on('error', (error: Error) => {
             logger.error('[AgentServer] 客户端错误:', error);
             this.clients.delete(ws);
+            this.handler.clearActiveConnection(ws);
           });
         });
 
@@ -186,7 +189,6 @@ export class AgentServer {
         }
         this.wss = null;
         this.startTime = null;
-        this.sessionCounter = 0;
         logger.info('[AgentServer] 服务器已停止');
         resolve();
       });

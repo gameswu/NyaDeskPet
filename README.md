@@ -2,106 +2,112 @@
 
 <div align="center">
   <img src="logo.png" alt="NyaDeskPet Logo" width="320"/>
-  <p>一个基于 Live2D 和 AI Agent 的桌面宠物应用</p>
+  <p>基于 Electron + Live2D + AI Agent 的跨平台桌面宠物应用</p>
 </div>
 
 ---
 
-## 📖 项目文档
+## 特性
 
-为了保持结构清晰，项目详细信息已拆分为以下文档：
+- 🎭 **Live2D 交互** — 模型渲染、动作/表情/参数控制、视线跟随、触碰反应、滚轮缩放、口型同步
+- 🤖 **内置 AI Agent** — Pipeline 管线架构，支持 5 种 LLM Provider、流式输出、Function Calling 工具循环
+- 🗣️ **语音系统** — Sherpa-ONNX 离线 ASR（中英日韩粤）、双 TTS Provider（Fish Audio / Edge TTS）
+- 🧩 **双插件体系** — 9 个 Agent 插件（主进程 JS）+ 2 个前端插件（独立进程 WebSocket）
+- 🔧 **MCP 支持** — 连接外部 MCP 服务器，自动发现并注册工具
+- 📷 **多模态输入** — 摄像头捕获、文件上传、图片转述
+- 🌐 **国际化** — 中/英双语，自动跟随系统语言
+- 🌙 **主题系统** — 浅色 / 深色 / 跟随系统
+- 💬 **侧边栏对话** — 多会话管理、对话历史持久化、斜杠指令自动补全
+- 🔒 **权限管理** — 5 级危险度审批，插件操作需用户确认
+- 📥 **系统托盘** — 最小化到托盘、动态菜单、双击唤出
+- 🖥️ **跨平台** — Windows / macOS / Linux
 
-- 🚀 **[快速开始 & 使用指南](docs/USAGE.md)**
-  安装环境、运行程序、打包发布、配置模型和常见问题。
+## 文档
 
-- 📡 **[API 接口规范](docs/API.md)**
-  WebSocket 通信协议、后端 API 定义及其安全实现。
+| 文档 | 说明 |
+|------|------|
+| [使用指南](docs/USAGE.md) | 安装、配置、运行、打包 |
+| [API 规范](docs/API.md) | WebSocket 消息协议 |
+| [开发指南](docs/DEVELOPMENT.md) | 架构设计、核心模块 |
+| [前端插件开发](docs/PLUGINS.md) | 前端插件 WebSocket 协议与开发流程 |
+| [Agent 插件开发](docs/AGENT_PLUGINS.md) | Agent 插件基类、工具注册、Handler 插件 |
 
-- 💻 **[开发与架构指南](docs/DEVELOPMENT.md)**
-  项目结构、核心模块设计、安全系统逻辑及技术栈说明。
-
-- 🧩 **[前端插件开发指南](docs/PLUGINS.md)**
-  前端插件系统架构、通信协议及示例插件说明。
-
-- 🤖 **[Agent 插件开发指南](docs/AGENT_PLUGINS.md)**
-  内置 Agent 插件开发、工具注册与配置系统说明。
-
----
-
-## ✨ 特性概览
-
-- 🎭 **Live2D 交互** - 高质量 Live2D 模型渲染与动画控制，支持鼠标滚轮缩放、视线跟随与口型同步
-- 🌐 **多语言支持** - 内置中英文国际化，可根据系统语言自动切换或手动设置
-- 🌙 **主题系统** - 深色/浅色模式切换，完美适配不同使用场景
-- 💬 **侧边栏对话** - 现代化的侧边栏聊天界面，支持对话历史记录与沉浸式体验
-- ⚙️ **分组设置面板** - 标签页式设置界面，包含模型、连接、角色、显示和关于等配置
-- 🎨 **角色自定义** - 支持自定义桌宠名称和人设，让 AI 对话更具个性
-- 🤖 **智能交互** - 与后端 AI Agent 通信，实现自然语言交互与智能决策
-- 🌐 **跨平台支持** - 一套代码支持 Windows、macOS 和 Linux
-- 📐 **窗口自适应** - Live2D 模型自动适应窗口大小变化，支持自由调整尺寸
-- 📥 **动态系统托盘** - 支持最小化到托盘，菜单按钮根据状态智能切换
-- 🎨 **现代化 UI** - 基于 Lucide Icons 的专业图标系统，分区布局设计，操作直观流畅
-- 👁️ **UI 切换模式** - 支持完整 UI 和纯模型两种显示模式，双击模型或点击按钮即可切换
-- 🗣️ **实时口型同步** - 音频播放时自动进行口型动画，让对话更加生动自然
-- 🎙️ **本地语音识别** - 基于 Sherpa-ONNX 的离线 ASR，支持中英日韩粤五种语言
-- 📷 **视频输入支持** - 集成摄像头捕获，支持视觉多模态交互
-- 🧩 **插件系统** - 支持外置插件扩展功能，内置终端控制和 UI 自动化插件
-- ⚙️ **插件配置** - 图形化插件配置界面，支持多种配置类型（文本、数字、开关等）
-- 🔒 **权限管理** - 5 级危险度权限审批系统，危险操作需用户确认
-
----
-
-## 🛠️ 快速运行
-
-### 环境准备
+## 快速开始
 
 ```bash
-# 1. 安装依赖
+# 安装依赖
 npm install
 
-# 2. 编译 TypeScript 代码
+# 编译 TypeScript
 npm run compile
+
+# 启动（按平台选择）
+npm run dev:mac
+npm run dev:linux
+npm run dev:win
 ```
 
-### 启动应用
+## 技术栈
+
+| 组件 | 技术 |
+|------|------|
+| 应用框架 | Electron 28 |
+| 开发语言 | TypeScript 5.3 |
+| 渲染引擎 | PixiJS 7.3 + Live2D Cubism SDK |
+| 数据持久化 | SQLite (better-sqlite3) |
+| 语音识别 | Sherpa-ONNX (Sense-Voice-Small) |
+| 音频格式转换 | FFmpeg |
+| 图标 | Lucide Icons |
+
+## 架构概览
+
+```mermaid
+graph TB
+    subgraph Main["主进程"]
+        AgentServer["Agent Server\n(WebSocket)"]
+        Pipeline["Pipeline\n(PreProcess → Process → Respond)"]
+        Providers["LLM / TTS Providers"]
+        Tools["ToolManager + MCPManager"]
+        Plugins["Agent 插件 ×9"]
+        DB["SQLite"]
+        ASR["ASR Service"]
+    end
+
+    subgraph Renderer["渲染进程"]
+        Live2D["Live2D Manager"]
+        Chat["对话 UI"]
+        Audio["音频播放器"]
+        PluginUI["插件管理"]
+        Settings["设置管理"]
+    end
+
+    subgraph External["外部"]
+        FrontendPlugins["前端插件\n(独立进程)"]
+        MCP["MCP 服务器"]
+        LLM["LLM API"]
+    end
+
+    Renderer <-->|IPC| Main
+    AgentServer <-->|WebSocket| Renderer
+    Pipeline --> Providers
+    Pipeline --> Tools
+    Pipeline --> Plugins
+    Providers --> LLM
+    Tools --> MCP
+    AgentServer --> Pipeline
+    Providers --> DB
+    FrontendPlugins <-->|WebSocket| Renderer
+```
+
+## 开发辅助
 
 ```bash
-# 开发模式（根据操作系统选择）
-npm run dev:mac     # macOS
-npm run dev:linux   # Linux
-npm run dev:win     # Windows
-npm run dev         # 通用命令
-
-# 生产模式
-npm start
+npm run check-i18n              # 校验国际化键一致性
+npm run migrate-logger:preview  # 预览 console → logger 迁移
+npm run migrate-logger          # 执行迁移
+npm run version                 # 版本号管理
 ```
 
-### 开发辅助工具
-
-```bash
-# 检查国际化文件一致性
-npm run check-i18n
-
-# 自动迁移 console 调用到 logger 系统（预览模式）
-npm run migrate-logger:preview
-
-# 自动迁移 console 调用到 logger 系统（实际执行）
-npm run migrate-logger
-
-# 更新版本号（详见开发文档）
-npm run version
-```
-
----
-
-## 🤝 贡献与反馈
-
-欢迎提交 Issue 或 Pull Request！
-
-**注意**: 本项目文档结构已固定。后续任何更新请仅在 `README.md` 或 `docs/` 目录下的核心文档（`API.md`, `USAGE.md`, `DEVELOPMENT.md`, `PLUGINS.md`, `AGENT_PLUGINS.md`）中进行修改，**严禁新增文档文件**。
-
----
-
-## 📄 许可证
+## 许可证
 
 [MIT License](LICENSE)

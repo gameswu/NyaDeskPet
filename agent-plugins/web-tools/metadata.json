@@ -1,0 +1,12 @@
+{
+  "name": "web-tools",
+  "author": "gameswu",
+  "desc": "网络工具插件 — 提供 fetch_url（获取网页内容）和 search_web（搜索引擎查询）两个 Function Calling 工具",
+  "version": "1.0.0",
+  "entry": "main.js",
+  "autoActivate": true,
+  "i18n": {
+    "zh-CN": { "desc": "网络工具插件 — 提供 fetch_url（获取网页内容）和 search_web（搜索引擎查询）两个 Function Calling 工具" },
+    "en-US": { "desc": "Web tools plugin — provides fetch_url (fetch webpage content) and search_web (search engine query) Function Calling tools" }
+  }
+}

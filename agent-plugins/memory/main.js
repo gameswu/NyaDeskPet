@@ -49,6 +49,10 @@ class MemoryPlugin extends AgentPlugin {
       {
         name: 'clear_memory',
         description: '清除当前会话的历史摘要记忆。清除后，AI 将忘记之前的对话总结。',
+        i18n: {
+          'zh-CN': { description: '清除当前会话的历史摘要记忆。清除后，AI 将忘记之前的对话总结。' },
+          'en-US': { description: 'Clear the history summary memory of the current session. After clearing, the AI will forget previous conversation summaries.' }
+        },
         parameters: {
           type: 'object',
           properties: {
@@ -72,6 +76,10 @@ class MemoryPlugin extends AgentPlugin {
       {
         name: 'view_memory_stats',
         description: '查看记忆管理的统计信息，包括活跃会话数和压缩次数。',
+        i18n: {
+          'zh-CN': { description: '查看记忆管理的统计信息，包括活跃会话数和压缩次数。' },
+          'en-US': { description: 'View memory management statistics, including active sessions and compression count.' }
+        },
         parameters: {
           type: 'object',
           properties: {},

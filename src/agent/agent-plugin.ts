@@ -26,9 +26,11 @@ import { logger } from '../logger';
 import * as fs from 'fs';
 import * as path from 'path';
 import { app } from 'electron';
-import { toolManager, type ToolSchema, type ToolHandler } from './tools';
+import { toolManager, type ToolSchema, type ToolHandler, type OpenAIToolFormat } from './tools';
+import { commandRegistry, type CommandDefinition, type CommandHandler } from './commands';
 import type { LLMRequest, LLMResponse } from './provider';
 import type { SessionManager, OutgoingMessage } from './context';
+import type { ModelInfo, CharacterInfo } from './handler';
 
 // ==================== 类型定义 ====================
 
@@ -62,6 +64,8 @@ export interface AgentPluginMetadata {
   autoActivate?: boolean;
   /** 依赖的插件名称列表（将按顺序在此插件之前激活） */
   dependencies?: string[];
+  /** 国际化（可选，按 locale 提供 desc 的翻译） */
+  i18n?: Record<string, { desc?: string }>;
 }
 
 /** 插件配置 Schema 字段 */
@@ -91,6 +95,8 @@ export interface AgentPluginInfo {
   config?: Record<string, unknown>;
   toolCount: number;
   dirName: string;
+  /** 国际化 */
+  i18n?: Record<string, { desc?: string }>;
 }
 
 /** 插件上下文（传递给插件实例） */
@@ -100,13 +106,17 @@ export type PluginInvokeSender = (
   action: string,
   params: Record<string, unknown>,
   timeout?: number
-) => Promise<{ success: boolean; result?: any; error?: string }>;
+) => Promise<{ success: boolean; result?: unknown; error?: string }>;
 
 export interface AgentPluginContext {
   /** 注册工具 */
   registerTool(schema: ToolSchema, handler: ToolHandler): void;
   /** 注销工具 */
   unregisterTool(toolName: string): void;
+  /** 注册斜杠指令 */
+  registerCommand(definition: CommandDefinition, handler: CommandHandler): void;
+  /** 注销斜杠指令 */
+  unregisterCommand(commandName: string): void;
   /** 日志 */
   logger: {
     info(msg: string): void;
@@ -139,9 +149,9 @@ export interface AgentPluginContext {
   /** 获取会话管理器 */
   getSessions(): SessionManager;
   /** 获取当前模型信息 */
-  getModelInfo(): any | null;
+  getModelInfo(): ModelInfo | null;
   /** 获取当前角色信息 */
-  getCharacterInfo(): any | null;
+  getCharacterInfo(): CharacterInfo | null;
   /** 使用主 TTS Provider 合成音频并流式推送到前端 */
   synthesizeAndStream(text: string, ctx: MessageContext): Promise<void>;
   /** 是否有已连接的 TTS Provider */
@@ -151,7 +161,7 @@ export interface AgentPluginContext {
   /** 工具系统是否启用 */
   isToolCallingEnabled(): boolean;
   /** 获取 OpenAI 格式的工具列表 */
-  getOpenAITools(): any[] | undefined;
+  getOpenAITools(): OpenAIToolFormat[] | undefined;
   /** 检查是否有已注册工具 */
   hasEnabledTools(): boolean;
   /** 获取其他插件的实例（用于插件间服务调用） */
@@ -173,7 +183,7 @@ export interface AgentPluginContext {
  */
 export interface MessageContext {
   /** 原始消息 */
-  message: { type: string; text?: string; data?: any; timestamp?: number };
+  message: { type: string; text?: string; data?: unknown; timestamp?: number };
   /** 会话 ID */
   sessionId: string;
   /** 添加回复到缓冲（Respond 阶段统一发送） */
@@ -181,7 +191,7 @@ export interface MessageContext {
   /** 立即发送消息（不经过缓冲，用于流式场景） */
   send(msg: object): void;
   /** WebSocket 连接引用 */
-  ws: any;
+  ws: import('ws').WebSocket;
 }
 
 export abstract class AgentPlugin {
@@ -209,6 +219,9 @@ export abstract class AgentPlugin {
   /** 处理触碰事件 */
   async onTapEvent?(mctx: MessageContext): Promise<boolean>;
 
+  /** 处理文件上传 */
+  async onFileUpload?(mctx: MessageContext): Promise<boolean>;
+
   /** 处理模型信息更新 */
   onModelInfo?(mctx: MessageContext): boolean;
 
@@ -217,6 +230,9 @@ export abstract class AgentPlugin {
 
   /** 处理插件响应 */
   onPluginResponse?(mctx: MessageContext): boolean;
+
+  /** 处理前端插件主动发送的消息 */
+  async onPluginMessage?(mctx: MessageContext): Promise<boolean>;
 }
 
 // ==================== 内部记录 ====================
@@ -254,9 +270,9 @@ export interface HandlerAccessor {
   /** 获取会话管理器 */
   getSessions(): SessionManager;
   /** 获取模型信息 */
-  getModelInfo(): any | null;
+  getModelInfo(): ModelInfo | null;
   /** 获取角色信息 */
-  getCharacterInfo(): any | null;
+  getCharacterInfo(): CharacterInfo | null;
   /** TTS 合成并推流 */
   synthesizeAndStream(text: string, ctx: MessageContext): Promise<void>;
   /** 是否有可用的 TTS Provider */
@@ -266,7 +282,7 @@ export interface HandlerAccessor {
   /** 是否启用了工具调用 */
   isToolCallingEnabled(): boolean;
   /** 获取 OpenAI 格式的工具列表 */
-  getOpenAITools(): any[] | undefined;
+  getOpenAITools(): OpenAIToolFormat[] | undefined;
   /** 是否有已注册的工具 */
   hasEnabledTools(): boolean;
   /** 执行含工具循环的 LLM 调用 */
@@ -604,6 +620,9 @@ export class AgentPluginManager {
     }
     record.registeredToolIds = [];
 
+    // 注销该插件注册的所有指令
+    commandRegistry.unregisterBySource(name);
+
     record.instance = null;
     record.status = 'loaded';
     record.error = undefined;
@@ -688,7 +707,8 @@ export class AgentPluginManager {
         configSchema: record.configSchema,
         config: { ...record.config },
         toolCount: record.registeredToolIds.length,
-        dirName: record.dirName
+        dirName: record.dirName,
+        i18n: record.metadata.i18n
       });
     }
     return result;
@@ -711,7 +731,8 @@ export class AgentPluginManager {
       configSchema: record.configSchema,
       config: { ...record.config },
       toolCount: record.registeredToolIds.length,
-      dirName: record.dirName
+      dirName: record.dirName,
+      i18n: record.metadata.i18n
     };
   }
 
@@ -736,6 +757,42 @@ export class AgentPluginManager {
    */
   getPluginsDir(): string {
     return this.pluginsDir;
+  }
+
+  /**
+   * 获取插件持久化数据目录路径
+   */
+  getPluginDataDir(name: string): string {
+    const record = this.plugins.get(name);
+    if (!record) throw new Error(`插件 ${name} 不存在`);
+    return record.dataDir;
+  }
+
+  /**
+   * 清除插件持久化数据（保留 config.json）
+   */
+  clearPluginData(name: string): void {
+    const record = this.plugins.get(name);
+    if (!record) throw new Error(`插件 ${name} 不存在`);
+
+    if (!fs.existsSync(record.dataDir)) return;
+
+    // 备份 config.json
+    let configBackup: string | null = null;
+    if (fs.existsSync(record.configPath)) {
+      configBackup = fs.readFileSync(record.configPath, 'utf-8');
+    }
+
+    // 清除整个数据目录
+    fs.rmSync(record.dataDir, { recursive: true, force: true });
+    fs.mkdirSync(record.dataDir, { recursive: true });
+
+    // 恢复 config.json
+    if (configBackup !== null) {
+      fs.writeFileSync(record.configPath, configBackup, 'utf-8');
+    }
+
+    logger.info(`[AgentPluginManager] 已清除插件 ${name} 的数据目录: ${record.dataDir}`);
   }
 
   /**
@@ -772,6 +829,14 @@ export class AgentPluginManager {
         const toolId = `plugin_${pluginName}_${toolName}`;
         toolManager.unregister(toolId);
         record.registeredToolIds = record.registeredToolIds.filter(id => id !== toolId);
+      },
+
+      registerCommand: (definition: CommandDefinition, handler: CommandHandler) => {
+        commandRegistry.register(definition, handler, pluginName);
+      },
+
+      unregisterCommand: (commandName: string) => {
+        commandRegistry.unregister(commandName);
       },
 
       logger: {
@@ -861,7 +926,7 @@ export class AgentPluginManager {
         return manager.handlerAccessor?.isToolCallingEnabled() ?? false;
       },
 
-      getOpenAITools: (): any[] | undefined => {
+      getOpenAITools: (): OpenAIToolFormat[] | undefined => {
         return manager.handlerAccessor?.getOpenAITools();
       },
 

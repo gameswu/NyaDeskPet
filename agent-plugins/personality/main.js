@@ -65,6 +65,10 @@ class PersonalityPlugin extends AgentPlugin {
       {
         name: 'set_personality',
         description: '临时修改桌宠的人格设定（仅在当前会话有效）。可以用来扮演不同角色。',
+        i18n: {
+          'zh-CN': { description: '临时修改桌宠的人格设定（仅在当前会话有效）。可以用来扮演不同角色。' },
+          'en-US': { description: 'Temporarily modify the desktop pet personality (only effective in current session). Can be used to play different roles.' }
+        },
         parameters: {
           type: 'object',
           properties: {

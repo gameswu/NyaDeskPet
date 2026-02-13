@@ -32,6 +32,12 @@ class CoreAgentPlugin extends AgentPlugin {
   /** @type {import('../plugin-tool-bridge/main')} */
   pluginToolBridge = null;
 
+  /** @type {import('../input-collector/main')|null} 可选插件 */
+  inputCollector = null;
+
+  /** @type {import('../image-transcriber/main')|null} 可选插件 */
+  imageTranscriber = null;
+
   /** 配置项 */
   tapMaxTokens = 200;
   enableTTS = true;
@@ -52,6 +58,17 @@ class CoreAgentPlugin extends AgentPlugin {
     this.protocolAdapter = this.ctx.getPluginInstance('protocol-adapter');
     this.pluginToolBridge = this.ctx.getPluginInstance('plugin-tool-bridge');
 
+    // 获取可选插件实例（不存在也不报错）
+    this.inputCollector = this.ctx.getPluginInstance('input-collector');
+    this.imageTranscriber = this.ctx.getPluginInstance('image-transcriber');
+
+    if (this.inputCollector) {
+      this.ctx.logger.info('已关联输入收集器插件');
+    }
+    if (this.imageTranscriber) {
+      this.ctx.logger.info('已关联图片转述插件');
+    }
+
     // 验证依赖
     const missing = [];
     if (!this.personality) missing.push('personality');
@@ -71,6 +88,8 @@ class CoreAgentPlugin extends AgentPlugin {
     this.memory = null;
     this.protocolAdapter = null;
     this.pluginToolBridge = null;
+    this.inputCollector = null;
+    this.imageTranscriber = null;
     this.ctx.logger.info('Core Agent 处理器已停止');
   }
 
@@ -88,7 +107,18 @@ class CoreAgentPlugin extends AgentPlugin {
    * 6. TTS 合成
    */
   async onUserInput(mctx) {
-    const text = mctx.message.text || '';
+    let text = mctx.message.text || '';
+
+    // === 输入收集器：合并短时间内的多条输入 ===
+    if (this.inputCollector?.isEnabled?.() && this.inputCollector.collectInput) {
+      const collected = await this.inputCollector.collectInput(mctx.sessionId, text);
+      if (collected === null) {
+        this.ctx.logger.info('[Core Agent] 输入已被收集器缓冲，等待更多输入...');
+        return true; // 返回 true 表示已处理（跳过后续流程）
+      }
+      text = collected;
+      this.ctx.logger.info(`[Core Agent] 收集器合并输出: ${text}`);
+    }
 
     // 检查是否有可用的 LLM Provider
     const providers = this.ctx.getProviders();
@@ -196,6 +226,97 @@ class CoreAgentPlugin extends AgentPlugin {
   }
 
   /**
+   * 处理前端插件主动发送的消息
+   * 持久化并交给 LLM 处理，与 onUserInput 共享上下文和记忆
+   */
+  async onPluginMessage(mctx) {
+    const data = mctx.message.data;
+    if (!data?.text) return false;
+
+    const pluginLabel = data.pluginName || data.pluginId || '未知插件';
+    const userContent = `[插件 ${pluginLabel}] ${data.text}`;
+
+    // 检查 LLM 是否可用
+    const providers = this.ctx.getProviders();
+    const primaryId = this.ctx.getPrimaryProviderId();
+    const primaryProvider = providers.find(p => p.instanceId === primaryId);
+
+    if (!primaryId || !primaryProvider || primaryProvider.status !== 'connected') {
+      // 无 Provider 时仅持久化
+      const sessions = this.ctx.getSessions();
+      sessions.addMessage(mctx.sessionId, { role: 'user', content: userContent });
+      mctx.addReply({
+        type: 'dialogue',
+        data: { text: userContent, duration: 5000 }
+      });
+      return true;
+    }
+
+    if (primaryProvider.providerId === 'echo') {
+      return false;
+    }
+
+    const sessions = this.ctx.getSessions();
+    sessions.addMessage(mctx.sessionId, { role: 'user', content: userContent });
+
+    this._syncInfoToPlugins();
+    const systemPrompt = this.personality.buildSystemPrompt();
+
+    let compressionProvider = null;
+    try {
+      compressionProvider = { chat: (req) => this.ctx.callProvider('primary', req) };
+    } catch { /* 忽略 */ }
+
+    const contextMessages = await this.memory.buildContextMessages(
+      mctx.sessionId, sessions, compressionProvider
+    );
+
+    const lastMsg = contextMessages[contextMessages.length - 1];
+    if (!lastMsg || lastMsg.content !== userContent) {
+      contextMessages.push({ role: 'user', content: userContent });
+    }
+
+    const request = { messages: contextMessages, systemPrompt, sessionId: mctx.sessionId };
+
+    if (this.enableToolCalling && this.ctx.isToolCallingEnabled() && this.ctx.hasEnabledTools()) {
+      request.tools = this.ctx.getOpenAITools();
+      request.toolChoice = 'auto';
+    }
+
+    const sender = this.ctx.getPluginInvokeSender();
+    if (sender) {
+      this.pluginToolBridge.setInvokeSender(sender);
+    }
+
+    try {
+      const response = await this.ctx.executeWithToolLoop(request, mctx);
+      sessions.addMessage(mctx.sessionId, { role: 'assistant', content: response.text });
+
+      const parsed = this.protocolAdapter.parseResponse(response.text, response.reasoningContent);
+      const outgoingMessages = this.protocolAdapter.toOutgoingMessages(parsed);
+      for (const msg of outgoingMessages) {
+        mctx.addReply(msg);
+      }
+
+      if (this.enableTTS && this.ctx.hasTTS() && parsed.text) {
+        this.ctx.synthesizeAndStream(parsed.text, mctx).catch(err => {
+          this.ctx.logger.warn(`插件消息 TTS 合成失败（非致命）: ${err}`);
+        });
+      }
+    } catch (error) {
+      this.ctx.logger.error(`插件消息 LLM 处理失败: ${error}`);
+      const errText = `处理插件消息失败: ${error}`;
+      sessions.addMessage(mctx.sessionId, { role: 'assistant', content: errText });
+      mctx.addReply({
+        type: 'dialogue',
+        data: { text: errText, duration: 5000 }
+      });
+    }
+
+    return true;
+  }
+
+  /**
    * 处理触碰事件
    */
   async onTapEvent(mctx) {
@@ -211,6 +332,11 @@ class CoreAgentPlugin extends AgentPlugin {
       return false;
     }
 
+    const sessions = this.ctx.getSessions();
+
+    // 持久化触碰用户消息
+    sessions.addMessage(mctx.sessionId, { role: 'user', content: `[触碰] 用户触碰了 "${data.hitArea}" 部位` });
+
     this._syncInfoToPlugins();
     const prompt = `用户触碰了你的 "${data.hitArea}" 部位，请给出一个简短可爱的反应（1-2句话）。你可以使用表情和动作来表达。`;
 
@@ -220,6 +346,9 @@ class CoreAgentPlugin extends AgentPlugin {
         systemPrompt: this.personality.buildSystemPrompt(),
         maxTokens: this.tapMaxTokens
       });
+
+      // 持久化 AI 回复
+      sessions.addMessage(mctx.sessionId, { role: 'assistant', content: response.text });
 
       const parsed = this.protocolAdapter.parseResponse(response.text);
       const outgoingMessages = this.protocolAdapter.toOutgoingMessages(parsed);
@@ -239,6 +368,100 @@ class CoreAgentPlugin extends AgentPlugin {
       this.ctx.logger.warn(`触碰 LLM 调用失败: ${error}`);
       return false;
     }
+  }
+
+  /**
+   * 处理文件上传
+   * 
+   * 如果是图片且 image-transcriber 可用，自动转述为文字并通过 LLM 处理。
+   */
+  async onFileUpload(mctx) {
+    const data = mctx.message.data;
+    if (!data) return false;
+
+    const isImage = data.fileType?.startsWith('image/');
+
+    // 缓存图片供 describe_image 工具使用
+    if (isImage && data.fileData && this.imageTranscriber?.cacheImage) {
+      this.imageTranscriber.cacheImage(data.fileData, data.fileType, data.fileName || 'image');
+    }
+
+    // 自动转述模式
+    if (isImage && data.fileData && this.imageTranscriber?.isAvailable?.() && this.imageTranscriber.autoTranscribe && this.imageTranscriber.transcribeImage) {
+      mctx.addReply({
+        type: 'dialogue',
+        data: { text: `正在识别图片 ${data.fileName}...`, duration: 3000 }
+      });
+
+      try {
+        const result = await this.imageTranscriber.transcribeImage(data.fileData, data.fileType);
+        if (result.success && result.description) {
+          // 将图片描述作为用户输入追加到会话，交给 LLM 进一步处理
+          const sessions = this.ctx.getSessions();
+          const imageContext = `[用户上传了图片: ${data.fileName}]\n\n图片描述: ${result.description}`;
+          sessions.addMessage(mctx.sessionId, { role: 'user', content: imageContext });
+
+          // 构建 LLM 请求让 AI 对图片做出反应
+          this._syncInfoToPlugins();
+          const systemPrompt = this.personality.buildSystemPrompt();
+
+          let compressionProvider = null;
+          try {
+            compressionProvider = { chat: (req) => this.ctx.callProvider('primary', req) };
+          } catch { /* 忽略 */ }
+
+          const contextMessages = await this.memory.buildContextMessages(
+            mctx.sessionId, sessions, compressionProvider
+          );
+
+          const lastMsg = contextMessages[contextMessages.length - 1];
+          if (!lastMsg || lastMsg.content !== imageContext) {
+            contextMessages.push({ role: 'user', content: imageContext });
+          }
+
+          const request = { messages: contextMessages, systemPrompt, sessionId: mctx.sessionId };
+
+          if (this.enableToolCalling && this.ctx.isToolCallingEnabled() && this.ctx.hasEnabledTools()) {
+            request.tools = this.ctx.getOpenAITools();
+            request.toolChoice = 'auto';
+          }
+
+          const response = await this.ctx.executeWithToolLoop(request, mctx);
+
+          sessions.addMessage(mctx.sessionId, { role: 'assistant', content: response.text });
+
+          const parsed = this.protocolAdapter.parseResponse(response.text, response.reasoningContent);
+          const outgoingMessages = this.protocolAdapter.toOutgoingMessages(parsed);
+          for (const msg of outgoingMessages) {
+            mctx.addReply(msg);
+          }
+
+          if (this.enableTTS && this.ctx.hasTTS() && parsed.text) {
+            this.ctx.synthesizeAndStream(parsed.text, mctx).catch(err => {
+              this.ctx.logger.warn(`图片回复 TTS 合成失败（非致命）: ${err}`);
+            });
+          }
+
+          return true;
+        } else {
+          this.ctx.logger.warn(`图片转述失败: ${result.error}`);
+        }
+      } catch (error) {
+        this.ctx.logger.error(`图片转述出错: ${error}`);
+      }
+    }
+
+    // 默认：记录文件上传并确认
+    const sessions = this.ctx.getSessions();
+    const fileMsg = `[文件上传] ${data.fileName || '未知文件'}` + (data.fileType ? ` (${data.fileType})` : '');
+    sessions.addMessage(mctx.sessionId, { role: 'user', content: fileMsg });
+    const ackText = `[Core Agent] 收到文件: ${data.fileName || '未知文件'}`;
+    sessions.addMessage(mctx.sessionId, { role: 'assistant', content: ackText });
+    mctx.addReply({
+      type: 'dialogue',
+      data: { text: ackText, duration: 3000 }
+    });
+    return true;
   }
 
   /**
@@ -275,9 +498,13 @@ class CoreAgentPlugin extends AgentPlugin {
       const sender = this.ctx.getPluginInvokeSender();
       if (sender) {
         this.pluginToolBridge.setInvokeSender(sender);
+      } else {
+        this.ctx.logger.warn('插件调用发送器不可用（WebSocket 未就绪），工具将注册但暂时无法执行调用');
       }
       this.pluginToolBridge.registerPluginTools(plugins);
       this.ctx.logger.info(`已注册前端插件工具: ${plugins.map(p => p.pluginId).join(', ')}`);
+    } else {
+      this.ctx.logger.warn('plugin-tool-bridge 插件未就绪，无法注册前端插件工具');
     }
   }
 

@@ -4,5 +4,9 @@
   "desc": "人格管理插件 — 构建结构化系统提示词，整合默认人格、用户自定义人格、模型能力信息和回复格式规范",
   "version": "1.0.0",
   "entry": "main.js",
-  "autoActivate": true
+  "autoActivate": true,
+  "i18n": {
+    "zh-CN": { "desc": "人格管理插件 — 构建结构化系统提示词，整合默认人格、用户自定义人格、模型能力信息和回复格式规范" },
+    "en-US": { "desc": "Personality plugin — builds structured system prompts integrating default personality, user-defined personality, model capabilities and reply format rules" }
+  }
 }

@@ -8,12 +8,18 @@ import type {
   BackendConfig, 
   BackendMessage,
   DialogueData,
+  DialogueStreamStartData,
+  DialogueStreamChunkData,
+  DialogueStreamEndData,
+  ToolConfirmData,
   AudioStreamStartData,
   AudioChunkData,
   AudioStreamEndData,
   Live2DCommandData,
   TimelineItem,
-  CharacterInfo
+  CharacterInfo,
+  CommandsRegisterData,
+  CommandResponseData
 } from '../types/global';
 
 class BackendClient implements IBackendClient {
@@ -137,6 +143,38 @@ class BackendClient implements IBackendClient {
       const message = JSON.parse(data) as BackendMessage;
       window.logger.info('收到消息:', message);
 
+      const responseId = message.responseId;
+      const priority = message.priority ?? 0;
+
+      // ===== 响应优先级中断检查 =====
+      // 仅对"会产生可见效果"的消息类型做优先级判断
+      // 纯数据类消息（plugin_invoke、plugin_response、system 等）不受中断影响
+      const interruptableTypes = ['dialogue', 'dialogue_stream_start', 'audio_stream_start', 'sync_command', 'live2d'];
+      
+      if (responseId && interruptableTypes.includes(message.type)) {
+        // 首次出现的 responseId → 判断是否可以中断当前响应
+        if (message.type === 'dialogue' || message.type === 'dialogue_stream_start' || message.type === 'audio_stream_start' || message.type === 'sync_command') {
+          if (!window.responseController.shouldAccept(responseId, priority)) {
+            window.logger.info(`[Backend] 丢弃低优先级消息: type=${message.type} responseId=${responseId}`);
+            return;
+          }
+        } else {
+          // live2d 等附属消息：检查 responseId 是否仍然活跃
+          if (!window.responseController.isActive(responseId)) {
+            window.logger.info(`[Backend] 过滤已中断的消息: type=${message.type} responseId=${responseId}`);
+            return;
+          }
+        }
+      }
+
+      // 音频分片和结束消息：检查 responseId 是否仍然活跃（防止被中断后仍处理残留分片）
+      if (responseId && (message.type === 'audio_chunk' || message.type === 'audio_stream_end' || message.type === 'dialogue_stream_chunk' || message.type === 'dialogue_stream_end')) {
+        if (!window.responseController.isActive(responseId)) {
+          window.logger.info(`[Backend] 过滤已中断的音频消息: type=${message.type} responseId=${responseId}`);
+          return;
+        }
+      }
+
       // 触发所有消息处理器
       this.messageHandlers.forEach(handler => handler(message));
 
@@ -144,8 +182,19 @@ class BackendClient implements IBackendClient {
       switch (message.type) {
         case 'dialogue':
           this.handleDialogue(message.data as DialogueData);
+          // 如果当前响应没有活跃的音频流，对话结束时即视为响应结束
+          if (responseId) {
+            const session = window.responseController.getCurrentSession();
+            if (session && !session.hasActiveAudio) {
+              const duration = (message.data as DialogueData)?.duration || 5000;
+              setTimeout(() => {
+                window.responseController.notifyComplete(responseId);
+              }, duration);
+            }
+          }
           break;
         case 'audio_stream_start':
+          if (responseId) window.responseController.markAudioActive();
           this.handleAudioStreamStart(message.data as AudioStreamStartData);
           break;
         case 'audio_chunk':
@@ -153,6 +202,8 @@ class BackendClient implements IBackendClient {
           break;
         case 'audio_stream_end':
           this.handleAudioStreamEnd(message.data as AudioStreamEndData);
+          // 音频流结束 → 响应会话可以结束
+          if (responseId) window.responseController.notifyComplete(responseId);
           break;
         case 'live2d':
           this.handleLive2DCommand(message.data as Live2DCommandData);
@@ -165,6 +216,24 @@ class BackendClient implements IBackendClient {
           break;
         case 'plugin_invoke':
           this.handlePluginInvoke(message.data as import('../types/global').PluginInvokeData);
+          break;
+        case 'dialogue_stream_start':
+          this.handleDialogueStreamStart(message.data as DialogueStreamStartData);
+          break;
+        case 'dialogue_stream_chunk':
+          this.handleDialogueStreamChunk(message.data as DialogueStreamChunkData);
+          break;
+        case 'dialogue_stream_end':
+          this.handleDialogueStreamEnd(message.data as DialogueStreamEndData, responseId);
+          break;
+        case 'tool_confirm':
+          this.handleToolConfirm(message.data as ToolConfirmData);
+          break;
+        case 'commands_register':
+          this.handleCommandsRegister(message.data as CommandsRegisterData);
+          break;
+        case 'command_response':
+          this.handleCommandResponse(message.data as CommandResponseData);
           break;
         default:
           window.logger.warn('未知消息类型:', message.type);
@@ -379,17 +448,8 @@ class BackendClient implements IBackendClient {
     // 更新状态文本
     const statusText = document.getElementById('status-text');
     if (statusText) {
-      switch (status) {
-        case 'connected':
-          statusText.textContent = '已连接';
-          break;
-        case 'connecting':
-          statusText.textContent = '连接中...';
-          break;
-        case 'disconnected':
-          statusText.textContent = '未连接';
-          break;
-      }
+      const key = `topBar.${status}`;
+      statusText.textContent = window.i18nManager?.t(key) || status;
     }
   }
 
@@ -444,6 +504,253 @@ class BackendClient implements IBackendClient {
     });
   }
 
+  // ==================== 流式对话处理 ====================
+
+  /** 当前流式对话的 streamId */
+  private currentStreamId: string | null = null;
+  /** 流式对话累计文本 */
+  private streamAccumulated: string = '';
+  /** 流式思维链累计文本 */
+  private streamReasoningAccumulated: string = '';
+
+  /**
+   * 处理流式对话开始
+   */
+  private handleDialogueStreamStart(data: DialogueStreamStartData): void {
+    this.currentStreamId = data.streamId;
+    this.streamAccumulated = '';
+    this.streamReasoningAccumulated = '';
+    window.logger.info(`[Backend] 流式对话开始: ${data.streamId}`);
+    if (window.dialogueManager) {
+      // 显示对话框但内容为空，准备接收增量
+      window.dialogueManager.showDialogue('', 0, false);
+    }
+  }
+
+  /**
+   * 处理流式对话增量
+   */
+  private handleDialogueStreamChunk(data: DialogueStreamChunkData): void {
+    if (data.streamId !== this.currentStreamId) return;
+    if (data.delta) {
+      this.streamAccumulated += data.delta;
+    }
+    if (data.reasoningDelta) {
+      this.streamReasoningAccumulated += data.reasoningDelta;
+    }
+    if (window.dialogueManager && data.delta) {
+      window.dialogueManager.appendText(data.delta);
+    }
+  }
+
+  /**
+   * 处理流式对话结束
+   */
+  private handleDialogueStreamEnd(data: DialogueStreamEndData, responseId?: string): void {
+    if (data.streamId !== this.currentStreamId) return;
+    this.currentStreamId = null;
+    window.logger.info(`[Backend] 流式对话结束: ${data.streamId}`);
+
+    // 将完整的流式对话文本添加到聊天窗口
+    const fullText = data.fullText || this.streamAccumulated;
+    if (fullText) {
+      const messagesContainer = document.getElementById('chat-messages');
+      if (messagesContainer) {
+        const messageDiv = document.createElement('div');
+        messageDiv.className = 'chat-message assistant';
+
+        // 思维链（折叠展示）
+        if (this.streamReasoningAccumulated) {
+          const details = document.createElement('details');
+          details.className = 'reasoning-block';
+          const summary = document.createElement('summary');
+          summary.className = 'reasoning-summary';
+          const icon = document.createElement('i');
+          icon.setAttribute('data-lucide', 'brain');
+          icon.style.cssText = 'width: 13px; height: 13px;';
+          summary.appendChild(icon);
+          const label = document.createElement('span');
+          label.textContent = window.i18nManager?.t('chatWindow.reasoning') || '思考过程';
+          summary.appendChild(label);
+          details.appendChild(summary);
+          const content = document.createElement('div');
+          content.className = 'reasoning-content';
+          content.textContent = this.streamReasoningAccumulated;
+          details.appendChild(content);
+          messageDiv.appendChild(details);
+        }
+
+        const textNode = document.createElement('div');
+        textNode.textContent = fullText;
+        messageDiv.appendChild(textNode);
+
+        messagesContainer.appendChild(messageDiv);
+        messagesContainer.scrollTop = messagesContainer.scrollHeight;
+
+        if (window.lucide) {
+          window.lucide.createIcons();
+        }
+      }
+    }
+
+    this.streamAccumulated = '';
+    this.streamReasoningAccumulated = '';
+
+    if (window.dialogueManager) {
+      const duration = data.duration || 5000;
+      window.dialogueManager.startAutoHide(duration);
+    }
+    // 流式对话结束，通知响应控制器
+    if (responseId) {
+      const duration = data.duration || 5000;
+      setTimeout(() => {
+        window.responseController.notifyComplete(responseId);
+      }, duration);
+    }
+  }
+
+  // ==================== 工具确认处理 ====================
+
+  /**
+   * 处理工具调用确认请求
+   * 在前端显示确认对话框，用户批准/拒绝后发送 tool_confirm_response
+   */
+  private handleToolConfirm(data: ToolConfirmData): void {
+    window.logger.info(`[Backend] 收到工具确认请求: ${data.confirmId}`);
+
+    // 构建确认信息
+    const toolDetails = data.toolCalls.map(tc => {
+      const argsStr = Object.entries(tc.arguments)
+        .map(([k, v]) => `${k}: ${typeof v === 'string' ? v : JSON.stringify(v)}`)
+        .join(', ');
+      const sourceLabel = tc.source === 'plugin' ? '🧩 插件' : tc.source === 'mcp' ? '🔌 MCP' : '⚙️ 内置';
+      return `${sourceLabel} ${tc.name}(${argsStr})`;
+    }).join('\n');
+
+    // 显示确认对话
+    if (window.dialogueManager) {
+      window.dialogueManager.showDialogue(
+        `🔧 AI 请求执行以下操作:\n${toolDetails}\n\n等待确认...`,
+        0, // 不自动隐藏
+        false
+      );
+    }
+
+    // 创建确认 UI
+    this.showToolConfirmUI(data);
+  }
+
+  /**
+   * 显示工具确认 UI
+   */
+  private showToolConfirmUI(data: ToolConfirmData): void {
+    // 移除已有的确认 UI
+    const existing = document.getElementById('tool-confirm-overlay');
+    if (existing) existing.remove();
+
+    const overlay = document.createElement('div');
+    overlay.id = 'tool-confirm-overlay';
+    overlay.style.cssText = `
+      position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+      display: flex; align-items: center; justify-content: center;
+      z-index: 10000; pointer-events: all;
+    `;
+
+    const panel = document.createElement('div');
+    panel.style.cssText = `
+      background: rgba(30, 30, 30, 0.95); border: 1px solid rgba(255,255,255,0.15);
+      border-radius: 12px; padding: 20px; max-width: 400px; width: 90%;
+      color: #fff; font-family: -apple-system, BlinkMacSystemFont, sans-serif;
+      box-shadow: 0 8px 32px rgba(0,0,0,0.4);
+    `;
+
+    const title = document.createElement('div');
+    title.textContent = '🔧 工具调用确认';
+    title.style.cssText = 'font-size: 16px; font-weight: 600; margin-bottom: 12px;';
+    panel.appendChild(title);
+
+    // 工具列表
+    for (const tc of data.toolCalls) {
+      const toolItem = document.createElement('div');
+      toolItem.style.cssText = `
+        background: rgba(255,255,255,0.05); border-radius: 8px; padding: 10px;
+        margin-bottom: 8px; font-size: 13px;
+      `;
+      const sourceLabel = tc.source === 'plugin' ? '🧩' : tc.source === 'mcp' ? '🔌' : '⚙️';
+      toolItem.innerHTML = `
+        <div style="font-weight: 500; margin-bottom: 4px;">${sourceLabel} ${tc.name}</div>
+        ${tc.description ? `<div style="color: rgba(255,255,255,0.6); font-size: 12px; margin-bottom: 4px;">${tc.description}</div>` : ''}
+        <div style="color: rgba(255,255,255,0.5); font-size: 11px; word-break: break-all;">
+          参数: ${JSON.stringify(tc.arguments, null, 0)}
+        </div>
+      `;
+      panel.appendChild(toolItem);
+    }
+
+    // 超时提示
+    const timeoutSec = Math.round(data.timeout / 1000);
+    const timeoutHint = document.createElement('div');
+    timeoutHint.style.cssText = 'color: rgba(255,255,255,0.4); font-size: 11px; margin: 8px 0;';
+    timeoutHint.textContent = `⏱ ${timeoutSec} 秒后自动拒绝`;
+    panel.appendChild(timeoutHint);
+
+    // 按钮容器
+    const btnContainer = document.createElement('div');
+    btnContainer.style.cssText = 'display: flex; gap: 10px; margin-top: 12px;';
+
+    const approveBtn = document.createElement('button');
+    approveBtn.textContent = '✅ 允许';
+    approveBtn.style.cssText = `
+      flex: 1; padding: 10px; border: none; border-radius: 8px;
+      background: #4CAF50; color: #fff; font-size: 14px; cursor: pointer;
+      font-weight: 500; transition: opacity 0.2s;
+    `;
+    approveBtn.onmouseenter = () => { approveBtn.style.opacity = '0.8'; };
+    approveBtn.onmouseleave = () => { approveBtn.style.opacity = '1'; };
+
+    const rejectBtn = document.createElement('button');
+    rejectBtn.textContent = '❌ 拒绝';
+    rejectBtn.style.cssText = `
+      flex: 1; padding: 10px; border: none; border-radius: 8px;
+      background: #f44336; color: #fff; font-size: 14px; cursor: pointer;
+      font-weight: 500; transition: opacity 0.2s;
+    `;
+    rejectBtn.onmouseenter = () => { rejectBtn.style.opacity = '0.8'; };
+    rejectBtn.onmouseleave = () => { rejectBtn.style.opacity = '1'; };
+
+    const respond = (approved: boolean) => {
+      overlay.remove();
+      if (window.dialogueManager) {
+        window.dialogueManager.hideDialogue();
+      }
+      this.sendMessage({
+        type: 'tool_confirm_response',
+        data: { confirmId: data.confirmId, approved }
+      }).catch(err => {
+        window.logger.error('[Backend] 发送工具确认响应失败:', err);
+      });
+    };
+
+    approveBtn.onclick = () => respond(true);
+    rejectBtn.onclick = () => respond(false);
+
+    btnContainer.appendChild(approveBtn);
+    btnContainer.appendChild(rejectBtn);
+    panel.appendChild(btnContainer);
+    overlay.appendChild(panel);
+    document.body.appendChild(overlay);
+
+    // 超时自动移除
+    setTimeout(() => {
+      if (document.getElementById('tool-confirm-overlay')) {
+        overlay.remove();
+        if (window.dialogueManager) {
+          window.dialogueManager.hideDialogue();
+        }
+      }
+    }, data.timeout);
+  }
+
   /**
    * 处理后端的插件调用请求
    */
@@ -485,6 +792,79 @@ class BackendClient implements IBackendClient {
       this.ws = null;
     }
     this.updateStatus('disconnected');
+  }
+
+  // ==================== 指令系统 ====================
+
+  /** 已注册的指令列表（来自后端） */
+  private registeredCommands: import('../types/global').CommandDefinition[] = [];
+
+  /**
+   * 处理指令注册消息（后端 → 前端）
+   */
+  private handleCommandsRegister(data: CommandsRegisterData): void {
+    if (!data?.commands) return;
+    this.registeredCommands = data.commands;
+    window.logger.info(`[Backend] 收到 ${data.commands.length} 个指令定义`);
+  }
+
+  /**
+   * 处理指令执行结果
+   */
+  private handleCommandResponse(data: CommandResponseData): void {
+    if (!data) return;
+    window.logger.info(`[Backend] 指令响应: /${data.command} success=${data.success}`);
+
+    // 在聊天窗口显示指令结果
+    const messagesContainer = document.getElementById('chat-messages');
+    if (messagesContainer) {
+      const messageDiv = document.createElement('div');
+      messageDiv.className = 'chat-message assistant command-result';
+
+      const header = document.createElement('div');
+      header.className = 'command-result-header';
+      header.innerHTML = `<span class="command-result-prefix">/${data.command}</span>`;
+      messageDiv.appendChild(header);
+
+      if (data.success && data.text) {
+        const content = document.createElement('div');
+        content.className = 'command-result-content';
+        // 支持简易 markdown 换行
+        content.innerHTML = data.text.replace(/\n/g, '<br>');
+        messageDiv.appendChild(content);
+      } else if (!data.success) {
+        const errorDiv = document.createElement('div');
+        errorDiv.className = 'command-result-error';
+        errorDiv.textContent = data.error || '指令执行失败';
+        messageDiv.appendChild(errorDiv);
+      }
+
+      messagesContainer.appendChild(messageDiv);
+      messagesContainer.scrollTop = messagesContainer.scrollHeight;
+    }
+
+    // 也在对话框中简短显示
+    if (data.success && data.text && window.dialogueManager) {
+      const shortText = data.text.length > 100 ? data.text.substring(0, 100) + '...' : data.text;
+      window.dialogueManager.showDialogue(shortText, 5000);
+    }
+  }
+
+  /**
+   * 获取已注册的指令列表
+   */
+  public getRegisteredCommands(): import('../types/global').CommandDefinition[] {
+    return this.registeredCommands;
+  }
+
+  /**
+   * 发送指令执行请求
+   */
+  public async executeCommand(command: string, args: Record<string, unknown> = {}): Promise<void> {
+    await this.sendMessage({
+      type: 'command_execute',
+      data: { command, args }
+    });
   }
 }
 

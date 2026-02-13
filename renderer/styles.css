@@ -262,13 +262,14 @@ body {
 }
 
 .chat-sidebar-header {
-  padding: 15px 20px;
+  padding: 0 8px 0 0;
   background: linear-gradient(135deg, #4CAF50, #45a049);
   color: white;
   display: flex;
   justify-content: space-between;
   align-items: center;
   flex-shrink: 0;
+  min-height: 50px;
 }
 
 .chat-sidebar-header h3 {
@@ -280,26 +281,83 @@ body {
   gap: 8px;
 }
 
-/* 对话历史列表区域 */
-.chat-history {
-  flex-shrink: 0;
-  border-bottom: 1px solid #e0e0e0;
-  max-height: 30%;
+/* 标题栏（可点击展开对话列表） */
+.chat-title-bar {
+  flex: 1;
   display: flex;
-  flex-direction: column;
-  background: #f8f9fa;
+  align-items: center;
+  gap: 8px;
+  padding: 14px 12px;
+  cursor: pointer;
+  transition: background 0.15s;
+  min-width: 0;
 }
 
-.chat-history-header {
-  padding: 12px 20px;
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  font-size: 14px;
+.chat-title-bar:hover {
+  background: rgba(255, 255, 255, 0.1);
+}
+
+.chat-current-title {
+  flex: 1;
+  font-size: 15px;
   font-weight: 500;
-  color: #666;
-  background: white;
-  border-bottom: 1px solid #e0e0e0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  min-width: 0;
+}
+
+.chat-title-chevron {
+  transition: transform 0.2s ease;
+}
+
+.chat-title-bar.expanded .chat-title-chevron {
+  transform: rotate(180deg);
+}
+
+.chat-header-actions {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  flex-shrink: 0;
+}
+
+.btn-icon-header {
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: 6px;
+  border-radius: 6px;
+  color: rgba(255, 255, 255, 0.85);
+  transition: all 0.2s;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.btn-icon-header:hover {
+  background: rgba(255, 255, 255, 0.15);
+  color: white;
+}
+
+/* 对话列表下拉面板 */
+.conversation-dropdown {
+  max-height: 0;
+  overflow: hidden;
+  transition: max-height 0.25s ease;
+  background: #f8f9fa;
+  border-bottom: 1px solid transparent;
+}
+
+.conversation-dropdown:not(.hidden) {
+  max-height: 45vh;
+  border-bottom-color: #e0e0e0;
+}
+
+.conversation-dropdown .conversation-list {
+  overflow-y: auto;
+  max-height: 45vh;
+  padding: 6px 8px;
 }
 
 .btn-icon-small {
@@ -318,9 +376,7 @@ body {
 }
 
 .conversation-list {
-  flex: 1;
-  overflow-y: auto;
-  padding: 8px;
+  padding: 6px 8px;
 }
 
 .conversation-item {
@@ -331,6 +387,7 @@ body {
   cursor: pointer;
   transition: all 0.2s;
   border: 2px solid transparent;
+  position: relative;
 }
 
 .conversation-item:hover {
@@ -349,6 +406,7 @@ body {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+  padding-right: 24px;
 }
 
 .conversation-item-preview {
@@ -363,6 +421,36 @@ body {
   font-size: 11px;
   color: #999;
   margin-top: 4px;
+}
+
+.conversation-delete-btn {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: 4px;
+  border-radius: 4px;
+  color: #999;
+  opacity: 0;
+  transition: all 0.2s;
+}
+
+.conversation-item:hover .conversation-delete-btn {
+  opacity: 1;
+}
+
+.conversation-delete-btn:hover {
+  background: rgba(244, 67, 54, 0.1);
+  color: #f44336;
+}
+
+.conversation-empty {
+  text-align: center;
+  padding: 20px;
+  color: #999;
+  font-size: 13px;
 }
 
 /* 当前对话内容区域 */
@@ -1093,12 +1181,34 @@ details.reasoning-block[open] > .reasoning-summary::after {
 .agent-plugin-card-actions {
   display: flex;
   gap: 6px;
-  flex-wrap: wrap;
+  overflow-x: auto;
+  scrollbar-width: thin;
+  scrollbar-color: #d1d5db transparent;
+  padding-bottom: 4px;
+}
+
+.agent-plugin-card-actions::-webkit-scrollbar {
+  height: 4px;
+}
+
+.agent-plugin-card-actions::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.agent-plugin-card-actions::-webkit-scrollbar-thumb {
+  background: #d1d5db;
+  border-radius: 2px;
+}
+
+.agent-plugin-card-actions::-webkit-scrollbar-thumb:hover {
+  background: #9ca3af;
 }
 
 .agent-plugin-card-actions .btn-small {
   font-size: 12px;
   padding: 4px 10px;
+  white-space: nowrap;
+  flex-shrink: 0;
 }
 
 .agent-plugin-error-msg {
@@ -2699,18 +2809,29 @@ body.dark-theme {
   border-bottom-color: rgba(255, 255, 255, 0.1);
 }
 
-.dark-theme .chat-history {
+.dark-theme .conversation-dropdown {
   background: #222;
   border-bottom-color: rgba(255, 255, 255, 0.1);
 }
 
-.dark-theme .chat-history-header {
-  background: #2a2a2a;
+.dark-theme .conversation-dropdown:not(.hidden) {
   border-bottom-color: rgba(255, 255, 255, 0.1);
-  color: #b0b0b0;
 }
 
-.dark-theme .conversation-list {
+.dark-theme .chat-title-bar:hover {
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.dark-theme .btn-icon-header {
+  color: rgba(255, 255, 255, 0.7);
+}
+
+.dark-theme .btn-icon-header:hover {
+  background: rgba(255, 255, 255, 0.12);
+  color: white;
+}
+
+.dark-theme .conversation-dropdown .conversation-list {
   background: #222;
 }
 
@@ -2733,6 +2854,19 @@ body.dark-theme {
 }
 
 .dark-theme .conversation-item-time {
+  color: #666;
+}
+
+.dark-theme .conversation-delete-btn {
+  color: #666;
+}
+
+.dark-theme .conversation-delete-btn:hover {
+  background: rgba(244, 67, 54, 0.15);
+  color: #ef5350;
+}
+
+.dark-theme .conversation-empty {
   color: #666;
 }
 
@@ -4109,12 +4243,34 @@ body.dark-theme {
 .plugin-footer-left {
   display: flex;
   gap: 6px;
+  overflow-x: auto;
+  flex-shrink: 1;
+  min-width: 0;
+  scrollbar-width: thin;
+  scrollbar-color: #d1d5db transparent;
+}
+
+.plugin-footer-left::-webkit-scrollbar {
+  height: 4px;
+}
+
+.plugin-footer-left::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.plugin-footer-left::-webkit-scrollbar-thumb {
+  background: #d1d5db;
+  border-radius: 2px;
+}
+
+.plugin-footer-left::-webkit-scrollbar-thumb:hover {
+  background: #9ca3af;
 }
 
 .plugin-footer-right {
   display: flex;
   gap: 8px;
-  flex: 1;
+  flex-shrink: 0;
   justify-content: flex-end;
 }
 
@@ -4124,6 +4280,7 @@ body.dark-theme {
   justify-content: center;
   width: 36px;
   height: 36px;
+  min-width: 36px;
   border: 1px solid #d1d5db;
   border-radius: 8px;
   background: white;
@@ -5842,4 +5999,324 @@ body.dark-theme {
 
 .dark-theme .permission-dialog-btn.deny:hover {
   background: #4a4a4a;
+}
+
+/* ==================== 指令建议面板 ==================== */
+
+.command-suggestions {
+  position: absolute;
+  bottom: 100%;
+  left: 0;
+  right: 0;
+  max-height: 240px;
+  overflow-y: auto;
+  background: #fff;
+  border: 1px solid #e0e0e0;
+  border-radius: 8px;
+  box-shadow: 0 -4px 16px rgba(0, 0, 0, 0.12);
+  margin-bottom: 6px;
+  z-index: 100;
+  padding: 4px;
+}
+
+.command-suggestions.hidden {
+  display: none;
+}
+
+.command-suggestion-item {
+  padding: 8px 12px;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: background 0.15s;
+}
+
+.command-suggestion-item:hover,
+.command-suggestion-item.selected {
+  background: #f0f7f0;
+}
+
+.cmd-name-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.cmd-name {
+  font-weight: 600;
+  font-size: 14px;
+  color: #4CAF50;
+}
+
+.cmd-param {
+  font-size: 11px;
+  padding: 1px 6px;
+  border-radius: 3px;
+  background: #e8f5e9;
+  color: #388e3c;
+  font-family: monospace;
+}
+
+.cmd-param.required {
+  background: #fff3e0;
+  color: #e65100;
+}
+
+.cmd-desc {
+  font-size: 12px;
+  color: #888;
+  margin-top: 2px;
+  line-height: 1.4;
+}
+
+.cmd-source {
+  font-size: 10px;
+  color: #bbb;
+  float: right;
+  margin-top: -16px;
+}
+
+/* 指令执行结果样式 */
+
+.command-result .command-result-header {
+  margin-bottom: 4px;
+}
+
+.command-result-prefix {
+  font-family: monospace;
+  font-weight: 600;
+  font-size: 12px;
+  color: #4CAF50;
+  background: #e8f5e9;
+  padding: 2px 6px;
+  border-radius: 4px;
+}
+
+.command-result-content {
+  font-size: 13px;
+  line-height: 1.6;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.command-result-error {
+  color: #e53935;
+  font-size: 13px;
+}
+
+/* Agent 面板 — 指令标签页 */
+
+.agent-commands-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 12px;
+}
+
+.agent-commands-stats {
+  font-size: 12px;
+  color: #888;
+}
+
+.agent-command-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.agent-command-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 12px;
+  background: #f8f9fa;
+  border-radius: 8px;
+  border: 1px solid #eee;
+  transition: all 0.15s;
+}
+
+.agent-command-item:hover {
+  border-color: #ddd;
+  background: #f0f4f0;
+}
+
+.agent-command-info {
+  flex: 1;
+  min-width: 0;
+}
+
+.agent-command-name {
+  font-weight: 600;
+  font-size: 14px;
+  color: #4CAF50;
+  font-family: monospace;
+}
+
+.agent-command-desc {
+  font-size: 12px;
+  color: #888;
+  margin-top: 2px;
+}
+
+.agent-command-meta {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  font-size: 11px;
+  color: #bbb;
+  margin-top: 3px;
+}
+
+.agent-command-source {
+  background: #eee;
+  padding: 1px 6px;
+  border-radius: 3px;
+}
+
+.agent-command-params {
+  display: flex;
+  gap: 4px;
+}
+
+.agent-command-param {
+  font-size: 10px;
+  padding: 1px 5px;
+  border-radius: 3px;
+  background: #e8f5e9;
+  color: #388e3c;
+  font-family: monospace;
+}
+
+.agent-command-empty {
+  text-align: center;
+  padding: 24px;
+  color: #999;
+  font-size: 13px;
+}
+
+/* --- Toggle Switch Small（指令管理用） --- */
+.toggle-switch-small {
+  position: relative;
+  display: inline-block;
+  width: 30px;
+  height: 16px;
+  flex-shrink: 0;
+}
+
+.toggle-switch-small input {
+  opacity: 0;
+  width: 0;
+  height: 0;
+}
+
+.toggle-slider-small {
+  position: absolute;
+  cursor: pointer;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background-color: #ccc;
+  transition: 0.3s;
+  border-radius: 16px;
+}
+
+.toggle-slider-small::before {
+  position: absolute;
+  content: "";
+  height: 12px;
+  width: 12px;
+  left: 2px;
+  bottom: 2px;
+  background-color: white;
+  transition: 0.3s;
+  border-radius: 50%;
+}
+
+.toggle-switch-small input:checked + .toggle-slider-small {
+  background-color: #4a9eff;
+}
+
+.toggle-switch-small input:checked + .toggle-slider-small::before {
+  transform: translateX(14px);
+}
+
+/* ===== Dark Theme: 指令系统 ===== */
+
+.dark-theme .command-suggestions {
+  background: #2d2d2d;
+  border-color: #444;
+  box-shadow: 0 -4px 16px rgba(0, 0, 0, 0.3);
+}
+
+.dark-theme .command-suggestion-item:hover,
+.dark-theme .command-suggestion-item.selected {
+  background: #383838;
+}
+
+.dark-theme .cmd-name {
+  color: #66bb6a;
+}
+
+.dark-theme .cmd-param {
+  background: #2e3d2e;
+  color: #81c784;
+}
+
+.dark-theme .cmd-param.required {
+  background: #3d3020;
+  color: #ffb74d;
+}
+
+.dark-theme .cmd-desc {
+  color: #999;
+}
+
+.dark-theme .cmd-source {
+  color: #666;
+}
+
+.dark-theme .command-result-prefix {
+  background: #2e3d2e;
+  color: #66bb6a;
+}
+
+.dark-theme .command-result-error {
+  color: #ef5350;
+}
+
+.dark-theme .agent-command-item {
+  background: #2a2a2a;
+  border-color: #3a3a3a;
+}
+
+.dark-theme .agent-command-item:hover {
+  background: #333;
+  border-color: #444;
+}
+
+.dark-theme .agent-command-name {
+  color: #66bb6a;
+}
+
+.dark-theme .agent-command-desc {
+  color: #999;
+}
+
+.dark-theme .agent-command-source {
+  background: #3a3a3a;
+  color: #999;
+}
+
+.dark-theme .agent-command-param {
+  background: #2e3d2e;
+  color: #81c784;
+}
+
+.dark-theme .toggle-slider-small {
+  background-color: #555;
+}
+
+.dark-theme .toggle-switch-small input:checked + .toggle-slider-small {
+  background-color: #4a9eff;
 }

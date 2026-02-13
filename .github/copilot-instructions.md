@@ -1,236 +1,185 @@
-# NyaDeskPet - Electron + Live2D 桌面宠物项目
-
-## 项目文档
-
-**主文档**：README.md
-
-**核心文档库**：
-- `docs/API.md`：API 接口规范与通信协议
-- `docs/USAGE.md`：用户指南、安装说明、打包与故障排除
-- `docs/DEVELOPMENT.md`：架构设计、核心逻辑深度解析
-- `docs/PLUGINS.md`：前端插件开发指南
-- `docs/AGENT_PLUGINS.md`：内置 Agent 插件开发指南
-
-**文档原则**：严禁在 `docs/` 目录下创建新文档。所有更新必须在上述五个现有文档（或 README.md）中进行修改和扩展。
+# NyaDeskPet — Copilot 开发指引
 
 ## 项目概述
 
-跨平台桌面宠物应用，使用 Electron + Live2D + TypeScript，通过 WebSocket 与后端 Agent 服务器实时通信。
-
-## 技术栈
-
-- **前端框架**：Electron 28.0
-- **开发语言**：TypeScript 5.3
-- **渲染引擎**：PixiJS 7.3
-- **Live2D**：Cubism SDK for Web
-- **通信**：WebSocket（实时通信）
-- **音频**：MediaSource Extensions（MSE 流式播放）
-- **语音识别**：Sherpa-ONNX（本地 ASR）
+跨平台 Electron 桌面宠物应用。前端以 PixiJS + Live2D Cubism SDK 渲染模型，主进程内运行 WebSocket Agent 服务器，通过 Pipeline 管线驱动 LLM 推理与工具调用。TypeScript 5.3 全栈开发。
 
 ## 架构设计
 
-### 主要进程
+### 进程模型
 
-- **主进程**：Electron（src/main.ts → dist/main.js）
-- **预加载**：安全的 IPC 桥接（src/preload.ts → dist/preload.js）
+| 层级 | 职责 | 入口 |
+|------|------|------|
+| **主进程** | Electron 窗口、IPC、Agent 服务器、ASR | `src/main.ts` → `dist/main.js` |
+| **预加载** | 安全的 IPC 桥接 | `src/preload.ts` → `dist/preload.js` |
+| **渲染进程** | Live2D、对话 UI、音频、设置、插件 | `renderer/js/*.ts` → `renderer/js/*.js` |
 
-### 渲染进程模块
+### Agent 框架
 
-- **Live2D 管理器**（renderer/js/live2d-manager.ts）
-  - 模型渲染、动作、表情、参数控制
-  - 视线跟随、触碰交互
-  
-- **后端通信客户端**（renderer/js/backend-client.ts）
-  - WebSocket 消息处理
-  - HTTP 请求处理
-  
-- **对话管理器**（renderer/js/dialogue-manager.ts）
-  - 文字对话显示
-  - 对话历史记录
-  
-- **音频播放器**（renderer/js/audio-player.ts）
-  - 流式音频播放
-  - 时间轴同步
-  - 口型同步
-  
-- **设置管理器**（renderer/js/settings-manager.ts）
-  - 配置持久化
-  - 设置验证
-  
-- **主协调脚本**（renderer/js/renderer.ts）
-  - 初始化与事件协调
-
-- **插件连接器**（renderer/js/plugin-connector.ts）
-  - 插件进程管理
-  - WebSocket 连接管理
-  - 插件状态同步
-
-- **插件 UI**（renderer/js/plugin-ui.ts）
-  - 插件卡片渲染
-  - 现代化 UI 设计
-
-### 类型定义
-
-- `renderer/types/global.d.ts`：全局接口和类型定义
-
-## 核心特性
-
-### Live2D 控制系统
-
-**预设系统**：
-- 动作（motion）：需模型文件预定义的动画序列
-- 表情（expression）：需模型文件预定义的表情状态
-
-**参数直接控制**：
-- Agent 可通过 `setParameter()` 直接控制任意参数
-- 支持控制眼睛、嘴巴、头部旋转、眉毛等
-- 不依赖预设文件，可自由组合创造表情
-
-**交互功能**：
-- 视线跟随：鼠标移动时模型眼睛自动跟随，可在设置中开关
-- 触碰反应：点击模型的 hitArea 触发事件，由后端 Agent 决定反应
-- 滚轮缩放：支持 0.3x - 3.0x 的缩放范围
-
-### 流式音频系统
-
-**MSE 流式播放**：
-- 使用 MediaSource Extensions
-- 边接收边播放，减少延迟
-
-**分片传输**：
-- `audio_stream_start`：开始传输
-- 多个 `audio_chunk`（Base64）：音频数据分片
-- `audio_stream_end`：结束传输
-
-**口型同步**：
-- 实时分析音频频率
-- 自动更新模型嘴巴参数
-- 30 FPS 更新频率
-
-**时间轴同步**：
-- 支持在音频播放过程中触发动作/表情/参数变化
-- 语义标记：`start`（0%）、`early`（15%）、`middle`（50%）、`late`（85%）、`end`（98%）
-- 百分比：0-100 数字，精确控制触发时机
-
-### 本地语音识别
-
-**引擎**：Sherpa-ONNX（纯本地，无需联网）
-
-**流程**：
-1. 用户语音输入
-2. 本地转文字
-3. 通过 WebSocket 发送给后端 Agent
-
-**隐私保护**：
-- 语音数据不上传
-- 完全本地处理
-
-### 插件系统
-
-**架构**：
-- 插件作为独立进程运行
-- 通过 WebSocket 与前端通信
-- 元信息文件化（`metadata.json`）
-
-**配置格式**：
-```json
-{
-  "command": {
-    "darwin": ["venv/bin/python3", "main.py"]
-  },
-  "workingDirectory": "plugins/terminal-plugin",
-  "autoStart": false
-}
+```mermaid
+flowchart LR
+    A[前端消息] --> B[AgentServer]
+    B --> C[PipelineContext]
+    C --> D[Pipeline]
+    D --> D1[PreProcess]
+    D1 --> D2[Process]
+    D2 --> D3[Respond]
+    D2 --> E[AgentHandler]
+    E --> F[LLMProvider]
+    E --> G[ToolManager]
+    E --> H[Handler 插件]
 ```
 
-**管理方式**：
-- 独立的插件管理面板（顶栏 🧩 按钮）
-- 系统托盘快速入口
-- 支持启动/停止/连接/断开操作
+- **Provider 层**：`LLMProvider`（openai / deepseek / openrouter / siliconflow）、`TTSProvider`（fish-audio / edge-tts），均支持多实例共存
+- **Pipeline 层**：`PreProcessStage`（日志/优先级）→ `ProcessStage`（Handler 派发）→ `RespondStage`（批量发送）
+- **Context 层**：`PipelineContext`（单次消息上下文）、`SessionManager`（SQLite 持久化会话）
+- **Handler 层**：业务逻辑处理 + Agent 插件机制，Handler 插件可完全接管消息处理
+- **工具层**：`ToolManager`（FC 工具注册/执行）+ `MCPManager`（MCP 服务器工具发现）
+- **指令层**：`CommandRegistry`（斜杠指令注册/执行，Discord 风格自动补全）
 
-**内置插件**：
-- 终端控制插件（`terminal-plugin`）
-- UI 自动化插件（`ui-automation-plugin`）
+### 插件体系
 
-## 快速开始
+| 类型 | 位置 | 语言 | 通信方式 |
+|------|------|------|---------|
+| **Agent 插件** | `agent-plugins/` | JS (CommonJS) | 主进程直接调用，继承 `AgentPlugin` 基类 |
+| **前端插件** | `plugins/` | Python 等 | WebSocket 独立进程 |
+
+**内置 Agent 插件**（9 个，均位于 `agent-plugins/`）：
+
+| 插件 | 类型 | 说明 |
+|------|------|------|
+| `core-agent` | Handler | 核心协调器，组合下列 4 个核心插件 |
+| `personality` | 普通 | 人格系统，构建结构化系统提示词 |
+| `memory` | 普通 | 记忆管理，会话分离上下文 + 自动压缩 |
+| `protocol-adapter` | 普通 | 协议适配，XML 标签 → 前端消息格式 |
+| `plugin-tool-bridge` | 普通 | 前端插件能力 → FC 工具桥接 |
+| `info` | 普通 | `/info` 斜杠指令 |
+| `web-tools` | 普通 | `fetch_url` + `search_web` 工具 |
+| `input-collector` | 普通 | 输入抖动收集 |
+| `image-transcriber` | 普通 | 图片转述 |
+
+**内置前端插件**（2 个，位于 `plugins/`）：`terminal-plugin`、`ui-automation-plugin`
+
+## 项目结构
+
+```
+src/                        主进程 TypeScript
+  main.ts                   Electron 主进程、IPC Handler（~88 个）
+  preload.ts                IPC 桥接
+  agent-server.ts           WebSocket Agent 服务器
+  asr-service.ts            Sherpa-ONNX 本地语音识别
+  logger.ts                 主进程日志
+  agent/                    Agent 框架核心
+    index.ts                Barrel export
+    provider.ts             LLM Provider 抽象 + 注册表
+    tts-provider.ts         TTS Provider 抽象 + 注册表
+    pipeline.ts             消息处理管线（3 Stage 洋葱模型）
+    context.ts              PipelineContext + SessionManager
+    handler.ts              业务逻辑处理器（含工具循环）
+    database.ts             SQLite（conversations / messages / tool_definitions）
+    tools.ts                Function Calling 工具管理
+    mcp-client.ts           MCP 客户端（stdio / SSE）
+    commands.ts             斜杠指令注册表
+    agent-plugin.ts         Agent 插件框架（基类 + Manager）
+    providers/              LLM: openai / deepseek / openrouter / siliconflow
+    tts-providers/          TTS: fish-audio / edge-tts
+
+renderer/                   渲染进程
+  index.html                主页面
+  styles.css                样式
+  tsconfig.json             渲染进程编译配置
+  types/global.d.ts         全局类型定义（所有接口唯一来源）
+  locales/                  i18n：zh-CN.json / en-US.json
+  lib/                      前端库：PixiJS / Live2D / Lucide Icons
+  js/                       渲染进程模块
+    renderer.ts             主协调（初始化、事件、对话管理、指令 UI）
+    settings-manager.ts     设置管理（localStorage 持久化）
+    live2d-manager.ts       Live2D 模型渲染与交互
+    backend-client.ts       WebSocket + HTTP 后端通信
+    dialogue-manager.ts     对话气泡显示
+    audio-player.ts         MSE 流式音频 + 口型同步
+    camera-manager.ts       摄像头管理
+    microphone-manager.ts   麦克风 + ASR
+    i18n-manager.ts         国际化（data-i18n 自动绑定）
+    theme-manager.ts        主题（light / dark / system）
+    plugin-connector.ts     前端插件进程 + WebSocket 管理
+    plugin-ui.ts            插件管理面板 UI
+    plugin-config-manager.ts  插件配置读写
+    plugin-config-ui.ts     插件配置表单渲染
+    plugin-permission-manager.ts  权限审批（5 级危险度）
+    response-controller.ts  响应优先级控制
+    logger.ts               渲染进程日志
+
+agent-plugins/              Agent 插件（9 个，纯 JS CommonJS）
+plugins/                    前端插件（独立进程）
+models/                     Live2D 模型 + ASR 模型
+scripts/                    辅助脚本（check-i18n / migrate-logger / update-version）
+assets/                     图标资源
+docs/                       文档（固定 5 个，禁止新增）
+```
+
+## 开发原则
+
+### 类型安全
+
+- 所有接口类型统一在 `renderer/types/global.d.ts` 中定义
+- 新增/修改接口必须同步更新类型定义
+
+### IPC 三件套
+
+新增 IPC 通道时，以下三处必须同步修改：
+
+1. `src/main.ts` — `ipcMain.handle()` 处理器
+2. `src/preload.ts` — `contextBridge` 桥接函数
+3. `renderer/types/global.d.ts` — `ElectronAPI` 接口声明
+
+### 消息协议
+
+新增 WebSocket 消息类型时：
+
+1. `renderer/types/global.d.ts` — 更新 `BackendMessage` 联合类型
+2. `renderer/js/backend-client.ts` — `handleMessage` 的 switch case
+3. `src/agent/pipeline.ts` — `PRIORITY_MAP` 和 `ProcessStage` case
+
+### 国际化
+
+- HTML 文本：使用 `data-i18n` 属性
+- JS 代码：调用 `window.i18nManager.t(key)`
+- 新增键必须同时更新 `zh-CN.json` 和 `en-US.json`
+
+### 文档约束
+
+`docs/` 下仅允许 5 个文档（API / DEVELOPMENT / USAGE / PLUGINS / AGENT_PLUGINS），严禁新增。
+
+### 设备管理
+
+摄像头和麦克风采用延迟初始化，仅在用户主动使用时请求权限。
+
+## 编码规范
+
+- 缩进：2 空格
+- 命名：文件 `kebab-case`，类 `PascalCase`，变量/函数 `camelCase`，常量 `UPPER_SNAKE`
+- Agent 插件：纯 JS（CommonJS），入口 `main.js`，继承 `AgentPlugin`
+- 前端插件：WebSocket 通信，语言不限
+- 日志：使用 `logger` 而非 `console`（渲染进程用 `window.logger`）
+
+## 编译与检查
 
 ```bash
-npm install              # 安装依赖
-npm run compile          # 编译 TypeScript
-npm run dev:mac          # macOS 开发模式
+npm run compile          # tsc -p . && tsc -p renderer（src/ → dist/，renderer/js/*.ts → *.js 原地编译）
+npm run check-i18n       # 校验 zh-CN / en-US 键一致性
+npm run dev:mac          # macOS 开发模式（含 Sherpa-ONNX dylib 路径）
 npm run dev:linux        # Linux 开发模式
 npm run dev:win          # Windows 开发模式
 ```
 
-## 文件结构
+修改主进程代码（src）需重启 Electron；修改渲染进程代码（js）可 Ctrl+R / Cmd+R 刷新。
 
-```
-src/              - TypeScript 源码（主进程）
-dist/             - 编译输出（主进程）
-renderer/
-  ├── js/         - TypeScript 源码和编译输出（渲染进程）
-  │   ├── settings-manager.ts/js    - 设置管理器
-  │   ├── live2d-manager.ts/js      - Live2D 管理器
-  │   ├── backend-client.ts/js      - 后端通信客户端
-  │   ├── dialogue-manager.ts/js    - 对话管理器
-  │   ├── audio-player.ts/js        - 流式音频播放器
-  │   ├── plugin-connector.ts/js    - 插件连接器
-  │   ├── plugin-ui.ts/js           - 插件UI渲染
-  │   └── renderer.ts/js            - 主协调脚本
-  ├── types/      - 全局类型定义
-  ├── index.html  - 主页面
-  └── styles.css  - 样式
-docs/             - 项目文档
-  ├── API.md      - WebSocket 消息协议规范
-  ├── USAGE.md    - 用户使用说明
-  └── DEVELOPMENT.md - 开发详细说明
-models/           - Live2D 模型文件
-plugins/          - 插件目录
-  ├── terminal-plugin/      - 终端控制插件
-  └── ui-automation-plugin/ - UI自动化插件
-assets/           - 资源文件
-```
+## 核心文档
 
-## 消息协议
-
-### 前端 → 后端
-
-- **user_input**：用户文字/语音输入
-- **model_info**：模型加载后自动发送可用参数、动作、表情列表
-- **tap_event**：模型触碰事件（hitArea + 坐标）
-- **character_info**：角色人设信息（用户自定义）
-
-### 后端 → 前端
-
-- **dialogue**：文字对话
-- **audio_stream_start/chunk/end**：流式音频传输
-- **live2d**：动作/表情/参数控制
-- **sync_command**：组合指令（同时执行多个动作）
-
-**详细协议**：见 `docs/API.md`
-
-## 开发注意事项
-
-### 类型定义
-- 类型定义统一在 `renderer/types/global.d.ts` 中维护
-- 新增接口需同步更新类型定义
-
-### 编译
-- 所有 TypeScript 文件需编译后才能运行
-- 修改主进程代码（src/）需重启 Electron
-- 修改渲染进程代码（renderer/js/）可热重载
-
-### 消息处理
-- 新增消息类型需同步更新 `BackendMessage` 类型定义
-- 在 `backend-client.ts` 的 `handleMessage` 方法中添加处理逻辑
-
-### 视线跟随实现
-- 使用 `pixi-live2d-display` 库的 `focus()` 方法
-- `focus(x, y)` 接受世界空间的像素坐标
-- 鼠标坐标计算：`cursorPos - windowPos - rect.offset`
-- 关闭视线跟随时，通过 `focusController.focus(0, 0, true)` 重置
-
-### 设备管理
-- 摄像头和麦克风采用延迟初始化
-- 避免应用启动时立即请求权限
-- 只在用户主动使用时才连接设备
+- README.md：项目总览
+- API.md：WebSocket 消息协议规范
+- DEVELOPMENT.md：架构设计与核心模块详解
+- USAGE.md：用户使用指南
+- PLUGINS.md：前端插件开发指南
+- AGENT_PLUGINS.md：Agent 插件开发指南

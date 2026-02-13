@@ -1,0 +1,22 @@
+{
+  "visionProviderId": {
+    "type": "string",
+    "description": "用于图片识别的 Provider 实例 ID。留空则禁用图片转述功能。请填写一个支持 Vision（图片识别）的 Provider 的实例 ID。可在 LLM Provider 管理面板中查看。",
+    "default": ""
+  },
+  "transcribePrompt": {
+    "type": "string",
+    "description": "发送给视觉模型的转述提示词。用于指导模型如何描述图片内容。",
+    "default": "请详细描述这张图片的内容，包括画面中的主要元素、文字、颜色、布局等。用中文回复。"
+  },
+  "maxTokens": {
+    "type": "number",
+    "description": "视觉模型回复的最大 token 数。",
+    "default": 500
+  },
+  "autoTranscribe": {
+    "type": "boolean",
+    "description": "是否自动转述。开启后，收到图片时会自动调用视觉模型进行描述并将结果添加到对话上下文。关闭则仅注册 describe_image 工具供 LLM 主动调用。",
+    "default": true
+  }
+}

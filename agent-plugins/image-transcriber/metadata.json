@@ -1,0 +1,12 @@
+{
+  "name": "image-transcriber",
+  "author": "gameswu",
+  "desc": "图片转述插件 — 当主 LLM 不支持图片模态时，使用指定的视觉 Provider 将图片描述为文字",
+  "version": "1.0.0",
+  "entry": "main.js",
+  "autoActivate": false,
+  "i18n": {
+    "zh-CN": { "desc": "图片转述插件 — 当主 LLM 不支持图片模态时，使用指定的视觉 Provider 将图片描述为文字" },
+    "en-US": { "desc": "Image transcriber — when the primary LLM lacks image modality, uses a designated vision Provider to describe images as text" }
+  }
+}

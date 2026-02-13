@@ -139,6 +139,20 @@ const electronAPI = {
   agentUninstallPlugin: (name: string) => ipcRenderer.invoke('agent:uninstall-plugin', name),
   agentSavePluginConfig: (name: string, config: any) => ipcRenderer.invoke('agent:save-plugin-config', name, config),
   agentOpenPluginsDir: () => ipcRenderer.invoke('agent:open-plugins-dir'),
+  agentOpenPluginDataDir: (name: string) => ipcRenderer.invoke('agent:open-plugin-data-dir', name),
+  agentClearPluginData: (name: string) => ipcRenderer.invoke('agent:clear-plugin-data', name),
+  
+  // 指令系统
+  agentGetCommands: () => ipcRenderer.invoke('agent:get-commands'),
+  agentSetCommandEnabled: (name: string, enabled: boolean) => ipcRenderer.invoke('agent:set-command-enabled', name, enabled),
+  
+  // 对话管理
+  agentGetConversations: (limit?: number) => ipcRenderer.invoke('agent:get-conversations', limit),
+  agentGetMessages: (conversationId: string) => ipcRenderer.invoke('agent:get-messages', conversationId),
+  agentNewConversation: () => ipcRenderer.invoke('agent:new-conversation'),
+  agentSwitchConversation: (conversationId: string) => ipcRenderer.invoke('agent:switch-conversation', conversationId),
+  agentDeleteConversation: (conversationId: string) => ipcRenderer.invoke('agent:delete-conversation', conversationId),
+  agentGetCurrentConversation: () => ipcRenderer.invoke('agent:get-current-conversation'),
   
   onOpenAgent: (callback: () => void) => {
     ipcRenderer.on('open-agent', () => callback());

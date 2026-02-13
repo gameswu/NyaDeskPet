@@ -1,519 +1,492 @@
-# 插件开发指南
+# 前端插件开发指南
 
-本文档介绍如何为 NyaDeskPet 开发插件，扩展应用能力。
+本文档介绍如何为 NyaDeskPet 开发前端插件。前端插件作为独立进程运行，通过 WebSocket 与应用通信，语言不限。
 
-## 插件系统概述
+## 架构概述
 
-插件系统允许后端 Agent 通过前端插件访问系统资源和执行操作。插件分为两类：
+```mermaid
+sequenceDiagram
+    participant Agent as Agent Server
+    participant App as 前端 (PluginConnector)
+    participant Plugin as 插件进程
 
-- **内置插件**：使用 TypeScript/JavaScript 开发，直接集成在应用内
-- **外部插件**：使用 Python 等语言开发，通过进程间通信调用
-
-## 插件接口规范
-
-### 插件元数据
-
-```typescript
-interface PluginMetadata {
-  name: string;                    // 插件唯一标识
-  version: string;                 // 版本号
-  displayName: string;             // 显示名称
-  description: string;             // 描述
-  author: string;                  // 作者
-  type: 'builtin' | 'external';    // 类型
-  permissions: string[];           // 需要的权限列表
-  capabilities: string[];          // 提供的能力列表
-}
+    App->>Plugin: 启动进程 (child_process.spawn)
+    App->>Plugin: WebSocket 连接
+    Plugin->>App: metadata 响应
+    App->>Agent: plugin_status (已连接插件列表)
+    Agent->>App: plugin_invoke (调用请求)
+    App->>Plugin: 转发请求
+    Plugin->>App: 执行结果
+    App->>Agent: plugin_response (转发结果)
 ```
 
-### 插件操作定义
+- 前端启动插件进程并主动连接其 WebSocket 服务
+- 后端 Agent 通过 `plugin_invoke` / `plugin_response` 与插件间接通信
+- `plugin-tool-bridge` Agent 插件自动将已连接插件的 capabilities 注册为 FC 工具
 
-```typescript
-interface PluginAction {
-  name: string;                    // 操作名称
-  description: string;             // 描述
-  params: Record<string, any>;     // 参数 schema
-  permissions: string[];           // 需要的权限
-}
+## 内置插件
+
+| 插件 | 目录 | 功能 |
+|------|------|------|
+| 终端控制 | `plugins/terminal-plugin` | 执行系统命令、管理 Shell 会话 |
+| UI 自动化 | `plugins/ui-automation-plugin` | 鼠标键盘模拟、屏幕截图 |
+
+## 插件目录结构
+
+```
+plugins/my-plugin/
+  ├── metadata.json       # [必须] 插件元信息
+  ├── config.json         # [可选] 配置 Schema（前端自动生成配置 UI）
+  ├── main.py             # 插件主程序（语言不限）
+  └── requirements.txt    # 依赖
 ```
 
-### 插件接口
-
-```typescript
-interface Plugin {
-  metadata: PluginMetadata;
-  actions: PluginAction[];
-  runtimeInfo: PluginRuntimeInfo;
-  
-  initialize(): Promise<void>;
-  destroy(): Promise<void>;
-  execute(action: string, params: any): Promise<any>;
-  on(event: string, callback: Function): void;
-  off(event: string, callback: Function): void;
-}
-```
-
-## 内置插件开发
-
-### 基本结构
-
-```typescript
-class MyPlugin implements Plugin {
-  metadata: PluginMetadata = {
-    name: 'my-plugin',
-    version: '1.0.0',
-    displayName: 'My Plugin',
-    description: '插件描述',
-    author: 'Your Name',
-    type: 'builtin',
-    permissions: ['permission.name'],
-    capabilities: ['capability1', 'capability2']
-  };
-  
-  actions: PluginAction[] = [
-    {
-      name: 'actionName',
-      description: '操作描述',
-      params: {
-        param1: 'string',
-        param2: 'number?'
-      },
-      permissions: ['permission.name']
-    }
-  ];
-  
-  runtimeInfo: PluginRuntimeInfo = {
-    status: 'inactive',
-    callCount: 0
-  };
-  
-  async initialize(): Promise<void> {
-    // 初始化逻辑
-    this.runtimeInfo.status = 'active';
-  }
-  
-  async destroy(): Promise<void> {
-    // 清理逻辑
-    this.runtimeInfo.status = 'inactive';
-  }
-  
-  async execute(action: string, params: any): Promise<any> {
-    switch (action) {
-      case 'actionName':
-        return await this.handleAction(params);
-      default:
-        throw new Error(`Unknown action: ${action}`);
-    }
-  }
-  
-  private async handleAction(params: any): Promise<any> {
-    // 实现具体操作
-    return { result: 'success' };
-  }
-  
-  on(event: string, callback: Function): void {
-    // 事件监听
-  }
-  
-  off(event: string, callback: Function): void {
-    // 移除监听
-  }
-}
-```
-
-### 注册插件
-
-```typescript
-const myPlugin = new MyPlugin();
-window.pluginManager.registerPlugin(myPlugin);
-await myPlugin.initialize();
-```
-
-## 权限系统
-
-### 内置权限
-
-| 权限名称 | 级别 | 说明 |
-|---------|------|------|
-| `terminal.execute` | dangerous | 执行终端命令 |
-| `terminal.kill` | dangerous | 终止进程 |
-| `file.read` | normal | 读取文件 |
-| `file.write` | dangerous | 写入文件 |
-| `file.delete` | dangerous | 删除文件 |
-| `network.http` | normal | HTTP 请求 |
-| `system.info` | safe | 获取系统信息 |
-| `clipboard.read` | normal | 读取剪贴板 |
-| `clipboard.write` | safe | 写入剪贴板 |
-
-### 权限级别
-
-- **safe**: 安全权限，自动授权
-- **normal**: 普通权限，首次使用时请求授权
-- **dangerous**: 危险权限，每次使用都需要用户确认
-
-### 自定义权限
-
-插件可以定义自己的权限，但需要确保权限名称唯一（建议使用命名空间，如 `myplugin.action`）。
-
-## 外部插件开发
-
-### 通信协议
-
-外部插件通过标准输入输出（stdio）与前端通信，使用 JSON 格式。
-
-### 消息格式
-
-**请求**（前端 → 插件）：
-```json
-{
-  "type": "action",
-  "action": "execute",
-  "params": {
-    "command": "ls -la"
-  }
-}
-```
-
-**响应**（插件 → 前端）：
-```json
-{
-  "success": true,
-  "data": {
-    "stdout": "...",
-    "exitCode": 0
-  }
-}
-```
-
-### Python 示例
-
-```python
-import sys
-import json
-
-def handle_action(action, params):
-    if action == 'execute':
-        # 执行操作
-        return {
-            'success': True,
-            'data': {'result': 'ok'}
-        }
-    return {
-        'success': False,
-        'error': f'Unknown action: {action}'
-    }
-
-def main():
-    for line in sys.stdin:
-        try:
-            request = json.loads(line)
-            response = handle_action(
-                request['action'],
-                request['params']
-            )
-            print(json.dumps(response))
-            sys.stdout.flush()
-        except Exception as e:
-            error_response = {
-                'success': False,
-                'error': str(e)
-            }
-            print(json.dumps(error_response))
-            sys.stdout.flush()
-
-if __name__ == '__main__':
-    main()
-```
-
-### 插件配置
-
-外部插件需要提供配置文件 `plugin.json`：
+## metadata.json
 
 ```json
 {
-  "name": "my-external-plugin",
+  "id": "my-plugin",
+  "name": "my-plugin",
   "version": "1.0.0",
-  "displayName": "My External Plugin",
-  "description": "插件描述",
-  "author": "Your Name",
-  "type": "external",
-  "executable": "python",
-  "args": ["plugin.py"],
-  "permissions": ["file.read", "file.write"],
-  "capabilities": ["readFile", "writeFile"],
-  "actions": [
+  "url": "ws://localhost:8770",
+  "autoStart": false,
+  "command": {
+    "darwin": ["venv/bin/python3", "main.py"],
+    "win32": ["venv\\Scripts\\python.exe", "main.py"],
+    "linux": ["venv/bin/python3", "main.py"]
+  },
+  "workingDirectory": "plugins/my-plugin",
+  "permissions": [
     {
-      "name": "readFile",
-      "description": "读取文件",
-      "params": {
-        "path": "string"
-      },
-      "permissions": ["file.read"]
+      "id": "my-plugin.action",
+      "dangerLevel": "medium",
+      "i18n": {
+        "zh-CN": { "name": "执行操作", "description": "执行某项操作" },
+        "en-US": { "name": "Execute Action", "description": "Execute an action" }
+      }
     }
+  ],
+  "i18n": {
+    "zh-CN": { "displayName": "我的插件", "description": "插件功能描述" },
+    "en-US": { "displayName": "My Plugin", "description": "Plugin description" }
+  }
+}
+```
+
+| 字段 | 必须 | 说明 |
+|------|------|------|
+| `id` | ✅ | 插件唯一标识 |
+| `name` | ✅ | 插件名称 |
+| `version` | ✅ | 版本号 |
+| `url` | ✅ | WebSocket 监听地址 |
+| `command` | ✅ | 按平台区分的启动命令数组 |
+| `workingDirectory` | ✅ | 工作目录（相对应用根目录） |
+| `autoStart` | ❌ | 是否随应用自动启动，默认 `false` |
+| `permissions` | ❌ | 权限定义列表 |
+| `i18n` | ❌ | 国际化显示名和描述 |
+
+## 通信协议
+
+插件作为 WebSocket 服务端，前端主动连接。所有消息为 JSON 格式。
+
+### 握手
+
+前端连接后发送 `getMetadata`：
+
+**前端 → 插件**
+```json
+{ "action": "getMetadata", "locale": "zh-CN" }
+```
+
+**插件 → 前端**
+```json
+{
+  "type": "metadata",
+  "plugin": "my-plugin",
+  "locale": "zh-CN",
+  "defaultLocale": "en-US",
+  "metadata": {
+    "name": "my-plugin",
+    "version": "1.0.0",
+    "displayName": "我的插件",
+    "description": "插件功能描述",
+    "author": "YourName",
+    "type": "external",
+    "permissions": ["my-plugin.action"],
+    "capabilities": ["doSomething"]
+  }
+}
+```
+
+语言回退：请求的 locale 不支持时，回退到 `defaultLocale`。
+
+### 配置请求
+
+**插件 → 前端**
+```json
+{ "action": "getConfig", "pluginId": "my-plugin" }
+```
+
+**前端 → 插件**
+```json
+{
+  "type": "plugin_config",
+  "config": { "key1": "value1", "key2": 42 }
+}
+```
+
+配置存储位置：`userData/plugins/{id}/config.json`
+
+### 权限请求
+
+危险操作执行前须请求权限：
+
+**插件 → 前端**
+```json
+{
+  "type": "permission_request",
+  "requestId": "uuid",
+  "permissionId": "my-plugin.action",
+  "operation": "do_something",
+  "details": { "target": "..." }
+}
+```
+
+**前端 → 插件**
+```json
+{
+  "type": "permission_response",
+  "requestId": "uuid",
+  "granted": true
+}
+```
+
+### 操作请求与响应
+
+**前端 → 插件**（来自 Agent 的 `plugin_invoke` 转发）
+```json
+{
+  "action": "doSomething",
+  "requestId": "uuid",
+  "params": { "key": "value" }
+}
+```
+
+**插件 → 前端**
+```json
+{
+  "type": "plugin_response",
+  "requestId": "uuid",
+  "success": true,
+  "action": "doSomething",
+  "result": {
+    "type": "text",
+    "content": { "text": "执行结果" }
+  },
+  "locale": "zh-CN",
+  "requiredPermission": "my-plugin.action"
+}
+```
+
+### 语言切换
+
+**前端 → 插件**
+```json
+{ "action": "setLocale", "params": { "locale": "en-US" } }
+```
+
+## 响应内容类型
+
+`result` 字段支持 5 种类型：
+
+### text — 文本
+
+```json
+{
+  "type": "text",
+  "content": { "text": "结果文本", "format": "plain" }
+}
+```
+
+`format` 可选：`plain` / `markdown` / `html`
+
+### image — 图片
+
+```json
+{
+  "type": "image",
+  "content": {
+    "data": "<base64>",
+    "format": "png",
+    "width": 1920,
+    "height": 1080,
+    "filename": "screenshot.png"
+  }
+}
+```
+
+### file — 文件
+
+```json
+{
+  "type": "file",
+  "content": {
+    "filename": "report.pdf",
+    "size": 102400,
+    "mimeType": "application/pdf",
+    "data": "<base64>"
+  }
+}
+```
+
+### data — 结构化数据
+
+```json
+{
+  "type": "data",
+  "content": { "key": "value", "nested": { "data": "here" } }
+}
+```
+
+### mixed — 混合内容
+
+```json
+{
+  "type": "mixed",
+  "content": [
+    { "type": "text", "content": { "text": "执行完成" } },
+    { "type": "image", "content": { "data": "<base64>", "format": "png", "width": 800, "height": 600 } }
   ]
 }
 ```
 
-## 后端调用插件
+> 所有响应必须包含 `result.type` 字段，不符合规范的响应将被视为错误。
 
-### 调用请求
-
-```json
-{
-  "type": "plugin_call",
-  "requestId": "uuid-1234",
-  "plugin": "my-plugin",
-  "action": "actionName",
-  "params": {
-    "param1": "value1",
-    "param2": 42
-  },
-  "permissions": ["permission.name"]
-}
-```
-
-### 处理响应
-
-插件必须按照规范格式返回响应，支持多种内容类型。
-
-**基础响应格式**：
+### 错误响应
 
 ```json
 {
   "type": "plugin_response",
-  "requestId": "uuid-1234",
-  "success": true,
-  "action": "actionName",
-  "result": {
-    "type": "data",
-    "content": {
-      "key": "value"
+  "requestId": "uuid",
+  "success": false,
+  "action": "doSomething",
+  "error": "操作失败原因",
+  "errorKey": "error.some_key",
+  "locale": "zh-CN"
+}
+```
+
+- `errorKey` 可选，供前端国际化错误提示
+
+## 权限系统
+
+### 危险等级
+
+| 等级 | 说明 | 确认策略 |
+|------|------|---------|
+| `safe` | 无风险 | 自动允许 |
+| `low` | 低风险 | 首次确认 |
+| `medium` | 中等风险 | 每次确认 |
+| `high` | 高风险 | 每次确认 + 显著警告 |
+| `critical` | 极度危险 | 每次确认 + 强调警告 |
+
+### 权限管理
+
+- 用户可选「记住选择」避免重复确认
+- 权限记录存储在 `userData/plugin-permissions.json`
+- 可在插件管理面板撤销已授予的权限
+
+## 配置系统
+
+提供 `config.json` 即可自动生成配置 UI，支持 9 种配置类型：
+
+| type | 说明 |
+|------|------|
+| `string` | 单行文本 |
+| `text` | 多行文本 |
+| `int` | 整数（可设 min/max） |
+| `float` | 浮点数（可设 min/max） |
+| `bool` | 开关 |
+| `object` | 嵌套配置 |
+| `list` | 字符串列表 |
+| `dict` | 键值对列表 |
+| `template_list` | 模板化列表（多字段） |
+
+config.json 示例：
+
+```json
+[
+  {
+    "key": "timeout",
+    "type": "int",
+    "default": 30,
+    "min": 1,
+    "max": 300,
+    "i18n": {
+      "zh-CN": { "label": "超时时间（秒）", "hint": "操作最大等待时间" },
+      "en-US": { "label": "Timeout (seconds)", "hint": "Max wait time" }
+    }
+  },
+  {
+    "key": "dangerousOps",
+    "type": "list",
+    "default": ["rm -rf", "format"],
+    "i18n": {
+      "zh-CN": { "label": "危险操作列表" },
+      "en-US": { "label": "Dangerous operations" }
     }
   }
-}
+]
 ```
 
-**富内容类型支持**：
+## Python 插件示例
 
-插件可以返回不同类型的内容，通过 `result.type` 标识：
+```python
+import asyncio
+import json
+import websockets
 
-**1. 文本内容** (`"text"`)
-```json
-{
-  "result": {
-    "type": "text",
-    "content": {
-      "text": "纯文本内容",
-      "format": "plain"  // 可选: "plain", "markdown", "html"
-    }
-  }
-}
+class MyPlugin:
+    def __init__(self):
+        self.config = {}
+
+    async def handle(self, websocket):
+        async for raw in websocket:
+            msg = json.loads(raw)
+
+            if msg.get("action") == "getMetadata":
+                await websocket.send(json.dumps({
+                    "type": "metadata",
+                    "plugin": "my-plugin",
+                    "locale": msg.get("locale", "en-US"),
+                    "defaultLocale": "en-US",
+                    "metadata": {
+                        "name": "my-plugin",
+                        "version": "1.0.0",
+                        "displayName": "My Plugin",
+                        "description": "Example plugin",
+                        "author": "Dev",
+                        "type": "external",
+                        "permissions": [],
+                        "capabilities": ["greet"]
+                    }
+                }))
+
+            elif msg.get("type") == "plugin_config":
+                self.config = msg.get("config", {})
+
+            elif msg.get("action") == "greet":
+                name = msg.get("params", {}).get("name", "World")
+                await websocket.send(json.dumps({
+                    "type": "plugin_response",
+                    "requestId": msg.get("requestId"),
+                    "success": True,
+                    "action": "greet",
+                    "result": {
+                        "type": "text",
+                        "content": { "text": f"Hello, {name}!" }
+                    }
+                }))
+
+    async def start(self):
+        # 启动时请求配置
+        async with websockets.serve(self.handle, "localhost", 8770):
+            await asyncio.Future()
+
+if __name__ == "__main__":
+    plugin = MyPlugin()
+    asyncio.run(plugin.start())
 ```
 
-**2. 图片内容** (`"image"`)
-```json
-{
-  "result": {
-    "type": "image",
-    "content": {
-      "data": "base64_encoded_image_data",
-      "format": "png",  // "png", "jpeg", "gif", "webp"
-      "width": 1920,
-      "height": 1080,
-      "filename": "screenshot.png"  // 可选
-    }
-  }
-}
-```
+## 插件管理
 
-**3. 文件内容** (`"file"`)
-```json
-{
-  "result": {
-    "type": "file",
-    "content": {
-      "filename": "report.pdf",
-      "size": 102400,
-      "mimeType": "application/pdf",
-      "data": "base64_encoded_file_data",  // Base64编码的文件内容
-      "path": "/path/to/file"  // 或本地文件路径（仅限本地插件）
-    }
-  }
-}
-```
+用户通过以下方式管理插件：
 
-**4. 结构化数据** (`"data"`)
-```json
-{
-  "result": {
-    "type": "data",
-    "content": {
-      "key1": "value1",
-      "key2": 123,
-      "nested": { "data": "here" }
-    }
-  }
-}
-```
+- **顶栏 🧩 按钮** 或 **系统托盘菜单 → 插件管理**
+- 面板功能：启动/停止进程、连接/断开 WebSocket、打开目录、配置、权限管理
 
-**5. 混合内容** (`"mixed"`)
-```json
-{
-  "result": {
-    "type": "mixed",
-    "content": [
-      {
-        "type": "text",
-        "content": { "text": "命令执行完成" }
-      },
-      {
-        "type": "image",
-        "content": { "data": "base64...", "format": "png", "width": 800, "height": 600 }
-      }
-    ]
-  }
-}
-```
+### 启动流程
 
-**规范要求**：
-- 所有响应必须严格遵循上述格式，`result` 必须包含 `type` 字段
-- 不支持简单对象自动包装，请明确指定内容类型
-- 不符合规范的响应将导致调用失败
+1. 用户点击「启动」→ 主进程 `child_process.spawn` 执行 `command`
+2. 等待 3 秒后前端连接 `url` 指定的 WebSocket
+3. 发送 `getMetadata` 握手
+4. 连接成功 → 发送 `plugin_status` 通知后端
 
 ## 最佳实践
 
-### 错误处理
+- **输入验证**：校验所有参数，拒绝非法输入
+- **权限检查**：危险操作前先请求权限
+- **超时控制**：长时间操作设置合理超时
+- **资源清理**：进程退出时释放所有资源
+- **错误处理**：捕获所有异常，返回结构化错误响应
+- **输出缓冲**：Python 中 `sys.stdout.flush()` 确保输出及时
+- **日志**：使用标准错误输出 `stderr` 打印调试信息，避免干扰 JSON 通信
 
-插件应捕获所有异常并返回结构化错误：
+## 主动发送消息
 
-```typescript
-try {
-  const result = await someOperation();
-  return result;
-} catch (error) {
-  throw new Error(`Operation failed: ${error.message}`);
-}
-```
+前端插件除了被动响应 Agent 的工具调用外，还可以**主动向 Agent 发送消息**。例如：监控到系统事件、定时提醒、检测到异常等场景。
 
-### 参数验证
+### 消息格式
 
-在执行操作前验证参数：
+插件发送类型为 `plugin_message` 的 WebSocket 消息给前端：
 
-```typescript
-if (!params.requiredParam) {
-  throw new Error('Missing required parameter: requiredParam');
-}
-
-if (typeof params.number !== 'number') {
-  throw new Error('Invalid parameter type: number must be a number');
-}
-```
-
-### 资源清理
-
-在 `destroy()` 方法中清理所有资源：
-
-```typescript
-async destroy(): Promise<void> {
-  // 关闭连接
-  await this.closeConnections();
-  
-  // 清理定时器
-  if (this.timer) {
-    clearInterval(this.timer);
+```json
+{
+  "type": "plugin_message",
+  "text": "检测到用户桌面发生了变化",
+  "metadata": {
+    "source": "desktop-monitor",
+    "details": "窗口切换至 VSCode"
   }
-  
-  // 释放内存
-  this.cache.clear();
-  
-  this.runtimeInfo.status = 'inactive';
 }
 ```
 
-### 安全考虑
+| 字段 | 必须 | 说明 |
+|------|------|------|
+| `type` | ✅ | 固定为 `plugin_message` |
+| `text` | ✅ | 消息正文，将作为用户消息发送给 LLM |
+| `metadata` | ❌ | 可选的附加结构化数据 |
 
-1. **输入验证**：验证所有输入参数
-2. **权限检查**：确保插件只请求必要的权限
-3. **错误信息**：避免泄露敏感信息
-4. **超时控制**：为长时间操作设置超时
-5. **资源限制**：限制内存和CPU使用
+### 处理流程
 
-## 调试插件
+```mermaid
+sequenceDiagram
+    participant Plugin as 插件进程
+    participant Connector as PluginConnector
+    participant Agent as Agent Server
 
-### 开发模式
-
-在开发模式下，插件错误会在控制台显示：
-
-```bash
-npm run dev:mac  # macOS
-npm run dev:linux  # Linux
-npm run dev:win  # Windows
+    Plugin->>Connector: { type: "plugin_message", text: "..." }
+    Connector->>Agent: { type: "plugin_message", data: { pluginId, pluginName, text, metadata } }
+    Agent->>Agent: 持久化到会话历史 + LLM 处理
+    Agent->>Connector: dialogue / dialogue_stream_*
 ```
 
-### 日志输出
+- 前端 PluginConnector 自动补充 `pluginId` 和 `pluginName`
+- 消息以 `[插件 pluginName] text` 格式写入会话历史
+- Agent 经过完整的 LLM 处理流程（含工具调用、流式输出）后回复
 
-使用 `console.log` 输出调试信息：
+### Python 示例
 
-```typescript
-console.log('[MyPlugin] Executing action:', action);
-console.error('[MyPlugin] Error:', error);
+```python
+# 在插件的 WebSocket 处理中，主动发送消息
+async def send_proactive_message(websocket, text, metadata=None):
+    message = {
+        "type": "plugin_message",
+        "text": text
+    }
+    if metadata:
+        message["metadata"] = metadata
+    await websocket.send(json.dumps(message))
+
+# 使用示例：定时通知
+async def monitor_loop(websocket):
+    while True:
+        event = await check_some_condition()
+        if event:
+            await send_proactive_message(
+                websocket,
+                f"检测到事件: {event.description}",
+                {"eventType": event.type, "timestamp": event.time}
+            )
+        await asyncio.sleep(60)
 ```
-
-### 测试插件
-
-```typescript
-// 手动测试插件
-const result = await window.pluginManager.callPlugin(
-  'my-plugin',
-  'actionName',
-  { param1: 'test' },
-  ['permission.name']
-);
-console.log('Result:', result);
-```
-
-## 插件分发
-
-### 内置插件
-
-内置插件随应用一起分发，需要：
-1. 将插件文件放入 `renderer/js/plugins/` 目录
-2. 在应用启动时注册插件
-3. 重新编译和打包应用
-
-### 外部插件
-
-外部插件可以独立分发：
-1. 创建插件目录包含所有文件
-2. 提供 `plugin.json` 配置文件
-3. 用户将插件放入指定目录
-4. 应用自动加载插件
-
-## 示例插件
-
-完整示例请参考：
-- 内置插件示例：`renderer/js/plugins/example-plugin.ts`
-- 外部插件示例：`examples/plugins/python-example/`
-
-## 常见问题
-
-### 插件无法加载
-
-检查：
-1. 插件元数据是否正确
-2. 是否正确实现了 Plugin 接口
-3. 控制台是否有错误信息
-
-### 权限被拒绝
-
-插件需要的权限必须：
-1. 在 `metadata.permissions` 中声明
-2. 在 `actions` 中指定需要该权限
-3. 用户已授权该权限
-
-### 外部插件通信失败
-
-检查：
-1. 可执行文件路径是否正确
-2. JSON 格式是否正确
-3. 是否正确 flush 输出缓冲

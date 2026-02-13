@@ -3,6 +3,8 @@
     "toggleUI": "Toggle UI"
   },
   "topBar": {
+    "connected": "Connected",
+    "connecting": "Connecting...",
     "disconnected": "Disconnected",
     "plugins": "Plugins",
     "agent": "Agent Management",
@@ -14,16 +16,17 @@
     "openChat": "Open Chat"
   },
   "chatWindow": {
-    "title": "Chat with Desk Pet",
     "placeholder": "Type a message...",
     "send": "Send",
     "voice": "Voice Input",
     "camera": "Camera",
     "attach": "Attach File",
     "close": "Close",
-    "conversations": "Conversations",
     "newChat": "New Chat",
-    "reasoning": "Thinking"
+    "reasoning": "Thinking",
+    "deleteConversation": "Delete Conversation",
+    "noConversations": "No conversations yet",
+    "toggleConversations": "Toggle conversation list"
   },
   "settings": {
     "title": "Settings",
@@ -134,7 +137,8 @@
     "reloadConfirm": "Settings saved! Some settings require a reload. Reload now?",
     "resetConfirm": "Reset all settings to defaults?",
     "confirmClose": "Are you sure you want to close the desktop pet?",
-    "sendFailed": "Failed to send message. Please check your connection"
+    "sendFailed": "Failed to send message. Please check your connection",
+    "welcome": "Hello! I'm your desktop pet~ Let's chat!"
   },
   "camera": {
     "preview": "Camera Preview",
@@ -166,7 +170,13 @@
     "tabs": {
       "overview": "Overview",
       "tools": "Tools",
-      "plugins": "Plugins"
+      "plugins": "Plugins",
+      "commands": "Commands"
+    },
+    "commands": {
+      "title": "Command Management",
+      "description": "Manage registered slash commands, enable or disable commands",
+      "empty": "No registered commands"
     },
     "serverStatus": "Server Status",
     "status": "Status",
@@ -235,6 +245,10 @@
             "label": "Proxy Address",
             "placeholder": "http://127.0.0.1:7890",
             "description": "HTTP/HTTPS proxy (if needed)"
+          },
+          "stream": {
+            "label": "Streaming Output",
+            "description": "When enabled, LLM responses will be displayed token by token for faster perceived response. When disabled, the full response is shown at once"
           }
         }
       },
@@ -267,6 +281,10 @@
             "label": "Proxy Address",
             "placeholder": "http://127.0.0.1:7890",
             "description": "HTTP/HTTPS proxy (if needed)"
+          },
+          "stream": {
+            "label": "Streaming Output",
+            "description": "When enabled, LLM responses will be displayed token by token for faster perceived response"
           }
         }
       },
@@ -292,12 +310,54 @@
             "label": "Proxy Address",
             "placeholder": "http://127.0.0.1:7890",
             "description": "HTTP/HTTPS proxy (if needed)"
+          },
+          "stream": {
+            "label": "Streaming Output",
+            "description": "When enabled, LLM responses will be displayed token by token for faster perceived response"
           }
         }
       },
-      "echo": {
-        "name": "Echo (Built-in)",
-        "description": "Echoes input messages without calling any AI service. For testing or as fallback."
+      "siliconflow": {
+        "name": "SiliconFlow",
+        "description": "SiliconFlow cloud platform with top models including DeepSeek, Qwen, GLM. Some models are free. Supports Function Calling",
+        "fields": {
+          "apiKey": {
+            "label": "API Key",
+            "placeholder": "sk-...",
+            "description": "API key from SiliconFlow platform (https://cloud.siliconflow.cn/account/ak)"
+          },
+          "baseUrl": {
+            "label": "API Base URL",
+            "description": "SiliconFlow API address, usually no need to change"
+          },
+          "model": {
+            "label": "Model",
+            "description": "Select a model. Custom model IDs are supported. Full list at https://cloud.siliconflow.cn/models",
+            "options": {
+              "Qwen/Qwen2.5-7B-Instruct": "Qwen2.5-7B-Instruct (Free)",
+              "Qwen/Qwen3-8B": "Qwen3-8B",
+              "Qwen/Qwen3-32B": "Qwen3-32B",
+              "Pro/zai-org/GLM-4.7": "GLM-4.7 (Pro)",
+              "deepseek-ai/DeepSeek-V3": "DeepSeek-V3",
+              "deepseek-ai/DeepSeek-R1": "DeepSeek-R1",
+              "Pro/deepseek-ai/DeepSeek-V3": "DeepSeek-V3 (Pro)",
+              "Pro/deepseek-ai/DeepSeek-R1": "DeepSeek-R1 (Pro)"
+            }
+          },
+          "timeout": {
+            "label": "Timeout (seconds)",
+            "description": "Request timeout, consider increasing for reasoning models"
+          },
+          "proxy": {
+            "label": "Proxy Address",
+            "placeholder": "http://127.0.0.1:7890",
+            "description": "HTTP/HTTPS proxy (if needed)"
+          },
+          "stream": {
+            "label": "Streaming Output",
+            "description": "When enabled, LLM responses will be displayed token by token for faster perceived response"
+          }
+        }
       }
     },
     "tts": {

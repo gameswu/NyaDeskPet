@@ -33,8 +33,6 @@ export {
 
 // 内置 Provider 实现（导入时自动注册）
 export {
-  EchoProvider,
-  ECHO_METADATA,
   OpenAIProvider,
   OPENAI_METADATA
 } from './providers';
@@ -59,7 +57,8 @@ export {
   PipelineContext,
   SessionManager,
   type IncomingMessage,
-  type OutgoingMessage
+  type OutgoingMessage,
+  type Sendable
 } from './context';
 
 // Handler 层
@@ -118,3 +117,14 @@ export {
   type MCPServerConfig,
   type MCPServerStatus
 } from './mcp-client';
+
+// 指令系统
+export {
+  commandRegistry,
+  type CommandDefinition,
+  type CommandParam,
+  type CommandHandler,
+  type CommandExecuteData,
+  type CommandResponseData,
+  type CommandsRegisterData
+} from './commands';

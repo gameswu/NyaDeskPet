@@ -375,9 +375,9 @@ export const FISH_AUDIO_METADATA: ProviderMetadata = {
       required: false,
       default: 's1',
       options: [
-        { label: 'S1（最新，推荐）', value: 's1' },
-        { label: 'Speech 1.6（稳定）', value: 'speech-1.6' },
-        { label: 'Speech 1.5（旧版）', value: 'speech-1.5' }
+        { label: 'S1', value: 's1' },
+        { label: 'Speech 1.6', value: 'speech-1.6' },
+        { label: 'Speech 1.5', value: 'speech-1.5' }
       ],
       description: 'TTS 引擎模型版本'
     },
@@ -402,8 +402,8 @@ export const FISH_AUDIO_METADATA: ProviderMetadata = {
       required: false,
       default: 'normal',
       options: [
-        { label: '标准（最佳质量）', value: 'normal' },
-        { label: '均衡（低延迟）', value: 'balanced' }
+        { label: '标准', value: 'normal' },
+        { label: '均衡', value: 'balanced' }
       ],
       description: '延迟与质量的权衡'
     },

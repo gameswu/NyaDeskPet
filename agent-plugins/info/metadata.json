@@ -1,0 +1,12 @@
+{
+  "name": "info",
+  "author": "gameswu",
+  "desc": "项目信息指令插件 — 提供 /info 指令，输出 NyaDeskPet 项目信息和仓库地址",
+  "version": "1.0.0",
+  "entry": "main.js",
+  "autoActivate": true,
+  "i18n": {
+    "zh-CN": { "desc": "项目信息指令插件 — 提供 /info 指令，输出 NyaDeskPet 项目信息和仓库地址" },
+    "en-US": { "desc": "Info command plugin — provides /info command to display NyaDeskPet project information and repository URL" }
+  }
+}

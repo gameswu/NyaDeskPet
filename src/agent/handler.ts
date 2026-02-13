@@ -30,8 +30,9 @@ import {
   type TTSProvider,
   ttsProviderRegistry
 } from './tts-provider';
-import { type PipelineContext, SessionManager } from './context';
+import { type PipelineContext, type Sendable, SessionManager } from './context';
 import { toolManager, type ToolCall, type ToolResult } from './tools';
+import { commandRegistry } from './commands';
 import { agentPluginManager, type HandlerAccessor, type MessageContext, type PluginInvokeSender } from './agent-plugin';
 
 // ==================== 类型定义 ====================
@@ -72,7 +73,7 @@ const MAX_TOOL_LOOP_ITERATIONS = 10;
 export interface ProviderInstanceConfig {
   /** 实例唯一 ID (uuid) */
   instanceId: string;
-  /** Provider 类型 ID (如 'openai', 'echo') */
+  /** Provider 类型 ID (如 'openai', 'deepseek') */
   providerId: string;
   /** 用户自定义的显示名称 */
   displayName: string;
@@ -163,8 +164,14 @@ export class AgentHandler {
 
   /** 挂起的插件调用请求（requestId → resolve/reject） */
   private pendingPluginRequests: Map<string, {
-    resolve: (result: any) => void;
+    resolve: (result: { success: boolean; result?: unknown; error?: string }) => void;
     reject: (error: Error) => void;
+    timer: NodeJS.Timeout;
+  }> = new Map();
+
+  /** 挂起的工具确认请求（confirmId → resolve） */
+  private pendingToolConfirms: Map<string, {
+    resolve: (approved: boolean) => void;
     timer: NodeJS.Timeout;
   }> = new Map();
 
@@ -567,22 +574,7 @@ export class AgentHandler {
       logger.warn(`[AgentHandler] 加载 Provider 配置失败: ${error}`);
     }
 
-    // 如果没有任何实例，默认添加 Echo
-    if (this.providerInstances.size === 0) {
-      const echoId = 'echo-default';
-      this.providerInstances.set(echoId, {
-        config: {
-          instanceId: echoId,
-          providerId: 'echo',
-          displayName: 'Echo (内置)',
-          config: { id: 'echo', name: 'Echo' },
-          enabled: true
-        },
-        provider: null,
-        status: 'idle'
-      });
-      this.primaryInstanceId = echoId;
-    }
+    // 首次启动无 Provider 实例，用户需要在设置中手动添加
   }
 
   private saveConfig(): void {
@@ -931,14 +923,15 @@ export class AgentHandler {
    * 使用主 TTS Provider 合成音频并通过 WebSocket 流式发送
    * LLM 回复后自动调用，将文字转语音推送到前端
    */
-  public async synthesizeAndStream(text: string, ctx: PipelineContext): Promise<void> {
+  public async synthesizeAndStream(text: string, ctx: Sendable): Promise<void> {
     const ttsProvider = this.getPrimaryTTSProvider();
     if (!ttsProvider) {
       return; // 没有 TTS Provider 就静默跳过
     }
 
     try {
-      const format = ttsProvider.getConfig().format as string || 'mp3';
+      const rawFormat = ttsProvider.getConfig().format;
+      const format = (typeof rawFormat === 'string' ? rawFormat : 'mp3') as 'mp3' | 'wav' | 'pcm' | 'opus';
       const mimeType = ttsProvider.getMimeType(format);
 
       // 发送 audio_stream_start
@@ -952,7 +945,7 @@ export class AgentHandler {
 
       // 流式合成并发送 audio_chunk
       let sequence = 0;
-      for await (const chunk of ttsProvider.synthesizeStream({ text, format: format as any })) {
+      for await (const chunk of ttsProvider.synthesizeStream({ text, format })) {
         ctx.send({
           type: 'audio_chunk',
           data: {
@@ -986,13 +979,20 @@ export class AgentHandler {
    * 
    * 如果有活跃的 handler 插件，委托给插件处理；
    * 否则使用默认逻辑（简单的 LLM 调用 + 文本回复）。
+   * 
+   * 集成 input-collector：在默认逻辑中，先将输入交给收集器，
+   * 如果收集器返回 null 表示输入已缓冲，跳过处理。
    */
   public async processUserInput(ctx: PipelineContext): Promise<void> {
-    const text = ctx.message.text || '';
+    let text = ctx.message.text || '';
     logger.info(`[AgentHandler] 用户输入: ${text}`);
 
-    // 更新活跃连接（用于插件调用等场景）
-    this.setActiveConnection(ctx.ws, (_ws, msg) => ctx.send(msg));
+    // 更新活跃连接（绑定到 WebSocket 连接而非 PipelineContext，避免并发消息覆盖闭包）
+    this.setActiveConnection(ctx.ws, (ws, msg) => {
+      if (ws.readyState === 1 /* WebSocket.OPEN */) {
+        ws.send(JSON.stringify(msg));
+      }
+    });
 
     // 尝试委托给 handler 插件
     const handlerPlugin = agentPluginManager.getHandlerPlugin();
@@ -1003,6 +1003,19 @@ export class AgentHandler {
     }
 
     // === 默认逻辑（无 handler 插件时的回退） ===
+
+    // 集成 input-collector：抖动收集
+    const collector = agentPluginManager.getPluginInstance('input-collector') as { isEnabled?: () => boolean; collectInput?: (sid: string, text: string) => Promise<string | null> } | null;
+    if (collector?.isEnabled?.() && collector.collectInput) {
+      const collected = await collector.collectInput(ctx.sessionId, text);
+      if (collected === null) {
+        logger.info(`[AgentHandler] 输入已被收集器缓冲，跳过处理`);
+        return;
+      }
+      text = collected;
+      logger.info(`[AgentHandler] 收集器输出: ${text}`);
+    }
+
     const primaryProvider = this.getPrimaryProvider();
     if (!primaryProvider) {
       ctx.addReply({
@@ -1016,7 +1029,7 @@ export class AgentHandler {
 
     const history = this.sessions.getHistory(ctx.sessionId);
     const request: LLMRequest = {
-      messages: history,
+      messages: [...history],
       systemPrompt: this.characterInfo?.personality || '你是一个可爱的桌面宠物。',
       sessionId: ctx.sessionId
     };
@@ -1027,13 +1040,22 @@ export class AgentHandler {
     }
 
     try {
-      const response = await this.executeWithToolLoop(request, ctx, primaryProvider);
-      this.sessions.addMessage(ctx.sessionId, { role: 'assistant', content: response.text });
+      // 判断是否启用流式输出
+      const isStreaming = this.isStreamingEnabled();
 
-      ctx.addReply({
-        type: 'dialogue',
-        data: { text: response.text, duration: Math.min(30000, Math.max(3000, response.text.length * 80)) }
-      });
+      if (isStreaming) {
+        const fullText = await this.executeWithToolLoopStreaming(request, ctx, primaryProvider);
+        this.sessions.addMessage(ctx.sessionId, { role: 'assistant', content: fullText });
+        // 流式输出已在 executeWithToolLoopStreaming 内部发送，无需 addReply
+      } else {
+        const response = await this.executeWithToolLoop(request, ctx, primaryProvider);
+        this.sessions.addMessage(ctx.sessionId, { role: 'assistant', content: response.text });
+
+        ctx.addReply({
+          type: 'dialogue',
+          data: { text: response.text, duration: Math.min(30000, Math.max(3000, response.text.length * 80)) }
+        });
+      }
     } catch (error) {
       logger.error('[AgentHandler] LLM 调用失败:', error);
       ctx.addReply({
@@ -1052,7 +1074,7 @@ export class AgentHandler {
    * 2. 如果 LLM 返回 tool_calls → 执行工具 → 将结果追加到消息 → 回到步骤 1
    * 3. 如果 LLM 返回文本 → 结束循环
    */
-  private async executeWithToolLoop(request: LLMRequest, ctx: PipelineContext, provider: LLMProvider): Promise<LLMResponse> {
+  private async executeWithToolLoop(request: LLMRequest, ctx: Sendable, provider: LLMProvider): Promise<LLMResponse> {
     let iterations = 0;
     let currentRequest = { ...request };
 
@@ -1077,12 +1099,44 @@ export class AgentHandler {
       currentRequest.messages.push(assistantMsg);
       this.sessions.addMessage(ctx.sessionId, assistantMsg);
 
-      // 执行所有工具调用
-      const toolCalls: ToolCall[] = response.toolCalls.map(tc => ({
-        id: tc.id,
-        name: tc.name,
-        arguments: typeof tc.arguments === 'string' ? JSON.parse(tc.arguments) : tc.arguments
-      }));
+      // 解析工具调用参数（安全处理 LLM 返回的无效 JSON）
+      const toolCalls: ToolCall[] = [];
+      for (const tc of response.toolCalls) {
+        let parsedArgs: Record<string, unknown>;
+        try {
+          parsedArgs = typeof tc.arguments === 'string' ? JSON.parse(tc.arguments) : tc.arguments;
+        } catch (parseErr) {
+          logger.error(`[AgentHandler] 工具参数 JSON 解析失败 (${tc.name}):`, parseErr);
+          // 跳过此工具调用，用错误结果占位
+          toolCalls.push({ id: tc.id, name: tc.name, arguments: {} });
+          continue;
+        }
+        toolCalls.push({ id: tc.id, name: tc.name, arguments: parsedArgs });
+      }
+
+      // 请求用户确认工具调用（仅对插件来源工具需要确认）
+      const hasPluginTools = toolCalls.some(tc => {
+        const toolDef = toolManager.getToolByName(tc.name);
+        return toolDef?.source === 'plugin';
+      });
+
+      if (hasPluginTools) {
+        const approved = await this.requestToolConfirm(toolCalls, iterations, ctx);
+        if (!approved) {
+          // 用户拒绝，通知 LLM
+          for (const tc of toolCalls) {
+            const toolMsg: ChatMessage = {
+              role: 'tool',
+              content: '用户拒绝了此工具调用。',
+              toolCallId: tc.id,
+              toolName: tc.name
+            };
+            currentRequest.messages.push(toolMsg);
+            this.sessions.addMessage(ctx.sessionId, toolMsg);
+          }
+          continue;
+        }
+      }
 
       const results: ToolResult[] = await toolManager.executeToolCalls(toolCalls);
 
@@ -1115,6 +1169,267 @@ export class AgentHandler {
       text: '[内置Agent] 工具调用次数超过限制，请简化请求。',
       finishReason: 'max_iterations'
     };
+  }
+
+  /**
+   * 判断主 LLM Provider 是否启用了流式输出
+   */
+  private isStreamingEnabled(): boolean {
+    if (!this.primaryInstanceId) return false;
+    const entry = this.providerInstances.get(this.primaryInstanceId);
+    return !!(entry?.config.config?.stream);
+  }
+
+  /**
+   * 发送工具确认请求到前端，等待用户确认
+   * @returns true = 用户批准, false = 用户拒绝或超时
+   */
+  private async requestToolConfirm(
+    toolCalls: ToolCall[],
+    _iteration: number,
+    ctx: Sendable,
+    timeout: number = 30000
+  ): Promise<boolean> {
+    return new Promise<boolean>((resolve) => {
+      const confirmId = `tc_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+
+      const timer = setTimeout(() => {
+        this.pendingToolConfirms.delete(confirmId);
+        logger.warn(`[AgentHandler] 工具确认超时 (${timeout}ms)，自动拒绝`);
+        resolve(false);
+      }, timeout);
+
+      this.pendingToolConfirms.set(confirmId, { resolve, timer });
+
+      // 构建确认数据（附带工具描述信息）
+      const confirmData = {
+        confirmId,
+        toolCalls: toolCalls.map(tc => {
+          const toolDef = toolManager.getToolByName(tc.name);
+          return {
+            id: tc.id,
+            name: tc.name,
+            arguments: tc.arguments,
+            source: (toolDef?.source || 'function') as 'function' | 'mcp' | 'plugin',
+            description: toolDef?.schema.description
+          };
+        }),
+        timeout
+      };
+
+      ctx.send({
+        type: 'tool_confirm',
+        data: confirmData
+      });
+
+      logger.info(`[AgentHandler] 已发送工具确认请求: ${confirmId}, 工具: ${toolCalls.map(tc => tc.name).join(', ')}`);
+    });
+  }
+
+  /**
+   * 处理前端返回的工具确认响应
+   */
+  public processToolConfirmResponse(ctx: PipelineContext): void {
+    const data = ctx.message.data as { confirmId?: string; approved?: boolean; remember?: boolean } | undefined;
+    if (!data?.confirmId) {
+      logger.warn('[AgentHandler] tool_confirm_response 缺少 confirmId');
+      return;
+    }
+
+    const pending = this.pendingToolConfirms.get(data.confirmId);
+    if (!pending) {
+      logger.warn(`[AgentHandler] 未找到挂起的工具确认: ${data.confirmId}`);
+      return;
+    }
+
+    clearTimeout(pending.timer);
+    this.pendingToolConfirms.delete(data.confirmId);
+    
+    logger.info(`[AgentHandler] 工具确认响应: ${data.confirmId} → ${data.approved ? '批准' : '拒绝'}`);
+    pending.resolve(!!data.approved);
+  }
+
+  /**
+   * 流式工具循环执行
+   * 
+   * 使用 chatStream() 获取流式响应，实时发送 dialogue_stream_* 到前端。
+   * 当遇到 tool_calls 时切换到内部积累模式，不发送中间 tool_calls 的流式文本。
+   * 
+   * @returns 最终完整文本
+   */
+  private async executeWithToolLoopStreaming(
+    request: LLMRequest,
+    ctx: Sendable,
+    provider: LLMProvider
+  ): Promise<string> {
+    let iterations = 0;
+    let currentRequest = { ...request };
+    const streamId = `stream_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+    let streamStarted = false;
+
+    while (iterations < MAX_TOOL_LOOP_ITERATIONS) {
+      iterations++;
+
+      let fullText = '';
+      let fullReasoning = '';
+      const toolCallAccumulator: Map<number, { id: string; name: string; arguments: string }> = new Map();
+      let hasToolCalls = false;
+
+      // 流式读取 LLM 响应
+      for await (const chunk of provider.chatStream(currentRequest)) {
+        // 积累工具调用增量
+        if (chunk.toolCallDeltas) {
+          hasToolCalls = true;
+          for (const delta of chunk.toolCallDeltas) {
+            let existing = toolCallAccumulator.get(delta.index);
+            if (!existing) {
+              existing = { id: '', name: '', arguments: '' };
+              toolCallAccumulator.set(delta.index, existing);
+            }
+            if (delta.id) existing.id = delta.id;
+            if (delta.name) existing.name += delta.name;
+            if (delta.arguments) existing.arguments += delta.arguments;
+          }
+        }
+
+        // 积累文本
+        if (chunk.delta) {
+          fullText += chunk.delta;
+
+          // 仅在非工具调用轮次才流式输出文本
+          if (!hasToolCalls) {
+            if (!streamStarted) {
+              streamStarted = true;
+              ctx.send({ type: 'dialogue_stream_start', data: { streamId } });
+            }
+            ctx.send({
+              type: 'dialogue_stream_chunk',
+              data: {
+                streamId,
+                delta: chunk.delta,
+                reasoningDelta: chunk.reasoningDelta
+              }
+            });
+          }
+        }
+
+        if (chunk.reasoningDelta) {
+          fullReasoning += chunk.reasoningDelta;
+          // 如果流已开始且有推理增量（但无普通 delta），也发送
+          if (!hasToolCalls && streamStarted && !chunk.delta) {
+            ctx.send({
+              type: 'dialogue_stream_chunk',
+              data: { streamId, delta: '', reasoningDelta: chunk.reasoningDelta }
+            });
+          }
+        }
+
+        if (chunk.done) break;
+      }
+
+      // 如果没有工具调用，结束流并返回
+      if (!hasToolCalls || toolCallAccumulator.size === 0) {
+        if (streamStarted) {
+          const duration = Math.min(30000, Math.max(3000, fullText.length * 80));
+          ctx.send({
+            type: 'dialogue_stream_end',
+            data: { streamId, fullText, duration }
+          });
+        }
+        return fullText;
+      }
+
+      // === 有工具调用 ===
+      logger.info(`[AgentHandler] 流式工具循环 #${iterations}: ${toolCallAccumulator.size} 个工具调用`);
+
+      // 构建 ToolCallInfo
+      const toolCallInfos: import('./provider').ToolCallInfo[] = [];
+      for (const [, tc] of toolCallAccumulator) {
+        toolCallInfos.push({ id: tc.id, name: tc.name, arguments: tc.arguments });
+      }
+
+      // 将 assistant 的 tool_calls 消息追加到历史
+      const assistantMsg: ChatMessage = {
+        role: 'assistant',
+        content: fullText || '',
+        toolCalls: toolCallInfos
+      };
+      currentRequest.messages.push(assistantMsg);
+      this.sessions.addMessage(ctx.sessionId, assistantMsg);
+
+      // 解析工具调用参数
+      const toolCalls: ToolCall[] = [];
+      for (const tc of toolCallInfos) {
+        let parsedArgs: Record<string, unknown>;
+        try {
+          parsedArgs = typeof tc.arguments === 'string' ? JSON.parse(tc.arguments) : tc.arguments;
+        } catch (parseErr) {
+          logger.error(`[AgentHandler] 流式工具参数 JSON 解析失败 (${tc.name}):`, parseErr);
+          toolCalls.push({ id: tc.id, name: tc.name, arguments: {} });
+          continue;
+        }
+        toolCalls.push({ id: tc.id, name: tc.name, arguments: parsedArgs });
+      }
+
+      // 请求用户确认工具调用
+      const hasPluginTools = toolCalls.some(tc => {
+        const toolDef = toolManager.getToolByName(tc.name);
+        return toolDef?.source === 'plugin';
+      });
+      
+      if (hasPluginTools) {
+        const approved = await this.requestToolConfirm(toolCalls, iterations, ctx);
+        if (!approved) {
+          // 用户拒绝，发送拒绝消息作为工具结果，让 LLM 知道
+          for (const tc of toolCalls) {
+            const toolMsg: ChatMessage = {
+              role: 'tool',
+              content: '用户拒绝了此工具调用。',
+              toolCallId: tc.id,
+              toolName: tc.name
+            };
+            currentRequest.messages.push(toolMsg);
+            this.sessions.addMessage(ctx.sessionId, toolMsg);
+          }
+          // 继续循环让 LLM 生成不使用工具的回复
+          continue;
+        }
+      }
+
+      const results: ToolResult[] = await toolManager.executeToolCalls(toolCalls);
+
+      // 将工具结果追加到消息
+      for (const result of results) {
+        const toolMsg: ChatMessage = {
+          role: 'tool',
+          content: result.content,
+          toolCallId: result.toolCallId,
+          toolName: toolCalls.find(tc => tc.id === result.toolCallId)?.name
+        };
+        currentRequest.messages.push(toolMsg);
+        this.sessions.addMessage(ctx.sessionId, toolMsg);
+      }
+
+      // 通知前端工具执行状态
+      ctx.send({
+        type: 'tool_status',
+        data: {
+          iteration: iterations,
+          calls: toolCalls.map(tc => ({ name: tc.name, id: tc.id })),
+          results: results.map(r => ({ id: r.toolCallId, success: r.success }))
+        }
+      });
+    }
+
+    // 超过最大迭代次数
+    logger.warn(`[AgentHandler] 流式工具循环超过最大迭代次数 (${MAX_TOOL_LOOP_ITERATIONS})`);
+    if (streamStarted) {
+      ctx.send({
+        type: 'dialogue_stream_end',
+        data: { streamId, fullText: '[内置Agent] 工具调用次数超过限制，请简化请求。', duration: 5000 }
+      });
+    }
+    return '[内置Agent] 工具调用次数超过限制，请简化请求。';
   }
 
   /**
@@ -1151,16 +1466,19 @@ export class AgentHandler {
       if (handled) return;
     }
 
-    // 默认反应
+    // === 默认逻辑 ===
+    const tapUserMsg = `[触碰] 用户触碰了 "${data.hitArea}" 部位`;
+    this.sessions.addMessage(ctx.sessionId, { role: 'user', content: tapUserMsg });
+
     const primaryProvider = this.getPrimaryProvider();
-    const primaryEntry = this.primaryInstanceId ? this.providerInstances.get(this.primaryInstanceId) : null;
-    if (primaryProvider && primaryEntry?.config.providerId !== 'echo') {
+    if (primaryProvider) {
       try {
         const response = await primaryProvider.chat({
           messages: [{ role: 'user', content: `用户触碰了你的 "${data.hitArea}" 部位，请给出简短反应。` }],
           systemPrompt: this.characterInfo?.personality || '你是一个可爱的桌面宠物。',
           maxTokens: 100
         });
+        this.sessions.addMessage(ctx.sessionId, { role: 'assistant', content: response.text });
         ctx.addReply({ type: 'dialogue', data: { text: response.text, duration: 3000 } });
         return;
       } catch (error) {
@@ -1171,7 +1489,9 @@ export class AgentHandler {
     const reactions: Record<string, string> = {
       'Head': '头被摸了喵~', 'Body': '不要乱摸喵！', 'Face': '脸好痒喵~'
     };
-    ctx.addReply({ type: 'dialogue', data: { text: reactions[data.hitArea] || '被点到了喵~', duration: 3000 } });
+    const replyText = reactions[data.hitArea] || '被点到了喵~';
+    this.sessions.addMessage(ctx.sessionId, { role: 'assistant', content: replyText });
+    ctx.addReply({ type: 'dialogue', data: { text: replyText, duration: 3000 } });
   }
 
   /**
@@ -1193,15 +1513,125 @@ export class AgentHandler {
 
   /**
    * 处理文件上传
+   * 
+   * 集成 image-transcriber：如果上传的是图片且图片转述插件已启用，
+   * 自动调用视觉 Provider 获取描述，并将描述添加到会话上下文中。
    */
   public async processFileUpload(ctx: PipelineContext): Promise<void> {
-    const data = ctx.message.data;
+    const data = ctx.message.data as { fileName?: string; fileType?: string; fileData?: string; fileSize?: number } | undefined;
     logger.info(`[AgentHandler] 收到文件: ${data?.fileName}`);
 
+    // 尝试委托给 handler 插件
+    const handlerPlugin = agentPluginManager.getHandlerPlugin();
+    if (handlerPlugin?.onFileUpload) {
+      const mctx = this.createMessageContext(ctx);
+      const handled = await handlerPlugin.onFileUpload(mctx);
+      if (handled) return;
+    }
+
+    // === 默认逻辑（无 handler 插件时的回退） ===
+
+    // 检查是否为图片且 image-transcriber 可用
+    const isImage = data?.fileType?.startsWith('image/');
+    const transcriber = agentPluginManager.getPluginInstance('image-transcriber') as {
+      isAvailable?: () => boolean;
+      autoTranscribe?: boolean;
+      cacheImage?: (data: string, mime: string, name: string) => void;
+      transcribeImage?: (data: string, mime: string) => Promise<{ success: boolean; description?: string; error?: string }>;
+    } | null;
+
+    if (isImage && data?.fileData) {
+      // 缓存图片供 describe_image 工具使用
+      if (transcriber?.cacheImage) {
+        transcriber.cacheImage(data.fileData, data.fileType!, data.fileName || 'image');
+      }
+
+      // 自动转述模式
+      if (transcriber?.isAvailable?.() && transcriber.autoTranscribe && transcriber.transcribeImage) {
+        ctx.addReply({
+          type: 'dialogue',
+          data: { text: `正在识别图片 ${data.fileName}...`, duration: 3000 }
+        });
+
+        const result = await transcriber.transcribeImage(data.fileData, data.fileType!);
+        if (result.success && result.description) {
+          // 将图片描述添加到会话历史
+          this.sessions.addMessage(ctx.sessionId, {
+            role: 'user',
+            content: `[用户上传了图片: ${data.fileName}]\n\n图片描述: ${result.description}`
+          });
+
+          ctx.addReply({
+            type: 'dialogue',
+            data: { text: `📷 ${data.fileName}\n\n${result.description}`, duration: 8000 }
+          });
+          return;
+        } else {
+          logger.warn(`[AgentHandler] 图片转述失败: ${result.error}`);
+          // 降级：仅记录文件信息
+        }
+      }
+    }
+
+    // 默认：记录文件上传并确认
+    const fileMsg = `[文件上传] ${data?.fileName || '未知文件'}` + (data?.fileType ? ` (${data.fileType})` : '');
+    this.sessions.addMessage(ctx.sessionId, { role: 'user', content: fileMsg });
+    const ackText = `[内置Agent] 收到文件: ${data?.fileName}`;
+    this.sessions.addMessage(ctx.sessionId, { role: 'assistant', content: ackText });
     ctx.addReply({
       type: 'dialogue',
-      data: { text: `[内置Agent] 收到文件: ${data?.fileName}`, duration: 3000 }
+      data: { text: ackText, duration: 3000 }
     });
+  }
+
+  // ==================== 指令系统 ====================
+
+  /**
+   * 处理指令执行请求（command_execute 消息）
+   */
+  public async processCommandExecute(ctx: PipelineContext): Promise<void> {
+    const data = ctx.message.data as { command?: string; args?: Record<string, unknown> } | undefined;
+    if (!data?.command) {
+      ctx.addReply({
+        type: 'command_response',
+        data: { command: '', success: false, error: '缺少指令名称' }
+      });
+      return;
+    }
+
+    logger.info(`[AgentHandler] 执行指令: /${data.command}`);
+
+    // 持久化指令输入
+    const argsStr = data.args && Object.keys(data.args).length > 0 ? ' ' + JSON.stringify(data.args) : '';
+    this.sessions.addMessage(ctx.sessionId, { role: 'user', content: `/${data.command}${argsStr}` });
+
+    const result = await commandRegistry.execute(data.command, data.args || {}, ctx.sessionId);
+
+    // 持久化指令执行结果
+    const resultText = result.success
+      ? (result.text || `指令 /${data.command} 执行成功`)
+      : `指令 /${data.command} 失败: ${result.error || '未知错误'}`;
+    this.sessions.addMessage(ctx.sessionId, { role: 'assistant', content: resultText });
+
+    ctx.addReply({
+      type: 'command_response',
+      data: result
+    });
+  }
+
+  /**
+   * 向指定客户端发送已注册指令列表
+   */
+  public sendCommandsRegister(ws: import('ws').WebSocket): void {
+    const commands = commandRegistry.getEnabledDefinitions();
+    const msg = {
+      type: 'commands_register',
+      data: { commands }
+    };
+    if (ws.readyState === 1 /* WebSocket.OPEN */) {
+      ws.send(JSON.stringify(msg));
+    }
+    logger.info(`[AgentHandler] 已发送 ${commands.length} 个指令定义到前端`);
   }
 
   /**
@@ -1239,6 +1669,79 @@ export class AgentHandler {
   }
 
   /**
+   * 处理前端插件主动发送的消息
+   * 插件可以主动向后端发送消息（非工具调用响应），消息将持久化到会话历史，
+   * 并作为用户消息交给 LLM 处理以获取回复。
+   */
+  public async processPluginMessage(ctx: PipelineContext): Promise<void> {
+    const data = ctx.message.data as { pluginId?: string; pluginName?: string; text?: string; metadata?: Record<string, unknown> } | undefined;
+    if (!data?.text) {
+      logger.warn('[AgentHandler] plugin_message 缺少 text 字段');
+      return;
+    }
+
+    const pluginLabel = data.pluginName || data.pluginId || '未知插件';
+    logger.info(`[AgentHandler] 收到插件主动消息: ${pluginLabel}`);
+
+    // 尝试委托给 handler 插件
+    const handlerPlugin = agentPluginManager.getHandlerPlugin();
+    if (handlerPlugin?.onPluginMessage) {
+      const mctx = this.createMessageContext(ctx);
+      const handled = await handlerPlugin.onPluginMessage(mctx);
+      if (handled) return;
+    }
+
+    // === 默认逻辑：作为用户消息持久化并交给 LLM 处理 ===
+    const userContent = `[插件 ${pluginLabel}] ${data.text}`;
+    this.sessions.addMessage(ctx.sessionId, { role: 'user', content: userContent });
+
+    const primaryProvider = this.getPrimaryProvider();
+    if (!primaryProvider) {
+      // 无 Provider，仅持久化，不生成回复
+      ctx.addReply({
+        type: 'dialogue',
+        data: { text: userContent, duration: 5000 }
+      });
+      return;
+    }
+
+    const history = this.sessions.getHistory(ctx.sessionId);
+    const request: LLMRequest = {
+      messages: [...history],
+      systemPrompt: this.characterInfo?.personality || '你是一个可爱的桌面宠物。',
+      sessionId: ctx.sessionId
+    };
+
+    if (this.enableToolCalling && toolManager.hasEnabledTools()) {
+      request.tools = toolManager.toOpenAITools();
+      request.toolChoice = 'auto';
+    }
+
+    try {
+      const isStreaming = this.isStreamingEnabled();
+      if (isStreaming) {
+        const fullText = await this.executeWithToolLoopStreaming(request, ctx, primaryProvider);
+        this.sessions.addMessage(ctx.sessionId, { role: 'assistant', content: fullText });
+      } else {
+        const response = await this.executeWithToolLoop(request, ctx, primaryProvider);
+        this.sessions.addMessage(ctx.sessionId, { role: 'assistant', content: response.text });
+        ctx.addReply({
+          type: 'dialogue',
+          data: { text: response.text, duration: Math.min(30000, Math.max(3000, response.text.length * 80)) }
+        });
+      }
+    } catch (error) {
+      logger.error('[AgentHandler] 插件消息 LLM 处理失败:', error);
+      const errText = `处理插件消息失败: ${(error as Error).message}`;
+      this.sessions.addMessage(ctx.sessionId, { role: 'assistant', content: errText });
+      ctx.addReply({
+        type: 'dialogue',
+        data: { text: errText, duration: 5000 }
+      });
+    }
+  }
+
+  /**
    * 处理前端插件状态报告
    * 前端在插件连接/断开时发送 plugin_status 消息，通知后端当前已连接的插件列表。
    * 后端将这些信息传递给 handler 插件的 registerConnectedPlugins，
@@ -1251,13 +1754,23 @@ export class AgentHandler {
       return;
     }
 
+    // 确保活跃连接已设置（plugin_status 可能在 user_input 之前到达）
+    if (!this.activeWs) {
+      this.setActiveConnection(ctx.ws, (ws, msg) => {
+        if (ws.readyState === 1 /* WebSocket.OPEN */) {
+          ws.send(JSON.stringify(msg));
+        }
+      });
+    }
+
     const plugins = data.plugins as Array<{ pluginId: string; pluginName: string; capabilities: string[] }>;
     logger.info(`[AgentHandler] 收到前端插件状态: ${plugins.length} 个插件`);
 
     // 通过 HandlerAccessor 传递给 handler 插件
     const handlerPlugin = agentPluginManager.getHandlerPlugin();
-    if (handlerPlugin && typeof (handlerPlugin as any).registerConnectedPlugins === 'function') {
-      (handlerPlugin as any).registerConnectedPlugins(plugins);
+    if (handlerPlugin && 'registerConnectedPlugins' in handlerPlugin &&
+        typeof (handlerPlugin as Record<string, unknown>).registerConnectedPlugins === 'function') {
+      (handlerPlugin as unknown as { registerConnectedPlugins: (plugins: typeof data.plugins) => void }).registerConnectedPlugins(plugins);
     }
   }
 
@@ -1286,7 +1799,15 @@ export class AgentHandler {
         pending.reject(new Error('WebSocket 连接已断开'));
         this.pendingPluginRequests.delete(requestId);
       }
-      logger.info('[AgentHandler] 活跃连接已清除，挂起的插件请求已拒绝');
+
+      // 清理所有挂起的工具确认请求
+      for (const [confirmId, pending] of this.pendingToolConfirms) {
+        clearTimeout(pending.timer);
+        pending.resolve(false); // 连接断开视为拒绝
+        this.pendingToolConfirms.delete(confirmId);
+      }
+
+      logger.info('[AgentHandler] 活跃连接已清除，挂起的请求已拒绝');
     }
   }
 
@@ -1345,7 +1866,7 @@ export class AgentHandler {
       getSessions: () => handler.sessions,
       getModelInfo: () => handler.modelInfo,
       getCharacterInfo: () => handler.characterInfo,
-      synthesizeAndStream: (text: string, ctx: MessageContext) => handler.synthesizeAndStream(text, ctx as any),
+      synthesizeAndStream: (text: string, ctx: MessageContext) => handler.synthesizeAndStream(text, ctx),
       hasTTS: () => handler.getPrimaryTTSProvider() !== null,
       getPluginInvokeSender: () => (handler.activeWs && handler.activeSendFn) ? handler.createPluginInvokeSender() : null,
       isToolCallingEnabled: () => handler.enableToolCalling,
@@ -1354,18 +1875,15 @@ export class AgentHandler {
       executeWithToolLoop: (request: LLMRequest, ctx: MessageContext) => {
         const provider = handler.getPrimaryProvider();
         if (!provider) throw new Error('未配置主 LLM Provider');
-        // 创建一个轻量的 PipelineContext 代理用于工具循环
-        const pctx = {
-          sessionId: ctx.sessionId,
-          send: (msg: object) => ctx.send(msg)
-        } as any;
-        return handler.executeWithToolLoop(request, pctx, provider);
+        // MessageContext 满足 Sendable 接口，无需 as any
+        return handler.executeWithToolLoop(request, ctx, provider);
       },
       registerConnectedPlugins: (plugins: Array<{ pluginId: string; pluginName: string; capabilities: string[] }>) => {
         // 委托给 handler 插件的 registerConnectedPlugins 方法
         const handlerPlugin = agentPluginManager.getHandlerPlugin();
-        if (handlerPlugin && typeof (handlerPlugin as any).registerConnectedPlugins === 'function') {
-          (handlerPlugin as any).registerConnectedPlugins(plugins);
+        if (handlerPlugin && 'registerConnectedPlugins' in handlerPlugin &&
+            typeof (handlerPlugin as Record<string, unknown>).registerConnectedPlugins === 'function') {
+          (handlerPlugin as unknown as { registerConnectedPlugins: (p: typeof plugins) => void }).registerConnectedPlugins(plugins);
           logger.info(`[AgentHandler] 已注册 ${plugins.length} 个前端插件到 handler 插件`);
         } else {
           logger.warn('[AgentHandler] 无 handler 插件或 handler 插件不支持 registerConnectedPlugins');

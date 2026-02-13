@@ -582,6 +582,14 @@ export const OPENAI_METADATA: ProviderMetadata = {
       required: false,
       placeholder: 'http://127.0.0.1:7890',
       description: 'HTTP/HTTPS 代理（如需翻墙访问）'
+    },
+    {
+      key: 'stream',
+      label: '流式输出',
+      type: 'boolean',
+      required: false,
+      default: false,
+      description: '启用后 LLM 回复将逐字流式显示，提升响应速度体验。关闭则等待完整回复后一次性显示'
     }
   ]
 };
