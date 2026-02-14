@@ -1,21 +1,16 @@
 /**
  * 协议适配插件 (Protocol Adapter Plugin)
  * 
- * 将 LLM 的原始文本回复解析为前端期望的结构化消息格式。
+ * 将 LLM 的纯文本回复和独立生成的 Live2D 动作指令
+ * 转换为前端期望的结构化消息格式。
  * 
- * LLM 回复中可能包含：
- * - 纯文本对话
- * - XML 风格的动作/表情/参数标签
+ * 对话 LLM 只输出纯文本，表情/动作由 expression-generator 插件
+ * 通过独立 LLM 调用生成。本插件负责将两者组合为前端协议消息。
  * 
- * 解析后输出：
+ * 输出消息类型：
  * - dialogue: 纯文字对话
  * - live2d: 动作/表情/参数控制
- * - sync_command: 组合指令
- * 
- * 标签格式：
- *   <expression id="happy" />
- *   <motion group="TapBody" index="0" />
- *   <param id="ParamEyeLOpen" value="0.5" />
+ * - sync_command: 组合指令（对话 + 动作同步下发）
  */
 
 const { AgentPlugin } = require('../../dist/agent/agent-plugin');
@@ -42,64 +37,20 @@ class ProtocolAdapterPlugin extends AgentPlugin {
   // ==================== 服务 API ====================
 
   /**
-   * 解析 LLM 原始回复文本
-   * 提取 XML 标签中的动作指令，返回纯文本和动作列表
+   * 解析 LLM 纯文本回复（不再提取 XML 标签）
    * @param {string} rawText 
    * @param {string} [reasoningContent]
    * @returns {{ text: string, actions: Array, reasoningContent?: string }}
    */
   parseResponse(rawText, reasoningContent) {
-    const actions = [];
-    let cleanText = rawText;
-
-    // 提取 <expression id="..." /> 标签
-    const expressionRegex = /<expression\s+id\s*=\s*"([^"]+)"\s*\/?\s*>/gi;
-    let match;
-    while ((match = expressionRegex.exec(rawText)) !== null) {
-      actions.push({
-        type: 'expression',
-        expressionId: match[1]
-      });
-    }
-    cleanText = cleanText.replace(expressionRegex, '');
-
-    // 提取 <motion group="..." index="..." /> 标签
-    const motionRegex = /<motion\s+(?:group\s*=\s*"([^"]+)"\s*)?(?:index\s*=\s*"(\d+)"\s*)?(?:group\s*=\s*"([^"]+)"\s*)?(?:priority\s*=\s*"(\d+)"\s*)?\/?\s*>/gi;
-    while ((match = motionRegex.exec(rawText)) !== null) {
-      const group = match[1] || match[3];
-      const index = match[2] ? parseInt(match[2], 10) : 0;
-      const priority = match[4] ? parseInt(match[4], 10) : 2;
-      if (group) {
-        actions.push({ type: 'motion', group, index, priority });
-      }
-    }
-    cleanText = cleanText.replace(/<motion\s+[^>]*\/?>/gi, '');
-
-    // 提取 <param id="..." value="..." /> 标签
-    const paramRegex = /<param\s+(?:id\s*=\s*"([^"]+)"\s*)?(?:value\s*=\s*"([^"]+)"\s*)?(?:id\s*=\s*"([^"]+)"\s*)?(?:weight\s*=\s*"([^"]+)"\s*)?\/?\s*>/gi;
-    while ((match = paramRegex.exec(rawText)) !== null) {
-      const id = match[1] || match[3];
-      const value = match[2] ? parseFloat(match[2]) : undefined;
-      const weight = match[4] ? parseFloat(match[4]) : undefined;
-      if (id && value !== undefined) {
-        actions.push({
-          type: 'parameter',
-          parameterId: id,
-          value,
-          weight: weight ?? 1.0
-        });
-      }
-    }
-    cleanText = cleanText.replace(/<param\s+[^>]*\/?>/gi, '');
-
-    // 清理多余空行和首尾空白
-    cleanText = cleanText.replace(/\n{3,}/g, '\n\n').trim();
-
-    return { text: cleanText, actions, reasoningContent };
+    // 对话 LLM 现在只输出纯文本，无需提取任何标签
+    const cleanText = rawText.replace(/\n{3,}/g, '\n\n').trim();
+    return { text: cleanText, actions: [], reasoningContent };
   }
 
   /**
-   * 将解析结果转换为前端期望的协议消息列表
+   * 将纯文本和动作列表组合为前端协议消息
+   * 动作列表由 expression-generator 外部传入，不再从文本中提取
    * @param {{ text: string, actions: Array, reasoningContent?: string }} parsed
    * @returns {Array} OutgoingMessage[]
    */
@@ -151,6 +102,7 @@ class ProtocolAdapterPlugin extends AgentPlugin {
   static DEFAULT_MOTION_INDEX = 0;
   static DEFAULT_MOTION_PRIORITY = 2;
   static DEFAULT_PARAM_WEIGHT = 1.0;
+  static DEFAULT_PARAM_DURATION = 0;  // 0 = 前端自动计算
   static DEFAULT_EXPRESSION_ID = 'default';
 
   /**
@@ -174,7 +126,8 @@ class ProtocolAdapterPlugin extends AgentPlugin {
           type: 'parameter',
           parameterId: action.parameterId,
           value: action.value,
-          weight: action.weight ?? ProtocolAdapterPlugin.DEFAULT_PARAM_WEIGHT
+          weight: action.weight ?? ProtocolAdapterPlugin.DEFAULT_PARAM_WEIGHT,
+          duration: action.duration ?? ProtocolAdapterPlugin.DEFAULT_PARAM_DURATION
         };
       default:
         return { type: 'expression', expressionId: ProtocolAdapterPlugin.DEFAULT_EXPRESSION_ID };

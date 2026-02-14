@@ -1235,6 +1235,18 @@ ipcMain.handle('plugin:save-permissions', async (_event: IpcMainInvokeEvent, arg
 // ==================== 内置 Agent 服务器 IPC 处理器 ====================
 
 /**
+ * 设置内置 Agent 服务器端口（需重启 Agent 生效）
+ */
+ipcMain.handle('agent:set-port', async (_event: IpcMainInvokeEvent, port: number) => {
+  if (typeof port !== 'number' || port < 1024 || port > 65535) {
+    return { success: false, error: '端口号必须在 1024-65535 之间' };
+  }
+  agentServer.updateConfig({ port });
+  logger.info(`[Agent] 端口已设置为 ${port}（重启后生效）`);
+  return { success: true };
+});
+
+/**
  * 启动内置 Agent 服务器
  */
 ipcMain.handle('agent:start', async () => {
@@ -1713,6 +1725,7 @@ ipcMain.handle('agent:get-messages', (_event, conversationId: string) => {
     return messages.map(m => ({
       role: m.role,
       type: m.type,
+      // 对话 LLM 现在只输出纯文本，无需清洗
       content: m.content,
       extra: m.extra,
       createdAt: m.createdAt

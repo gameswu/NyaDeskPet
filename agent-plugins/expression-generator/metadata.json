@@ -1,0 +1,12 @@
+{
+  "name": "expression-generator",
+  "author": "gameswu",
+  "desc": "LLM 驱动的 Live2D 表情生成器 — 使用独立 LLM 将对话文本转化为 Live2D 参数控制指令，实现自然灵动的表情动画",
+  "version": "1.0.0",
+  "entry": "main.js",
+  "autoActivate": true,
+  "i18n": {
+    "zh-CN": { "desc": "LLM 驱动的 Live2D 表情生成器 — 使用独立 LLM 将对话文本转化为 Live2D 参数控制指令，实现自然灵动的表情动画" },
+    "en-US": { "desc": "LLM-driven Live2D expression generator — uses a dedicated LLM to convert dialogue text into Live2D parameter control commands for natural and lively expression animations" }
+  }
+}

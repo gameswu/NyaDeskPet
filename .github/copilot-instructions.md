@@ -44,14 +44,15 @@ flowchart LR
 | **Agent 插件** | `agent-plugins/` | JS (CommonJS) | 主进程直接调用，继承 `AgentPlugin` 基类 |
 | **前端插件** | `plugins/` | Python 等 | WebSocket 独立进程 |
 
-**内置 Agent 插件**（9 个，均位于 `agent-plugins/`）：
+**内置 Agent 插件**（10 个，均位于 `agent-plugins/`）：
 
 | 插件 | 类型 | 说明 |
 |------|------|------|
 | `core-agent` | Handler | 核心协调器，组合下列 4 个核心插件 |
 | `personality` | 普通 | 人格系统，构建结构化系统提示词 |
 | `memory` | 普通 | 记忆管理，会话分离上下文 + 自动压缩 |
-| `protocol-adapter` | 普通 | 协议适配，XML 标签 → 前端消息格式 |
+| `protocol-adapter` | 普通 | 协议适配，纯文本 + 动作 → 前端消息格式 |
+| `expression-generator` | 普通 | 表情生成器，独立 LLM 将对话文本转化为 Live2D 控制指令 |
 | `plugin-tool-bridge` | 普通 | 前端插件能力 → FC 工具桥接 |
 | `info` | 普通 | `/info` 斜杠指令 |
 | `web-tools` | 普通 | `fetch_url` + `search_web` 工具 |
@@ -110,9 +111,9 @@ renderer/                   渲染进程
     response-controller.ts  响应优先级控制
     logger.ts               渲染进程日志
 
-agent-plugins/              Agent 插件（9 个，纯 JS CommonJS）
+agent-plugins/              Agent 插件（10 个，纯 JS CommonJS）
 plugins/                    前端插件（独立进程）
-models/                     Live2D 模型 + ASR 模型
+models/                     Live2D 模型（含 param-map.json 参数映射表）+ ASR 模型
 scripts/                    辅助脚本（check-i18n / migrate-logger / update-version）
 assets/                     图标资源
 docs/                       文档（固定 5 个，禁止新增）
@@ -161,6 +162,9 @@ docs/                       文档（固定 5 个，禁止新增）
 - 命名：文件 `kebab-case`，类 `PascalCase`，变量/函数 `camelCase`，常量 `UPPER_SNAKE`
 - Agent 插件：纯 JS（CommonJS），入口 `main.js`，继承 `AgentPlugin`
 - 前端插件：WebSocket 通信，语言不限
+- 常量：使用命名常量（`UPPER_SNAKE` 风格），禁止使用魔法数字 / 魔法字符串
+- 类型：尽量避免使用 `any`，优先使用具体类型或泛型约束
+- 代码卫生：避免冗余代码和死代码，删除未使用的变量、导入和不可达分支
 - 日志：使用 `logger` 而非 `console`（渲染进程用 `window.logger`）
 
 ## 编译与检查

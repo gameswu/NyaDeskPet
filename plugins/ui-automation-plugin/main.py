@@ -100,6 +100,9 @@ class UIAutomationPlugin:
                     
                     # 处理其他操作
                     response = await self.handle_message(data, websocket)
+                    # 回传 requestId，供前端 callPlugin 匹配响应
+                    if "requestId" in data:
+                        response["requestId"] = data["requestId"]
                     await websocket.send(json.dumps(response))
                     
                 except json.JSONDecodeError:
@@ -111,13 +114,17 @@ class UIAutomationPlugin:
                         "locale": self.i18n.get_frontend_locale()
                     }))
                 except Exception as e:
-                    await websocket.send(json.dumps({
+                    error_response = {
                         "type": "plugin_response",
                         "success": False,
                         "error": str(e),
                         "errorKey": "error.execution_failed",
                         "locale": self.i18n.get_frontend_locale()
-                    }))
+                    }
+                    # data 已成功解析，回传 requestId
+                    if isinstance(data, dict) and "requestId" in data:
+                        error_response["requestId"] = data["requestId"]
+                    await websocket.send(json.dumps(error_response))
                     
         except websockets.exceptions.ConnectionClosed:
             print(f"📱 {self.i18n.t('plugin.disconnected')}: {websocket.remote_address}")

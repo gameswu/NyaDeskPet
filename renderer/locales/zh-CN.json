@@ -55,6 +55,8 @@
       "modeBuiltin": "内置 Agent",
       "modeCustom": "自定义链接",
       "autoConnect": "启动时自动连接后端",
+      "agentPort": "Agent 端口",
+      "agentPortPlaceholder": "默认 8765",
       "httpUrl": "HTTP 地址",
       "httpPlaceholder": "http://localhost:8000",
       "wsUrl": "WebSocket 地址",

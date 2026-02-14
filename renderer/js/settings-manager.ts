@@ -11,6 +11,7 @@ class SettingsManager implements ISettingsManager {
   private defaultSettings: AppSettings = {
     modelPath: '../models/live2d/mao_pro_zh/runtime/mao_pro.model3.json',
     backendMode: 'builtin',
+    agentPort: 8765,
     backendUrl: 'http://localhost:8000',
     wsUrl: 'ws://localhost:8000/ws',
     autoConnect: true,
@@ -221,19 +222,15 @@ class SettingsManager implements ISettingsManager {
   /**
    * 获取当前模型的触碰配置
    */
-  public getCurrentTapConfig(): any {
+  public getCurrentTapConfig(): TapConfig {
     return this.getTapConfig(this.settings.modelPath);
   }
 
   /**
    * 获取默认触碰配置
    */
-  private getDefaultTapConfig(): any {
+  private getDefaultTapConfig(): TapConfig {
     return {
-      'Head': { enabled: true, description: '头部触摸' },
-      'Body': { enabled: true, description: '身体触摸' },
-      'Mouth': { enabled: true, description: '嘴部触摸' },
-      'Face': { enabled: true, description: '脸部触摸' },
       'default': { enabled: true, description: '默认触摸' }
     };
   }

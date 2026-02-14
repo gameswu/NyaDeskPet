@@ -131,28 +131,39 @@ class AudioPlayer implements IAudioPlayer {
       clearInterval(this.lipSyncInterval);
     }
     
+    const LIP_SYNC_FPS = 60;
+    // 时域数据以 128 为中心（静音 = 128），偏离 128 的幅度即为波形振幅
+    const TIME_DOMAIN_CENTER = 128;
+    // RMS 归一化阈值：时域偏差的 RMS，语音通常在 20-60 范围
+    const LIP_SYNC_AMPLITUDE_SCALE = 35;
+    // 噪声门限：低于此 RMS 直接归零，避免底噪导致嘴巴微张
+    const LIP_SYNC_NOISE_GATE = 5;
+    
     // 每帧更新口型
     this.lipSyncInterval = window.setInterval(() => {
       if (!this.analyser || !this.dataArray) return;
       
-      // 获取音频频率数据
-      this.analyser.getByteFrequencyData(this.dataArray as unknown as Uint8Array<ArrayBuffer>);
+      // 使用时域数据：直接反映波形振幅包络，在音节间隙自然降为零
+      // 相比频域数据（持续有能量），时域更能体现吐字节奏
+      this.analyser.getByteTimeDomainData(this.dataArray as unknown as Uint8Array<ArrayBuffer>);
       
-      // 计算平均音量
-      let sum = 0;
+      // 计算时域 RMS（相对于 128 中心的偏差）
+      let sumOfSquares = 0;
       for (let i = 0; i < this.dataArray.length; i++) {
-        sum += this.dataArray[i];
+        const deviation = this.dataArray[i] - TIME_DOMAIN_CENTER;
+        sumOfSquares += deviation * deviation;
       }
-      const average = sum / this.dataArray.length;
+      const rms = Math.sqrt(sumOfSquares / this.dataArray.length);
       
-      // 转换为 0-1 的值（0-255 -> 0-1）
-      const lipValue = Math.min(average / 128, 1.0);
+      // 噪声门限 + 归一化到 0-1
+      const gated = rms < LIP_SYNC_NOISE_GATE ? 0 : rms;
+      const lipValue = Math.min(gated / LIP_SYNC_AMPLITUDE_SCALE, 1.0);
       
       // 更新 Live2D 模型的口型
       if (window.live2dManager) {
         window.live2dManager.setLipSync(lipValue);
       }
-    }, 1000 / 30); // 30 FPS
+    }, 1000 / LIP_SYNC_FPS);
   }
 
   /**

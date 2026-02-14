@@ -399,8 +399,15 @@ class PluginConnector {
       // 处理其他响应
       window.logger?.debug('插件系统：收到消息', { name, type: message.type });
       
-      // 自动转发插件响应到后端 Agent
-      if (message.type === 'plugin_response' && message.requestId) {
+      // 触发自定义事件，让其他模块（如 callPlugin）优先处理
+      const event = new CustomEvent('plugin-message', {
+        detail: { plugin: name, message },
+        cancelable: true
+      });
+      document.dispatchEvent(event);
+
+      // 仅当没有 callPlugin 消费该事件时，才自动转发 plugin_response 到后端
+      if (message.type === 'plugin_response' && message.requestId && !event.defaultPrevented) {
         this.forwardPluginResponseToBackend(name, message);
       }
 
@@ -408,12 +415,6 @@ class PluginConnector {
       if (message.type === 'plugin_message' && message.text) {
         this.forwardPluginMessageToBackend(name, message);
       }
-      
-      // 触发自定义事件，让其他模块处理
-      const event = new CustomEvent('plugin-message', {
-        detail: { plugin: name, message }
-      });
-      document.dispatchEvent(event);
       
     } catch (error) {
       window.logger?.error('插件系统：解析消息失败', { name, error });
@@ -464,13 +465,15 @@ class PluginConnector {
       // 设置超时
       const timeout = setTimeout(() => {
         document.removeEventListener('plugin-message', handler);
-        reject(new Error(`插件 ${name} 调用超时`));
+        reject(new Error(`插件 ${nameOrId} 调用超时`));
       }, params.timeout as number || 30000);
 
       // 监听响应
       const handler = (event: Event) => {
         const customEvent = event as CustomEvent;
-        if (customEvent.detail.plugin === name && customEvent.detail.message.requestId === requestId) {
+        if (customEvent.detail.plugin === nameOrId && customEvent.detail.message.requestId === requestId) {
+          // 阻止自动转发——由 handlePluginInvoke 使用后端 requestId 统一转发
+          event.preventDefault();
           clearTimeout(timeout);
           document.removeEventListener('plugin-message', handler);
           
@@ -487,7 +490,7 @@ class PluginConnector {
 
       // 发送消息
       plugin.ws!.send(JSON.stringify(message));
-      window.logger.info(`📤 调用插件 ${name}.${action}:`, params);
+      window.logger.info(`📤 调用插件 ${nameOrId}.${action}:`, params);
     });
   }
 

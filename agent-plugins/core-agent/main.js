@@ -32,6 +32,9 @@ class CoreAgentPlugin extends AgentPlugin {
   /** @type {import('../plugin-tool-bridge/main')} */
   pluginToolBridge = null;
 
+  /** @type {import('../expression-generator/main')|null} 可选插件 */
+  expressionGenerator = null;
+
   /** @type {import('../input-collector/main')|null} 可选插件 */
   inputCollector = null;
 
@@ -62,16 +65,8 @@ class CoreAgentPlugin extends AgentPlugin {
     this.protocolAdapter = this.ctx.getPluginInstance('protocol-adapter');
     this.pluginToolBridge = this.ctx.getPluginInstance('plugin-tool-bridge');
 
-    // 获取可选插件实例（不存在也不报错）
-    this.inputCollector = this.ctx.getPluginInstance('input-collector');
-    this.imageTranscriber = this.ctx.getPluginInstance('image-transcriber');
-
-    if (this.inputCollector) {
-      this.ctx.logger.info('已关联输入收集器插件');
-    }
-    if (this.imageTranscriber) {
-      this.ctx.logger.info('已关联图片转述插件');
-    }
+    // 可选插件采用懒加载（首次使用时获取），避免拓扑排序导致的激活顺序问题
+    // inputCollector, imageTranscriber, expressionGenerator 会在 _getOptionalPlugin() 中动态获取
 
     // 验证依赖
     const missing = [];
@@ -94,7 +89,24 @@ class CoreAgentPlugin extends AgentPlugin {
     this.pluginToolBridge = null;
     this.inputCollector = null;
     this.imageTranscriber = null;
+    this.expressionGenerator = null;
     this.ctx.logger.info('Core Agent 处理器已停止');
+  }
+
+  /**
+   * 懒加载可选插件：首次获取成功后缓存，避免拓扑排序激活顺序问题
+   * @param {string} field - 实例字段名 ('inputCollector'|'imageTranscriber'|'expressionGenerator')
+   * @param {string} pluginName - 插件名称
+   * @returns {object|null}
+   */
+  _getOptionalPlugin(field, pluginName) {
+    if (!this[field]) {
+      this[field] = this.ctx.getPluginInstance(pluginName);
+      if (this[field]) {
+        this.ctx.logger.info(`已关联可选插件: ${pluginName}`);
+      }
+    }
+    return this[field];
   }
 
   // ==================== 消息处理钩子 ====================
@@ -114,8 +126,9 @@ class CoreAgentPlugin extends AgentPlugin {
     let text = mctx.message.text || '';
 
     // === 输入收集器：合并短时间内的多条输入 ===
-    if (this.inputCollector?.isEnabled?.() && this.inputCollector.collectInput) {
-      const collected = await this.inputCollector.collectInput(mctx.sessionId, text);
+    const inputCollector = this._getOptionalPlugin('inputCollector', 'input-collector');
+    if (inputCollector?.isEnabled?.() && inputCollector.collectInput) {
+      const collected = await inputCollector.collectInput(mctx.sessionId, text);
       if (collected === null) {
         this.ctx.logger.info('[Core Agent] 输入已被收集器缓冲，等待更多输入...');
         return true;
@@ -197,6 +210,11 @@ class CoreAgentPlugin extends AgentPlugin {
       sessions.addMessage(mctx.sessionId, { role: 'assistant', content: response.text });
 
       const parsed = this.protocolAdapter.parseResponse(response.text);
+
+      // 使用 expression-generator 生成 Live2D 控制指令
+      const expressionActions = await this._generateExpressionActions(parsed.text);
+      parsed.actions = expressionActions;
+
       const outgoingMessages = this.protocolAdapter.toOutgoingMessages(parsed);
       for (const msg of outgoingMessages) {
         mctx.addReply(msg);
@@ -227,19 +245,20 @@ class CoreAgentPlugin extends AgentPlugin {
     const isImage = data.fileType?.startsWith('image/');
 
     // 缓存图片供 describe_image 工具使用
-    if (isImage && data.fileData && this.imageTranscriber?.cacheImage) {
-      this.imageTranscriber.cacheImage(data.fileData, data.fileType, data.fileName || 'image');
+    const imageTranscriber = this._getOptionalPlugin('imageTranscriber', 'image-transcriber');
+    if (isImage && data.fileData && imageTranscriber?.cacheImage) {
+      imageTranscriber.cacheImage(data.fileData, data.fileType, data.fileName || 'image');
     }
 
     // 自动转述模式
-    if (isImage && data.fileData && this.imageTranscriber?.isAvailable?.() && this.imageTranscriber.autoTranscribe && this.imageTranscriber.transcribeImage) {
+    if (isImage && data.fileData && imageTranscriber?.isAvailable?.() && imageTranscriber.autoTranscribe && imageTranscriber.transcribeImage) {
       mctx.addReply({
         type: 'dialogue',
         data: { text: `正在识别图片 ${data.fileName}...`, duration: 3000 }
       });
 
       try {
-        const result = await this.imageTranscriber.transcribeImage(data.fileData, data.fileType);
+        const result = await imageTranscriber.transcribeImage(data.fileData, data.fileType);
         if (result.success && result.description) {
           const sessions = this.ctx.getSessions();
           const imageContext = `[用户上传了图片: ${data.fileName}]\n\n图片描述: ${result.description}`;
@@ -369,7 +388,13 @@ class CoreAgentPlugin extends AgentPlugin {
       const response = await this.ctx.executeWithToolLoop(request, mctx);
       sessions.addMessage(mctx.sessionId, { role: 'assistant', content: response.text });
 
+      // 对话 LLM 只输出纯文本，由 protocol-adapter 转为前端消息
       const parsed = this.protocolAdapter.parseResponse(response.text, response.reasoningContent);
+
+      // 使用 expression-generator 生成 Live2D 控制指令（异步，不阻断主流程）
+      const expressionActions = await this._generateExpressionActions(parsed.text);
+      parsed.actions = expressionActions;
+
       const outgoingMessages = this.protocolAdapter.toOutgoingMessages(parsed);
       for (const msg of outgoingMessages) {
         mctx.addReply(msg);
@@ -405,6 +430,31 @@ class CoreAgentPlugin extends AgentPlugin {
     const characterInfo = this.ctx.getCharacterInfo();
     if (characterInfo) {
       this.personality.setCharacterInfo(characterInfo);
+    }
+  }
+
+  /**
+   * 使用 expression-generator 生成 Live2D 控制指令
+   * 如果插件不可用或生成失败，返回空数组（不影响主流程）
+   * @param {string} dialogueText 
+   * @returns {Promise<Array>}
+   */
+  async _generateExpressionActions(dialogueText) {
+    const expressionGenerator = this._getOptionalPlugin('expressionGenerator', 'expression-generator');
+    if (!expressionGenerator || !expressionGenerator.isEnabled?.()) {
+      return [];
+    }
+
+    try {
+      const modelInfo = this.ctx.getModelInfo();
+      const result = await expressionGenerator.generateExpression(dialogueText, modelInfo);
+      if (result.error) {
+        this.ctx.logger.warn(`表情生成出错（非致命）: ${result.error}`);
+      }
+      return result.actions || [];
+    } catch (error) {
+      this.ctx.logger.warn(`表情生成异常（非致命）: ${error}`);
+      return [];
     }
   }
 }

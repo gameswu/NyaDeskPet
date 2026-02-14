@@ -211,6 +211,12 @@
                 <span data-i18n="settings.backend.autoConnect">启动时自动连接后端</span>
               </label>
             </div>
+            <div id="builtin-backend-fields">
+              <div class="setting-item">
+                <label for="setting-agent-port" data-i18n="settings.backend.agentPort">Agent 端口</label>
+                <input type="number" id="setting-agent-port" min="1024" max="65535" data-i18n-placeholder="settings.backend.agentPortPlaceholder" placeholder="默认 8765">
+              </div>
+            </div>
             <div id="custom-backend-fields">
               <div class="setting-item">
                 <label for="setting-backend-url" data-i18n="settings.backend.httpUrl">HTTP 地址</label>
@@ -535,7 +541,7 @@
               </div>
               <div class="agent-status-row">
                 <span class="agent-status-label" data-i18n="agent.address">地址</span>
-                <span id="agent-address" class="agent-status-value">ws://127.0.0.1:8765</span>
+                <span id="agent-address" class="agent-status-value">-</span>
               </div>
               <div class="agent-status-row">
                 <span class="agent-status-label" data-i18n="agent.clients">连接数</span>

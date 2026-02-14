@@ -102,7 +102,7 @@ renderer/                   渲染进程（*.ts 原地编译为 *.js）
     response-controller.ts  响应优先级控制
     logger.ts               渲染进程日志
 
-agent-plugins/              Agent 插件（9 个，纯 JS CommonJS）
+agent-plugins/              Agent 插件（10 个，纯 JS CommonJS）
 plugins/                    前端插件（独立进程，WebSocket）
 models/                     Live2D 模型 + ASR 模型
 scripts/                    辅助脚本
@@ -305,11 +305,16 @@ flowchart TD
 ### Live2D 管理器
 
 - 模型加载、动作/表情/参数控制
-- 视线跟随（鼠标坐标 → 模型坐标映射）
+- **参数映射表**（`param-map.json`）：从模型目录读取语义别名映射，构建 LLM 友好的模型信息
+- **参数动画系统**：三阶段生命周期（过渡 → 保持 → 淡出释放），自动计算过渡时长
+  - 过渡时长根据 `|Δvalue| / paramRange` 线性映射到 200~900ms
+  - 保持 2000ms 后通过 500ms 权重衰减平滑交还 SDK 控制
+  - 所有参数动画通过 `beforeModelUpdate` 事件钩子每帧持久注入
+- 视线跟随（鼠标坐标 → 模型坐标映射，参数动画期间自动抑制）
 - 滚轮缩放（0.3x ~ 3.0x）
 - 触碰系统（可按模型独立配置各部位的启用/禁用）
 - 口型同步（Web Audio API AnalyserNode，30 FPS 更新 `ParamMouthOpenY`）
-- 模型加载后自动发送 `model_info` 消息
+- 模型加载后自动发送 `model_info` 消息（含映射信息）
 
 ### 后端通信客户端
 

@@ -84,6 +84,7 @@ const electronAPI = {
   },
   
   // 内置 Agent 管理
+  agentSetPort: (port: number) => ipcRenderer.invoke('agent:set-port', port),
   agentStart: () => ipcRenderer.invoke('agent:start'),
   agentStop: () => ipcRenderer.invoke('agent:stop'),
   agentGetStatus: () => ipcRenderer.invoke('agent:status'),

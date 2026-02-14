@@ -6,17 +6,17 @@
   },
   "includeModelCapabilities": {
     "type": "boolean",
-    "description": "是否在系统提示词中包含 Live2D 模型能力信息（可用动作、表情、参数列表）。关闭后 LLM 将不会主动使用动作/表情。",
+    "description": "是否在系统提示词中包含 Live2D 模型能力信息（可用动作、表情、参数列表）。关闭后 LLM 将不会了解模型的能力。",
     "default": true
   },
   "includeResponseFormat": {
     "type": "boolean",
-    "description": "是否在系统提示词中包含回复格式规范（XML 标签使用说明）。关闭后 LLM 将只输出纯文本。",
+    "description": "是否在系统提示词中包含回复格式规范。关闭后 LLM 将没有格式引导。",
     "default": true
   },
   "responseFormatPrompt": {
     "type": "string",
-    "description": "自定义回复格式规范提示词。用于引导 LLM 使用 XML 标签控制 Live2D 动作/表情/参数。留空使用内置默认值。",
+    "description": "自定义回复格式规范提示词。用于引导 LLM 的输出格式。留空使用内置默认值。",
     "default": ""
   },
   "toolsGuidancePrompt": {

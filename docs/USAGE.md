@@ -242,10 +242,69 @@ models/your-model/
   ├── *.model3.json     # 模型配置（设置中填写此路径）
   ├── *.moc3            # 模型数据
   ├── *.physics3.json   # 物理配置
+  ├── param-map.json    # [可选] 参数映射表（提升 AI 控制精度）
   ├── motions/          # 动作文件
   ├── expressions/      # 表情文件
   └── textures/         # 纹理
 ```
+
+### 参数映射表（param-map.json）
+
+Live2D 模型通常包含数十甚至上百个参数（如 `ParamAngleX`、`Param3` 等），直接暴露给 AI 存在两个问题：
+
+1. **语义不明**：参数 ID 是技术命名，AI 难以理解其含义
+2. **数量过多**：大量无关参数浪费 AI 的上下文窗口
+
+参数映射表通过为重要参数提供语义别名和描述来解决这两个问题。
+
+#### 格式
+
+```json
+{
+  "version": 1,
+  "parameters": [
+    {
+      "id": "ParamAngleZ",
+      "alias": "head_tilt",
+      "description": "头部左右倾斜歪头，负值向右歪，正值向左歪"
+    }
+  ],
+  "expressions": [
+    {
+      "id": "exp_01",
+      "alias": "normal",
+      "description": "默认/正常表情"
+    }
+  ],
+  "motions": [
+    {
+      "id": "Idle",
+      "alias": "idle",
+      "description": "待机休闲动作"
+    }
+  ]
+}
+```
+
+#### 字段说明
+
+| 字段 | 说明 |
+|------|------|
+| `version` | 固定为 `1` |
+| `parameters[].id` | Live2D 原始参数 ID（必须与模型匹配） |
+| `parameters[].alias` | AI 使用的语义别名（如 `head_tilt`、`left_eye_open`） |
+| `parameters[].description` | 参数功能描述（AI 据此理解如何使用） |
+| `expressions[]` | 表情映射，同上结构 |
+| `motions[]` | 动作组映射，`id` 改为 `group` |
+
+#### 工作原理
+
+- 前端加载模型时自动读取同目录下的 `param-map.json`
+- 参数的 min/max/default 范围从模型自动读取，无需手动填写
+- AI 仅看到映射表中遴选的参数和别名，降低幻觉概率
+- 不提供映射表时，AI 照常使用全量原始参数 ID
+
+> 内置 nya 模型已配备映射表，可作为参考模板。
 
 ## 应用图标
 

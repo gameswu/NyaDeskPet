@@ -1,0 +1,159 @@
+{
+  "version": 1,
+  "parameters": [
+    {
+      "id": "ParamAngleX",
+      "alias": "head_turn_x",
+      "description": "头部左右转动，负值向右看，正值向左看"
+    },
+    {
+      "id": "ParamAngleY",
+      "alias": "head_turn_y",
+      "description": "头部上下点头，负值低头，正值仰头"
+    },
+    {
+      "id": "ParamAngleZ",
+      "alias": "head_tilt",
+      "description": "头部左右倾斜歪头，负值向右歪，正值向左歪"
+    },
+    {
+      "id": "ParamEyeLOpen",
+      "alias": "left_eye_open",
+      "description": "左眼睁开程度，0 为闭眼，1 为完全睁开"
+    },
+    {
+      "id": "ParamEyeROpen",
+      "alias": "right_eye_open",
+      "description": "右眼睁开程度，0 为闭眼，1 为完全睁开"
+    },
+    {
+      "id": "ParamEyeLSmile",
+      "alias": "left_eye_smile",
+      "description": "左眼微笑弯曲度，0 为正常，1 为弯成月牙"
+    },
+    {
+      "id": "ParamEyeRSmile",
+      "alias": "right_eye_smile",
+      "description": "右眼微笑弯曲度，0 为正常，1 为弯成月牙"
+    },
+    {
+      "id": "ParamEyeLForm",
+      "alias": "left_eye_shape",
+      "description": "左眼变形，可表现怒目等眼型变化"
+    },
+    {
+      "id": "ParamEyeRForm",
+      "alias": "right_eye_shape",
+      "description": "右眼变形，可表现怒目等眼型变化"
+    },
+    {
+      "id": "ParamEyeBallX",
+      "alias": "gaze_x",
+      "description": "视线水平方向，负值向左看，正值向右看"
+    },
+    {
+      "id": "ParamEyeBallY",
+      "alias": "gaze_y",
+      "description": "视线垂直方向，负值向下看，正值向上看"
+    },
+    {
+      "id": "ParamEyeBallForm",
+      "alias": "pupil_size",
+      "description": "瞳孔收缩程度，负值为缩小（惊吓/专注），正值为放大"
+    },
+    {
+      "id": "ParamEyeEffect",
+      "alias": "eye_sparkle",
+      "description": "眼睛特效（星星眼/高光），0 为无，1 为全亮"
+    },
+    {
+      "id": "ParamBrowLY",
+      "alias": "left_brow_height",
+      "description": "左眉上下位置，负值下压（生气/严肃），正值上扬（惊讶/疑问）"
+    },
+    {
+      "id": "ParamBrowRY",
+      "alias": "right_brow_height",
+      "description": "右眉上下位置，负值下压（生气/严肃），正值上扬（惊讶/疑问）"
+    },
+    {
+      "id": "ParamBrowLAngle",
+      "alias": "left_brow_angle",
+      "description": "左眉角度倾斜，负值为八字眉（悲伤/困扰），正值为上挑"
+    },
+    {
+      "id": "ParamBrowRAngle",
+      "alias": "right_brow_angle",
+      "description": "右眉角度倾斜，负值为八字眉（悲伤/困扰），正值为上挑"
+    },
+    {
+      "id": "ParamBrowLForm",
+      "alias": "left_brow_shape",
+      "description": "左眉形状变形，负值为下垂（悲伤），正值为上扬（惊讶）"
+    },
+    {
+      "id": "ParamBrowRForm",
+      "alias": "right_brow_shape",
+      "description": "右眉形状变形，负值为下垂（悲伤），正值为上扬（惊讶）"
+    },
+    {
+      "id": "ParamMouthUp",
+      "alias": "mouth_smile",
+      "description": "嘴角上扬程度，正值为微笑，负值为嘴角下压"
+    },
+    {
+      "id": "ParamMouthDown",
+      "alias": "mouth_open",
+      "description": "嘴巴张开程度（下唇），0 为闭嘴，正值为张大"
+    },
+    {
+      "id": "ParamMouthAngry",
+      "alias": "mouth_pout",
+      "description": "嘟嘴/不满的嘴型，0 为正常，1 为完全嘟嘴"
+    },
+    {
+      "id": "ParamCheek",
+      "alias": "blush",
+      "description": "脸颊泛红害羞程度，0 为正常，1 为满脸通红"
+    },
+    {
+      "id": "ParamBodyAngleX",
+      "alias": "body_turn_x",
+      "description": "身体左右转动"
+    },
+    {
+      "id": "ParamBodyAngleY",
+      "alias": "body_lean_y",
+      "description": "身体前后倾斜"
+    },
+    {
+      "id": "ParamBodyAngleZ",
+      "alias": "body_tilt_z",
+      "description": "身体左右摇摆倾斜"
+    },
+    {
+      "id": "ParamBreath",
+      "alias": "breath",
+      "description": "呼吸幅度，0 为平静，1 为深呼吸"
+    }
+  ],
+  "expressions": [
+    { "id": "exp_01", "alias": "normal", "description": "默认/中性表情" },
+    { "id": "exp_02", "alias": "happy", "description": "开心眯眼笑" },
+    { "id": "exp_03", "alias": "sleepy", "description": "闭眼/平静/困倦" },
+    { "id": "exp_04", "alias": "excited", "description": "兴奋/星星眼" },
+    { "id": "exp_05", "alias": "sad", "description": "悲伤/难过" },
+    { "id": "exp_06", "alias": "shy", "description": "害羞/脸红" },
+    { "id": "exp_07", "alias": "surprised", "description": "惊讶/吃惊" },
+    { "id": "exp_08", "alias": "angry", "description": "生气/愤怒" }
+  ],
+  "motions": [
+    { "group": "Idle", "index": 0, "alias": "idle", "description": "标准待机，悠闲呼吸摇摆" },
+    { "group": "Default", "index": 0, "alias": "nod", "description": "点头致意/打招呼" },
+    { "group": "Default", "index": 1, "alias": "sway", "description": "摇头晃脑/活泼摆动" },
+    { "group": "Default", "index": 2, "alias": "hat_transform", "description": "帽子变形 + 切换姿势" },
+    { "group": "Default", "index": 3, "alias": "heal_magic", "description": "治愈魔法，画出治愈爱心 + 光效" },
+    { "group": "Default", "index": 4, "alias": "explosion_magic", "description": "失败魔法，施法失败 → 烟雾 → 爆炸" },
+    { "group": "Default", "index": 5, "alias": "summon_rabbit", "description": "召唤兔子魔法，召唤魔法兔子伙伴" }
+  ]
+}

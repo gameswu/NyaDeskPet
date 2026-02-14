@@ -101,6 +101,9 @@ class BackendClient implements IBackendClient {
           
           // 连接成功后发送角色信息
           this.sendCharacterInfo();
+
+          // 连接成功后重发 model_info（模型加载在 WS 连接之前完成，首次发送会丢失）
+          this.sendModelInfo();
           
           resolve(true);
         };
@@ -362,7 +365,13 @@ class BackendClient implements IBackendClient {
           window.live2dManager.setParameters(data.parameters);
         } else if (data.parameterId !== undefined && data.value !== undefined) {
           // 单个参数设置
-          window.live2dManager.setParameter(data.parameterId, data.value, data.weight || 1.0);
+          const DEFAULT_PARAM_DURATION_MS = 3000;
+          window.live2dManager.setParameter(
+            data.parameterId, 
+            data.value, 
+            data.weight || 1.0,
+            (data as any).duration || DEFAULT_PARAM_DURATION_MS
+          );
         }
         break;
       default:
@@ -502,6 +511,23 @@ class BackendClient implements IBackendClient {
     }).catch(err => {
       window.logger.error('发送角色信息失败:', err);
     });
+  }
+
+  /**
+   * 发送当前 Live2D 模型信息到后端
+   * 模型在 WS 连接之前加载，初次发送可能丢失，需要在连接建立后重发
+   */
+  private sendModelInfo(): void {
+    if (!window.live2dManager) return;
+    const modelInfo = window.live2dManager.extractModelInfo();
+    if (modelInfo && modelInfo.available) {
+      this.sendMessage({
+        type: 'model_info',
+        data: modelInfo
+      }).catch(err => {
+        window.logger.error('发送模型信息失败:', err);
+      });
+    }
   }
 
   // ==================== 流式对话处理 ====================

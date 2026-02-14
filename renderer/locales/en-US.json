@@ -55,6 +55,8 @@
       "modeBuiltin": "Built-in Agent",
       "modeCustom": "Custom URL",
       "autoConnect": "Auto-connect on startup",
+      "agentPort": "Agent Port",
+      "agentPortPlaceholder": "Default 8765",
       "httpUrl": "HTTP URL",
       "httpPlaceholder": "http://localhost:8000",
       "wsUrl": "WebSocket URL",

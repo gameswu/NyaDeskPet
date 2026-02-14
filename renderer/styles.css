@@ -2542,61 +2542,61 @@ details.reasoning-block[open] > .reasoning-summary::after {
 
 /* 触碰配置样式 */
 .tap-config-container {
-  margin-top: 15px;
+  margin-top: 12px;
   display: flex;
   flex-direction: column;
-  gap: 10px;
+  gap: 8px;
 }
 
 .tap-config-item {
   display: flex;
   align-items: center;
-  gap: 12px;
-  padding: 12px;
+  gap: 10px;
+  padding: 10px 12px;
   background: #f9f9f9;
   border-radius: 8px;
   border: 1px solid #eee;
 }
 
+.tap-area-toggle {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  cursor: pointer;
+  flex-shrink: 0;
+}
+
 .tap-config-item input[type="checkbox"] {
-  width: 20px;
-  height: 20px;
+  width: 16px;
+  height: 16px;
   cursor: pointer;
   margin: 0;
 }
 
 .tap-config-item .tap-area-name {
-  flex: 1;
-  font-size: 14px;
+  font-size: 13px;
   font-weight: 500;
   color: #333;
+  white-space: nowrap;
 }
 
 .tap-config-item .tap-area-description {
-  flex: 2;
-  font-size: 13px;
-  color: #666;
-}
-
-.tap-config-item .btn-delete-tap {
+  flex: 1;
+  min-width: 0;
   padding: 6px 10px;
-  background: #f44336;
-  color: white;
-  border: none;
-  border-radius: 4px;
-  cursor: pointer;
-  display: flex;
-  align-items: center;
-  gap: 4px;
-  font-size: 12px;
-  transition: background 0.2s;
+  border: 1px solid #ddd;
+  border-radius: 6px;
+  font-size: 13px;
+  font-family: inherit;
+  color: #333;
+  background: #fff;
+  transition: border-color 0.2s;
 }
 
-.tap-config-item .btn-delete-tap:hover {
-  background: #d32f2f;
+.tap-config-item .tap-area-description:focus {
+  outline: none;
+  border-color: #4CAF50;
 }
-
-/* 触摸配置添加按钮已移除，不再需要单独样式 */
 
 .dark-theme .tap-config-item {
   background: rgba(255, 255, 255, 0.05);
@@ -2608,7 +2608,13 @@ details.reasoning-block[open] > .reasoning-summary::after {
 }
 
 .dark-theme .tap-config-item .tap-area-description {
-  color: #999;
+  background: rgba(255, 255, 255, 0.08);
+  border-color: rgba(255, 255, 255, 0.15);
+  color: #e0e0e0;
+}
+
+.dark-theme .tap-config-item .tap-area-description:focus {
+  border-color: #4CAF50;
 }
 
 .setting-item input[type="range"] {

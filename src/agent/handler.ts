@@ -37,12 +37,6 @@ import { agentPluginManager, type HandlerAccessor, type MessageContext, type Plu
 
 // ==================== 类型定义 ====================
 
-/** Live2D 动作类型联合 */
-export type Live2DAction =
-  | { type: 'expression'; expressionId: string }
-  | { type: 'motion'; group: string; index: number; priority: number }
-  | { type: 'parameter'; parameterId: string; value: number; weight: number };
-
 /** 工具循环最大迭代次数 */
 const MAX_TOOL_LOOP_ITERATIONS = 10;
 
@@ -88,6 +82,26 @@ export interface ModelInfo {
     min: number;
     max: number;
     default: number;
+  }>;
+  // 参数映射表（当模型目录存在 param-map.json 时填充）
+  mappedParameters?: Array<{
+    id: string;
+    alias: string;
+    description: string;
+    min: number;
+    max: number;
+    default: number;
+  }>;
+  mappedExpressions?: Array<{
+    id: string;
+    alias: string;
+    description: string;
+  }>;
+  mappedMotions?: Array<{
+    group: string;
+    index: number;
+    alias: string;
+    description: string;
   }>;
 }
 
@@ -1018,138 +1032,38 @@ export class AgentHandler {
 
   // ==================== 消息处理方法 ====================
 
-  // ---------- 默认路径 XML 标签解析 & 系统提示词构建 ----------
+  // ---------- 默认路径系统提示词构建 ----------
 
   /**
-   * 从 LLM 原始回复中提取 XML 标签（expression / motion / param）并返回清理后的文本和动作列表。
-   * 复用与 protocol-adapter 相同的正则逻辑，确保默认路径也能驱动 Live2D。
-   */
-  private parseXmlActions(rawText: string): { text: string; actions: Live2DAction[] } {
-    const actions: Live2DAction[] = [];
-    let cleanText = rawText;
-
-    // 提取 <expression id="..." />
-    const expressionRegex = /<expression\s+id\s*=\s*"([^"]+)"\s*\/?\s*>/gi;
-    let match;
-    while ((match = expressionRegex.exec(rawText)) !== null) {
-      actions.push({ type: 'expression', expressionId: match[1] });
-    }
-    cleanText = cleanText.replace(expressionRegex, '');
-
-    // 提取 <motion group="..." index="..." />
-    const motionRegex = /<motion\s+(?:group\s*=\s*"([^"]+)"\s*)?(?:index\s*=\s*"(\d+)"\s*)?(?:group\s*=\s*"([^"]+)"\s*)?(?:priority\s*=\s*"(\d+)"\s*)?\/?\s*>/gi;
-    while ((match = motionRegex.exec(rawText)) !== null) {
-      const group = match[1] || match[3];
-      const index = match[2] ? parseInt(match[2], 10) : 0;
-      const priority = match[4] ? parseInt(match[4], 10) : 2;
-      if (group) {
-        actions.push({ type: 'motion', group, index, priority });
-      }
-    }
-    cleanText = cleanText.replace(/<motion\s+[^>]*\/?>/gi, '');
-
-    // 提取 <param id="..." value="..." />
-    const paramRegex = /<param\s+(?:id\s*=\s*"([^"]+)"\s*)?(?:value\s*=\s*"([^"]+)"\s*)?(?:id\s*=\s*"([^"]+)"\s*)?(?:weight\s*=\s*"([^"]+)"\s*)?\/?\s*>/gi;
-    while ((match = paramRegex.exec(rawText)) !== null) {
-      const id = match[1] || match[3];
-      const value = match[2] ? parseFloat(match[2]) : undefined;
-      const weight = match[4] ? parseFloat(match[4]) : undefined;
-      if (id && value !== undefined) {
-        actions.push({ type: 'parameter', parameterId: id, value, weight: weight ?? 1.0 });
-      }
-    }
-    cleanText = cleanText.replace(/<param\s+[^>]*\/?>/gi, '');
-
-    // 清理多余空行和首尾空白
-    cleanText = cleanText.replace(/\n{3,}/g, '\n\n').trim();
-
-    return { text: cleanText, actions };
-  }
-
-  /**
-   * 将解析出的动作作为 live2d 消息发送到前端
-   */
-  private sendLive2DActions(actions: Live2DAction[], ctx: Sendable): void {
-    for (const action of actions) {
-      switch (action.type) {
-        case 'expression':
-          ctx.send({
-            type: 'live2d',
-            data: { command: 'expression', expressionId: action.expressionId }
-          });
-          break;
-        case 'motion':
-          ctx.send({
-            type: 'live2d',
-            data: { command: 'motion', group: action.group, index: action.index, priority: action.priority }
-          });
-          break;
-        case 'parameter':
-          ctx.send({
-            type: 'live2d',
-            data: { command: 'parameter', parameterId: action.parameterId, value: action.value, weight: action.weight }
-          });
-          break;
-      }
-    }
-  }
-
-  /**
-   * 为默认路径构建增强版系统提示词
-   * 在用户人格设定基础上追加模型能力信息和回复格式引导，
-   * 偏向引导模型使用 <param> 标签精细控制 Live2D。
+   * 为默认路径构建系统提示词
+   * 对话 LLM 只需输出纯文本，表情/动作由独立的 expression-generator 插件生成。
    */
   private buildDefaultSystemPrompt(): string {
     const personality = this.characterInfo?.personality || DEFAULT_PERSONALITY;
     const sections = [personality];
 
-    // 追加模型能力信息
+    // 追加模型能力信息（仅告知 LLM 拥有身体，具体控制由 expression-generator 负责）
     if (this.modelInfo) {
-      const capParts = ['## 你的身体能力（Live2D 模型）\n以下是你可以用来表达情感的能力：'];
+      const capParts = ['## 你的身体能力（Live2D 模型）\n你拥有一个 Live2D 模型身体，能做出各种表情和动作。这些会由独立的表情系统根据你的对话内容自动生成，你完全不需要手动指定。'];
 
-      if (this.modelInfo.motions && Object.keys(this.modelInfo.motions).length > 0) {
-        const motionList = Object.entries(this.modelInfo.motions)
-          .map(([group, info]) => `  - ${group}（${info.count} 个变体）`)
-          .join('\n');
-        capParts.push(`\n**可用动作组**:\n${motionList}`);
-      }
-
-      if (this.modelInfo.expressions && this.modelInfo.expressions.length > 0) {
-        capParts.push(`\n**可用表情**: ${this.modelInfo.expressions.join(', ')}`);
-      }
-
-      if (this.modelInfo.availableParameters && this.modelInfo.availableParameters.length > 0) {
-        const paramList = this.modelInfo.availableParameters
-          .map(p => `  - ${p.id}: ${p.min} ~ ${p.max}（默认 ${p.default}）`)
-          .join('\n');
-        capParts.push(`\n**可控参数**:\n${paramList}`);
+      if (this.modelInfo.hitAreas && this.modelInfo.hitAreas.length > 0) {
+        capParts.push(`\n**可触碰部位**: ${this.modelInfo.hitAreas.join(', ')}`);
       }
 
       sections.push(capParts.join(''));
     }
 
-    // 追加回复格式引导（偏向参数控制）
+    // 追加回复格式引导（纯文本输出）
     sections.push(`## 回复格式规范
 
-你的回复可以包含文字对话和 Live2D 控制指令。请按以下格式输出：
+请直接输出纯文字对话内容。你的表情、动作、身体姿态变化全部由独立的表情系统自动生成，你完全不需要也不应该手动控制。
 
-### 带动作/表情/参数控制的回复
-在文字中使用 XML 标签来嵌入指令：
-
-**播放表情**: <expression id="表情名称" />
-**播放动作**: <motion group="动作组名" index="0" />
-**设置参数（精细控制，推荐）**: <param id="参数ID" value="数值" />
-
-**组合使用示例**:
-<param id="ParamAngleZ" value="15" />
-<param id="ParamEyeLOpen" value="0.3" />
-嘻嘻，有点困了喵~
-
-注意事项：
-- 标签放在对话文字之前或之后，不要放在句子中间
-- 优先使用 <param> 标签精细控制表情和姿态，比预设表情更自然
-- 可以组合多个 <param> 标签实现复杂表情（如歪头+眯眼+微笑）
-- 参数值必须在对应参数的 min ~ max 范围内`);
+重要规则：
+- 只输出纯文字对话，绝对禁止使用任何 XML 标签（如 <expression>、<motion>、<parameter>、<action> 等）
+- 禁止在回复中描述或指定具体的表情名称、动作名称或参数值
+- 禁止输出任何结构化控制指令或格式标记
+- 通过文字本身的情感表达（如语气词、颜文字）来传达情绪
+- 专注于对话质量和角色性格的表现`);
 
     return sections.join('\n\n');
   }
@@ -1225,33 +1139,22 @@ export class AgentHandler {
 
       if (isStreaming) {
         const fullText = await this.executeWithToolLoopStreaming(request, ctx, primaryProvider);
-        // 解析 XML 标签，发送 Live2D 动作，保存和显示纯文本
-        const parsed = this.parseXmlActions(fullText);
+        // 对话 LLM 现在只输出纯文本，直接保存和使用
         this.sessions.addMessage(ctx.sessionId, { role: 'assistant', content: fullText });
-        // 流式输出已发送原始文本，再发送一次 dialogue_stream_end 携带清理后文本
-        // 并发送 Live2D 控制指令
-        if (parsed.actions.length > 0) {
-          this.sendLive2DActions(parsed.actions, ctx);
-        }
-        // TTS 合成使用清理后的纯文本
-        this.synthesizeAndStream(parsed.text, ctx).catch(e =>
+        // TTS 合成
+        this.synthesizeAndStream(fullText, ctx).catch(e =>
           logger.warn(`[AgentHandler] TTS 合成失败（非致命）: ${e}`)
         );
       } else {
         const response = await this.executeWithToolLoop(request, ctx, primaryProvider);
-        // 解析 XML 标签，分离纯文本和 Live2D 动作
-        const parsed = this.parseXmlActions(response.text);
         this.sessions.addMessage(ctx.sessionId, { role: 'assistant', content: response.text });
 
         ctx.addReply({
           type: 'dialogue',
-          data: { text: parsed.text, duration: calculateDialogueDuration(parsed.text) }
+          data: { text: response.text, duration: calculateDialogueDuration(response.text) }
         });
-        if (parsed.actions.length > 0) {
-          this.sendLive2DActions(parsed.actions, ctx);
-        }
-        // TTS 合成使用清理后的纯文本
-        this.synthesizeAndStream(parsed.text, ctx).catch(e =>
+        // TTS 合成
+        this.synthesizeAndStream(response.text, ctx).catch(e =>
           logger.warn(`[AgentHandler] TTS 合成失败（非致命）: ${e}`)
         );
       }
@@ -1502,6 +1405,7 @@ export class AgentHandler {
               streamStarted = true;
               ctx.send({ type: 'dialogue_stream_start', data: { streamId } });
             }
+            // 对话 LLM 只输出纯文本，直接发送 delta
             ctx.send({
               type: 'dialogue_stream_chunk',
               data: {
@@ -1679,15 +1583,11 @@ export class AgentHandler {
           systemPrompt: this.buildDefaultSystemPrompt(),
           maxTokens: TAP_RESPONSE_MAX_TOKENS
         });
-        // 解析 XML 标签
-        const parsed = this.parseXmlActions(response.text);
+        // 对话 LLM 只输出纯文本
         this.sessions.addMessage(ctx.sessionId, { role: 'assistant', content: response.text });
-        ctx.addReply({ type: 'dialogue', data: { text: parsed.text, duration: 3000 } });
-        if (parsed.actions.length > 0) {
-          this.sendLive2DActions(parsed.actions, ctx);
-        }
+        ctx.addReply({ type: 'dialogue', data: { text: response.text, duration: 3000 } });
         // TTS 合成（异步，不阻断主流程）
-        this.synthesizeAndStream(parsed.text, ctx).catch(e =>
+        this.synthesizeAndStream(response.text, ctx).catch(e =>
           logger.warn(`[AgentHandler] TTS 合成失败（非致命）: ${e}`)
         );
         return;
@@ -1935,28 +1835,20 @@ export class AgentHandler {
       const isStreaming = this.isStreamingEnabled();
       if (isStreaming) {
         const fullText = await this.executeWithToolLoopStreaming(request, ctx, primaryProvider);
-        const parsed = this.parseXmlActions(fullText);
         this.sessions.addMessage(ctx.sessionId, { role: 'assistant', content: fullText });
-        if (parsed.actions.length > 0) {
-          this.sendLive2DActions(parsed.actions, ctx);
-        }
-        // TTS 合成使用清理后的纯文本
-        this.synthesizeAndStream(parsed.text, ctx).catch(e =>
+        // TTS 合成
+        this.synthesizeAndStream(fullText, ctx).catch(e =>
           logger.warn(`[AgentHandler] TTS 合成失败（非致命）: ${e}`)
         );
       } else {
         const response = await this.executeWithToolLoop(request, ctx, primaryProvider);
-        const parsed = this.parseXmlActions(response.text);
         this.sessions.addMessage(ctx.sessionId, { role: 'assistant', content: response.text });
         ctx.addReply({
           type: 'dialogue',
-          data: { text: parsed.text, duration: calculateDialogueDuration(parsed.text) }
+          data: { text: response.text, duration: calculateDialogueDuration(response.text) }
         });
-        if (parsed.actions.length > 0) {
-          this.sendLive2DActions(parsed.actions, ctx);
-        }
-        // TTS 合成使用清理后的纯文本
-        this.synthesizeAndStream(parsed.text, ctx).catch(e =>
+        // TTS 合成
+        this.synthesizeAndStream(response.text, ctx).catch(e =>
           logger.warn(`[AgentHandler] TTS 合成失败（非致命）: ${e}`)
         );
       }

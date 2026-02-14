@@ -12,12 +12,16 @@ import uuid
 import os
 import signal
 import sys
+import socket
 from typing import Dict, Optional
 from datetime import datetime
 import websockets
 from websockets.server import WebSocketServerProtocol
 import psutil
 from i18n import I18n
+
+# UI 进程通信端口
+UI_UDP_PORT = 19099
 
 
 class TerminalSession:
@@ -83,6 +87,10 @@ class TerminalPlugin:
         self.i18n = I18n(locale, default_locale="en-US")
         self.config = {}  # 配置存储
         self.pending_permissions = {}  # 等待权限确认的请求
+        # 终端监视器 UI（独立子进程 + UDP 通信）
+        self._ui_process: Optional[subprocess.Popen] = None
+        self._ui_sock: Optional[socket.socket] = None
+        self._ui_addr = ("127.0.0.1", UI_UDP_PORT)
         
     async def handle_client(self, websocket: WebSocketServerProtocol):
         """处理客户端连接"""
@@ -147,6 +155,9 @@ class TerminalPlugin:
                     
                     # 处理其他操作
                     response = await self.handle_message(data, websocket)
+                    # 回传 requestId，供前端 callPlugin 匹配响应
+                    if "requestId" in data:
+                        response["requestId"] = data["requestId"]
                     await websocket.send(json.dumps(response))
                     
                 except json.JSONDecodeError:
@@ -158,13 +169,17 @@ class TerminalPlugin:
                         "locale": self.i18n.get_frontend_locale()
                     }))
                 except Exception as e:
-                    await websocket.send(json.dumps({
+                    error_response = {
                         "type": "plugin_response",
                         "success": False,
                         "error": str(e),
                         "errorKey": "error.execution_failed",
                         "locale": self.i18n.get_frontend_locale()
-                    }))
+                    }
+                    # data 已成功解析，回传 requestId
+                    if isinstance(data, dict) and "requestId" in data:
+                        error_response["requestId"] = data["requestId"]
+                    await websocket.send(json.dumps(error_response))
                     
         except websockets.exceptions.ConnectionClosed:
             print(f"[{self.i18n.t('plugin.name')}] {self.i18n.t('plugin.disconnected')}: {websocket.remote_address}")
@@ -213,6 +228,16 @@ class TerminalPlugin:
             "rm -rf", "del /f", "format", "mkfs", "dd if=", ">(", "curl", "wget"
         ])
         return any(danger in command.lower() for danger in dangerous_list)
+    
+    async def broadcast_to_ui(self, message: dict):
+        """向终端监视器 UI 推送事件（通过 UDP）"""
+        if not self._ui_sock:
+            return
+        try:
+            payload = json.dumps(message).encode("utf-8")
+            self._ui_sock.sendto(payload, self._ui_addr)
+        except Exception:
+            pass  # UDP 发送失败不影响主流程
             
     async def handle_message(self, data: dict, websocket: WebSocketServerProtocol) -> dict:
         """处理消息"""
@@ -286,6 +311,15 @@ class TerminalPlugin:
         cwd = params.get("cwd", os.getcwd())
         timeout = self.get_config("commandTimeout", params.get("timeout", 30))
         
+        # 广播命令开始
+        await self.broadcast_to_ui({
+            "type": "terminal_output",
+            "event": "command_start",
+            "data": {"command": command, "cwd": cwd}
+        })
+        
+        start_time = datetime.now()
+        
         try:
             result = subprocess.run(
                 command,
@@ -295,6 +329,22 @@ class TerminalPlugin:
                 text=True,
                 timeout=timeout
             )
+            
+            duration_ms = int((datetime.now() - start_time).total_seconds() * 1000)
+            
+            # 广播命令输出
+            await self.broadcast_to_ui({
+                "type": "terminal_output",
+                "event": "command_output",
+                "data": {"stdout": result.stdout, "stderr": result.stderr}
+            })
+            
+            # 广播命令结束
+            await self.broadcast_to_ui({
+                "type": "terminal_output",
+                "event": "command_end",
+                "data": {"exitCode": result.returncode, "command": command, "duration": duration_ms}
+            })
             
             return {
                 "type": "plugin_response",
@@ -313,6 +363,15 @@ class TerminalPlugin:
                 "requiredPermission": "terminal.execute" if self.is_dangerous_command(command) else None
             }
         except subprocess.TimeoutExpired:
+            duration_ms = int((datetime.now() - start_time).total_seconds() * 1000)
+            
+            # 广播超时错误
+            await self.broadcast_to_ui({
+                "type": "terminal_output",
+                "event": "command_error",
+                "data": {"error": f"命令超时 ({timeout}s)", "command": command, "duration": duration_ms}
+            })
+            
             return {
                 "type": "plugin_response",
                 "success": False,
@@ -551,13 +610,59 @@ class TerminalPlugin:
         """启动插件"""
         print(f"[{self.i18n.t('plugin.name')}] starting on ws://{self.host}:{self.port}")
         
+        # 启动终端监视器 UI（独立子进程）
+        self._start_ui()
+        
         async with websockets.serve(self.handle_client, self.host, self.port):
             print(f"[{self.i18n.t('plugin.name')}] {self.i18n.t('plugin.ready')}")
             await asyncio.Future()
+    
+    def _start_ui(self):
+        """以独立子进程启动 tkinter UI，使其拥有自己的进程组和 GUI 上下文"""
+        # 创建 UDP socket 用于向 UI 发送事件
+        self._ui_sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        
+        plugin_dir = os.path.dirname(os.path.abspath(__file__))
+        ui_script = os.path.join(plugin_dir, "terminal_ui.py")
+        # 必须解析符号链接获取真实路径，否则 venv 的 symlink 会导致
+        # Tcl 无法找到 init.tcl（它按 argv[0] 相对路径查找 lib/tcl8.6）
+        python_exe = os.path.realpath(sys.executable)
+        ui_log = os.path.join(plugin_dir, "terminal_ui.log")
+        
+        try:
+            log_fd = open(ui_log, "w")
+            self._ui_process = subprocess.Popen(
+                [python_exe, ui_script, "--port", str(UI_UDP_PORT)],
+                start_new_session=True,  # 脱离父进程组，获得独立 GUI 上下文
+                stdin=subprocess.DEVNULL,
+                stdout=log_fd,
+                stderr=subprocess.STDOUT,
+            )
+            log_fd.close()
+            print(f"[{self.i18n.t('plugin.name')}] 终端监视器 UI 已启动 (PID: {self._ui_process.pid})")
+        except Exception as e:
+            print(f"[{self.i18n.t('plugin.name')}] 启动终端监视器 UI 失败: {e}")
+            self._ui_process = None
             
     def cleanup(self):
         """清理资源"""
         print(f"[{self.i18n.t('plugin.name')}] {self.i18n.t('plugin.cleanup')}")
+        # 关闭 UI 子进程
+        if self._ui_process and self._ui_process.poll() is None:
+            try:
+                self._ui_process.terminate()
+                self._ui_process.wait(timeout=3)
+            except Exception:
+                try:
+                    self._ui_process.kill()
+                except Exception:
+                    pass
+        # 关闭 UDP socket
+        if self._ui_sock:
+            try:
+                self._ui_sock.close()
+            except Exception:
+                pass
         for session in self.sessions.values():
             session.terminate()
         self.sessions.clear()
@@ -566,7 +671,7 @@ class TerminalPlugin:
 def main():
     """主函数"""
     # 默认使用英文，等待前端发送语言请求
-    plugin = TerminalPlugin(host="localhost", port=8765, locale="en-US")
+    plugin = TerminalPlugin(host="localhost", port=8767, locale="en-US")
     
     def signal_handler(sig, frame):
         print(f"\n[{plugin.i18n.t('plugin.name')}] {plugin.i18n.t('plugin.interrupt')}")

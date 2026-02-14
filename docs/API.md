@@ -22,7 +22,7 @@
 
 ### model_info — 模型信息
 
-模型加载完成后自动发送，通知后端当前模型的全部控制能力：
+模型加载完成后自动发送，通知后端当前模型的全部控制能力。WebSocket 连接成功后也会重发：
 
 ```json
 {
@@ -46,10 +46,24 @@
       "currentScale": 1.5,
       "userScale": 1.0,
       "baseScale": 1.5
-    }
+    },
+    "mappedParameters": [
+      { "id": "ParamAngleX", "alias": "head_turn_x", "description": "头部左右转动", "min": -30, "max": 30, "default": 0 },
+      { "id": "ParamEyeLOpen", "alias": "left_eye_open", "description": "左眼睁开程度", "min": 0, "max": 1, "default": 1 }
+    ],
+    "mappedExpressions": [
+      { "id": "exp_01", "alias": "normal", "description": "默认表情" },
+      { "id": "exp_02", "alias": "happy", "description": "开心" }
+    ],
+    "mappedMotions": [
+      { "group": "Idle", "alias": "idle", "description": "待机休闲动作", "count": 1 }
+    ]
   }
 }
 ```
+
+- `mappedParameters` / `mappedExpressions` / `mappedMotions`：当模型目录存在 `param-map.json` 参数映射表时自动填充，提供语义别名和描述。不存在时这三个字段省略
+- `availableParameters`：始终包含模型全量参数（不受映射表影响）
 
 ### tap_event — 触碰事件
 

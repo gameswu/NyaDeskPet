@@ -212,6 +212,10 @@ async function initializeApp(): Promise<void> {
     if (settings.backendMode === 'builtin') {
       window.logger.info('启动内置 Agent 服务器...');
       try {
+        // 同步端口设置到主进程（在 start 之前）
+        const port = settings.agentPort || 8765;
+        await window.electronAPI.agentSetPort(port);
+        
         const agentResult = await window.electronAPI.agentStart();
         if (agentResult.success) {
           window.logger.info('内置 Agent 已启动');
@@ -334,8 +338,19 @@ function setupEventListeners(): void {
   window.backendClient.onMessage((message) => {
     window.logger.info('收到后端消息:', message);
     if (message.type === 'dialogue') {
+      // 后端已清洗 XML 控制标签，前端直接显示
       const data = message.data as { text: string; attachment?: { type: 'image' | 'file'; url: string; name?: string }; reasoningContent?: string };
       addChatMessage(data.text, false, { attachment: data.attachment, reasoningContent: data.reasoningContent });
+    } else if (message.type === 'sync_command') {
+      // sync_command 包含动作+对话的组合消息，提取其中的对话文本显示在聊天记录中
+      // 文本已由后端 protocol-adapter 清洗过
+      const data = message.data as { actions?: Array<{ type: string; text?: string; reasoningContent?: string }> };
+      if (data.actions) {
+        const dialogueAction = data.actions.find(a => a.type === 'dialogue');
+        if (dialogueAction?.text) {
+          addChatMessage(dialogueAction.text, false, { reasoningContent: dialogueAction.reasoningContent });
+        }
+      }
     }
   });
 }
@@ -2333,7 +2348,9 @@ function updateAgentStatusUI(status: any): void {
     badge?.classList.remove('running');
     badge?.classList.add('stopped');
     if (statusText) statusText.textContent = window.i18nManager.t('agent.stopped');
-    if (addressEl) addressEl.textContent = '-';
+    // 停止时仍显示配置的端口，方便用户确认
+    const configuredPort = window.settingsManager?.getSetting('agentPort') || 8765;
+    if (addressEl) addressEl.textContent = `ws://127.0.0.1:${configuredPort}`;
     if (clientsEl) clientsEl.textContent = '0';
     if (uptimeEl) uptimeEl.textContent = '-';
     if (btnStart) btnStart.removeAttribute('disabled');
@@ -2747,6 +2764,7 @@ async function loadConversationMessages(conversationId: string): Promise<void> {
 
       if (msg.content) {
         const textNode = document.createElement('div');
+        // 后端 IPC 已对 assistant 消息执行 XML 标签清洗，前端直接显示
         textNode.textContent = msg.content;
         messageDiv.appendChild(textNode);
       }
@@ -3185,7 +3203,11 @@ function initializeChatWindow(): void {
  * 更新自定义后端链接字段的显示状态
  */
 function updateCustomBackendFieldsVisibility(mode: 'builtin' | 'custom'): void {
+  const builtinFields = document.getElementById('builtin-backend-fields');
   const customFields = document.getElementById('custom-backend-fields');
+  if (builtinFields) {
+    builtinFields.style.display = mode === 'builtin' ? 'block' : 'none';
+  }
   if (customFields) {
     customFields.style.display = mode === 'custom' ? 'block' : 'none';
   }
@@ -3203,6 +3225,7 @@ function showSettingsPanel(): void {
   
   (document.getElementById('setting-model-path') as HTMLInputElement).value = settings.modelPath;
   (document.getElementById('setting-backend-mode') as HTMLSelectElement).value = settings.backendMode || 'builtin';
+  (document.getElementById('setting-agent-port') as HTMLInputElement).value = String(settings.agentPort || 8765);
   (document.getElementById('setting-backend-url') as HTMLInputElement).value = settings.backendUrl;
   (document.getElementById('setting-websocket-url') as HTMLInputElement).value = settings.wsUrl;
   (document.getElementById('setting-auto-connect') as HTMLInputElement).checked = settings.autoConnect;
@@ -3265,6 +3288,7 @@ function hideSettingsPanel(): void {
 async function saveSettings(): Promise<void> {
   const modelPath = (document.getElementById('setting-model-path') as HTMLInputElement).value;
   const backendMode = (document.getElementById('setting-backend-mode') as HTMLSelectElement).value as 'builtin' | 'custom';
+  const agentPort = parseInt((document.getElementById('setting-agent-port') as HTMLInputElement).value) || 8765;
   const backendUrl = (document.getElementById('setting-backend-url') as HTMLInputElement).value;
   const wsUrl = (document.getElementById('setting-websocket-url') as HTMLInputElement).value;
   const autoConnect = (document.getElementById('setting-auto-connect') as HTMLInputElement).checked;
@@ -3299,6 +3323,7 @@ async function saveSettings(): Promise<void> {
   window.settingsManager.updateSettings({
     modelPath,
     backendMode,
+    agentPort,
     backendUrl,
     wsUrl,
     autoConnect,
@@ -3361,12 +3386,16 @@ async function saveSettings(): Promise<void> {
     retentionDays: logRetentionDays
   });
   
-  // 保存触碰配置
-  saveTapConfigFromUI();
-  
   // 更新 Agent 按钮可见性并通知主进程
   updateAgentButtonVisibility();
   window.electronAPI.notifyBackendModeChanged(backendMode);
+  
+  // 同步 Agent 端口到主进程
+  if (backendMode === 'builtin') {
+    window.electronAPI.agentSetPort(agentPort).catch(err => {
+      window.logger.error('同步 Agent 端口失败:', err);
+    });
+  }
   
   // 提示用户重启应用
   if (confirm(window.i18nManager.t('messages.reloadConfirm'))) {
@@ -3727,6 +3756,9 @@ function addTapConfigItem(container: HTMLElement, areaName: string, enabled: boo
   item.className = 'tap-config-item';
   item.dataset.areaName = areaName;
 
+  const label = document.createElement('label');
+  label.className = 'tap-area-toggle';
+
   const checkbox = document.createElement('input');
   checkbox.type = 'checkbox';
   checkbox.checked = enabled;
@@ -3736,14 +3768,16 @@ function addTapConfigItem(container: HTMLElement, areaName: string, enabled: boo
   nameSpan.className = 'tap-area-name';
   nameSpan.textContent = areaName;
 
+  label.appendChild(checkbox);
+  label.appendChild(nameSpan);
+
   const descInput = document.createElement('input');
   descInput.type = 'text';
   descInput.className = 'tap-area-description';
   descInput.value = description;
   descInput.placeholder = window.i18nManager.t('settings.tap.areaDescription');
 
-  item.appendChild(checkbox);
-  item.appendChild(nameSpan);
+  item.appendChild(label);
   item.appendChild(descInput);
 
   container.appendChild(item);

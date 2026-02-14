@@ -16,7 +16,8 @@
 | `core-agent` | Handler | ✅ | 核心协调器，依赖下列 4 个插件 |
 | `personality` | 普通 | ✅ | 人格系统，构建结构化系统提示词 |
 | `memory` | 普通 | ✅ | 记忆管理，会话分离上下文 + 自动压缩 |
-| `protocol-adapter` | 普通 | ✅ | 协议适配，XML 标签 → 前端消息格式 |
+| `protocol-adapter` | 普通 | ✅ | 协议适配，纯文本 + 动作 → 前端消息格式 |
+| `expression-generator` | 普通 | ✅ | 表情生成器，独立 LLM 调用将对话文本转化为 Live2D 控制指令 |
 | `plugin-tool-bridge` | 普通 | ✅ | 前端插件能力 → FC 工具桥接 |
 | `info` | 普通 | ✅ | `/info` 斜杠指令 |
 | `web-tools` | 普通 | ✅ | `fetch_url` + `search_web` 工具 |

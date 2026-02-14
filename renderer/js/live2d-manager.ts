@@ -9,7 +9,8 @@ import type {
   ModelInfo,
   SyncCommandData,
   SyncAction,
-  TapConfig
+  TapConfig,
+  ParamMapConfig
 } from '../types/global';
 import type { Application } from 'pixi.js';
 
@@ -41,7 +42,28 @@ class Live2DManager implements ILive2DManager {
   private lipSyncValue: number = 0;
   private lipSyncTarget: number = 0;
   private lipSyncEnabled: boolean = false;
+  private lipSyncParams: string[] = [];
   private baseScale: number = 1.0; // 自适应计算的基础缩放
+  
+  // 参数覆盖系统（通过 beforeModelUpdate 事件每帧持久写入）
+  // SDK 每帧流程：Motion(覆写参数) → saveParameters(快照) → Expression → Physics → beforeModelUpdate → render → loadParameters(恢复快照)
+  // 因此直接调用 setParameterValueById 只在当前帧生效，下一帧被快照恢复。
+  // 通过在 beforeModelUpdate 事件中每帧写入，保证参数覆盖持久生效直到过渡完成。
+  //
+  // 参数生命周期：
+  // 1. 过渡期：easeInOutCubic 从 startValue 到 targetValue（duration ms）
+  // 2. 保持期：维持 targetValue 不变（HOLD_AFTER_TRANSITION_MS）
+  // 3. 淡出释放期：权重从 1.0 渐变到 0，平滑交还 SDK 控制（RELEASE_DURATION_MS）
+  private parameterOverrides: Map<string, {
+    targetValue: number;
+    startValue: number;
+    weight: number;
+    startTime: number;
+    duration: number;      // 过渡动画时长（ms）
+    holdUntil: number;     // 保持到此时间戳后开始淡出
+    releaseEnd: number;    // 淡出释放结束时间戳，到此时从 Map 移除
+  }> = new Map();
+  private modelUpdateCleanup: (() => void) | null = null;
   
   // 视线跟随相关
   private eyeTrackingEnabled: boolean = false;
@@ -50,7 +72,12 @@ class Live2DManager implements ILive2DManager {
   private eyeTrackingTimer: number | null = null;
   private isPlayingMotion: boolean = false;  // 标记是否正在播放动作
   private isAnimatingParams: boolean = false;  // 标记是否正在执行参数动画（优先于视线跟随）
-  private animatingParamsTimer: ReturnType<typeof setTimeout> | null = null;  // 参数动画抑制计时器
+
+  // 参数映射表（从模型目录的 param-map.json 加载）
+  private paramMapConfig: ParamMapConfig | null = null;
+
+  /** 参数映射表文件名 */
+  private static readonly PARAM_MAP_FILENAME = 'param-map.json';
 
   constructor(canvasId: string) {
     const canvas = document.getElementById(canvasId) as HTMLCanvasElement;
@@ -77,9 +104,16 @@ class Live2DManager implements ILive2DManager {
       // 停止所有动画和音频
       this.stopLipSync();
       if (this.eyeTrackingTimer) {
-        clearInterval(this.eyeTrackingTimer);
+        cancelAnimationFrame(this.eyeTrackingTimer);
         this.eyeTrackingTimer = null;
       }
+      
+      // 清理参数覆盖系统
+      if (this.modelUpdateCleanup) {
+        this.modelUpdateCleanup();
+        this.modelUpdateCleanup = null;
+      }
+      this.parameterOverrides.clear();
 
       // 从舞台移除
       if (this.app && this.model) {
@@ -115,6 +149,7 @@ class Live2DManager implements ILive2DManager {
       this.originalModelBounds = null;
       this.lipSyncEnabled = false;
       this.isPlayingMotion = false;
+      this.paramMapConfig = null;
 
       window.logger?.info('Live2D模型资源释放完成');
 
@@ -206,8 +241,20 @@ class Live2DManager implements ILive2DManager {
       
       this.model = live2dModel as any;
       
-      // 初始化口型同步
-      this.initLipSync();
+      // 修复 SDK hitAreas 空 Name 碰撞问题
+      // SDK 的 setupHitAreas() 以 model3.json 的 Name 为 key 存入对象
+      // 当多个 HitArea 的 Name 都为空字符串时只保留最后一个
+      // 这里使用 getHitAreaDefs() 获取完整列表，以 Id（或 Name）为 key 重建
+      this.patchHitAreas(live2dModel);
+      
+      // 检测模型的 LipSync 参数组
+      this.detectLipSyncParams(live2dModel);
+      
+      // 挂载 beforeModelUpdate 事件钩子：每帧渲染前写入参数覆盖 + 口型同步
+      this.setupParameterOverrideHook(live2dModel);
+      
+      // 标记口型同步已启用（实际写入由 beforeModelUpdate 钩子驱动）
+      this.lipSyncEnabled = true;
       
       if (this.app) {
         // 添加到舞台
@@ -242,6 +289,9 @@ class Live2DManager implements ILive2DManager {
         // 设置滚轮缩放功能
         this.setupWheelZoom();
       }
+      
+      // 加载参数映射表（在提取模型信息之前，确保 mappedParameters 能被包含）
+      await this.loadParamMap(modelPath);
       
       // 提取并发送模型信息
       const modelInfo = this.extractModelInfo();
@@ -465,28 +515,33 @@ class Live2DManager implements ILive2DManager {
     try {
       const model = this.model as any;
       
+      // 将别名映射回 SDK 实际的组名（部分模型的动作组名为空字符串）
+      const FALLBACK_MOTION_GROUP = 'Default';
+      const actualGroup = motionGroup === FALLBACK_MOTION_GROUP ? '' : motionGroup;
+      
       // 使用 pixi-live2d-display 的动作播放
       if (model.internalModel && model.internalModel.motionManager) {
         // 设置动作标记
         this.isPlayingMotion = true;
         
         // 播放动作，并在完成后重置标记
-        const motionPromise = model.motion(motionGroup, motionIndex);
+        const motionPromise = model.motion(actualGroup, motionIndex);
         if (motionPromise && motionPromise.then) {
           motionPromise.then(() => {
             this.isPlayingMotion = false;
           }).catch((error: any) => {
-            window.logger?.error('Live2D动作播放错误', { motionGroup, motionIndex, error });
+            window.logger?.error('Live2D动作播放错误', { motionGroup: actualGroup, motionIndex, error });
             this.isPlayingMotion = false;
           });
         } else {
           // 如果没有返回Promise，使用定时器估算
+          const MOTION_FALLBACK_DURATION = 2000;
           setTimeout(() => {
             this.isPlayingMotion = false;
-          }, 2000); // 默认2秒后恢复
+          }, MOTION_FALLBACK_DURATION);
         }
         
-        window.logger?.debug('Live2D播放动作', { motionGroup, motionIndex });
+        window.logger?.debug('Live2D播放动作', { motionGroup: actualGroup, motionIndex });
         this.currentMotion = `${motionGroup}[${motionIndex}]`;
       } else {
         window.logger?.warn('Live2D模型不支持动作播放');
@@ -588,6 +643,41 @@ class Live2DManager implements ILive2DManager {
   }
 
   /**
+   * 加载参数映射表（param-map.json）
+   * 从模型目录读取用户提供的参数/表情/动作别名映射，用于构建对 LLM 友好的模型信息
+   */
+  private async loadParamMap(modelPath: string): Promise<void> {
+    try {
+      const lastSlash = modelPath.lastIndexOf('/');
+      const modelDir = lastSlash >= 0 ? modelPath.substring(0, lastSlash) : '.';
+      const url = `${modelDir}/${Live2DManager.PARAM_MAP_FILENAME}`;
+
+      const response = await fetch(url);
+      if (!response.ok) {
+        this.paramMapConfig = null;
+        window.logger?.debug('[Live2D] 模型目录未提供参数映射表', { path: url });
+        return;
+      }
+
+      const config = await response.json() as ParamMapConfig;
+      if (!config || typeof config !== 'object' || config.version !== 1) {
+        this.paramMapConfig = null;
+        window.logger?.warn('[Live2D] 参数映射表版本不支持，期望 version: 1');
+        return;
+      }
+
+      this.paramMapConfig = config;
+      window.logger?.info('[Live2D] 参数映射表已加载', {
+        params: config.parameters?.length ?? 0,
+        expressions: config.expressions?.length ?? 0,
+        motions: config.motions?.length ?? 0
+      });
+    } catch {
+      this.paramMapConfig = null;
+    }
+  }
+
+  /**
    * 提取模型信息
    */
   public extractModelInfo(): ModelInfo | null {
@@ -601,13 +691,16 @@ class Live2DManager implements ILive2DManager {
     }
 
     // 提取动作组信息
+    // 部分模型的动作组名为空字符串，替换为可读的别名让 LLM 可以引用
+    const FALLBACK_MOTION_GROUP = 'Default';
     const motions: Record<string, { count: number; files: string[] }> = {};
     if (internalModel.motionManager?.definitions) {
       const definitions = internalModel.motionManager.definitions;
       for (const groupName in definitions) {
         if (definitions.hasOwnProperty(groupName)) {
           const group = definitions[groupName];
-          motions[groupName] = {
+          const displayName = groupName || FALLBACK_MOTION_GROUP;
+          motions[displayName] = {
             count: Array.isArray(group) ? group.length : 1,
             files: Array.isArray(group) ? group.map((m: any) => m.File || m.file) : [group.File || group.file]
           };
@@ -616,39 +709,47 @@ class Live2DManager implements ILive2DManager {
     }
 
     // 提取表情信息
+    // expressionManager.definitions 是数组（来自 model3.json Expressions[]），
+    // 每个元素包含 { Name, File }，需要提取 Name 字段
     const expressions: string[] = [];
     if (internalModel.motionManager?.expressionManager?.definitions) {
       const expDefs = internalModel.motionManager.expressionManager.definitions;
-      for (const expName in expDefs) {
-        if (expDefs.hasOwnProperty(expName)) {
-          expressions.push(expName);
-        }
-      }
-    }
-
-    // 提取命中区域信息
-    const hitAreas: string[] = [];
-    if (internalModel.hitAreas) {
-      if (Array.isArray(internalModel.hitAreas)) {
-        hitAreas.push(...internalModel.hitAreas.map((area: any) => area.name || area.Name || area.id || area.Id));
-      } else if (typeof internalModel.hitAreas === 'object') {
-        // hitAreas 可能是对象而非数组
-        for (const key in internalModel.hitAreas) {
-          if (internalModel.hitAreas.hasOwnProperty(key)) {
-            hitAreas.push(key);
+      if (Array.isArray(expDefs)) {
+        for (const def of expDefs) {
+          if (def && def.Name) {
+            expressions.push(def.Name);
           }
         }
       }
     }
 
-    return {
+    // 提取命中区域信息
+    // 使用 getHitAreaDefs() 获取完整列表（不受 SDK hitAreas 空 Name 碰撞影响）
+    // 优先使用 Name 作为显示名，Name 为空时 fallback 到 Id
+    const hitAreas: string[] = [];
+    if (typeof internalModel.getHitAreaDefs === 'function') {
+      const defs: Array<{ id: string; name: string; index: number }> = internalModel.getHitAreaDefs();
+      for (const def of defs) {
+        const effectiveName = def.name || def.id || '';
+        if (effectiveName && def.index >= 0) hitAreas.push(effectiveName);
+      }
+    } else if (internalModel.hitAreas && typeof internalModel.hitAreas === 'object') {
+      // 兜底：直接读取已修补的 hitAreas 对象
+      for (const key of Object.keys(internalModel.hitAreas)) {
+        if (key) hitAreas.push(key);
+      }
+    }
+
+    // 构建基础模型信息
+    const allParams = this.getAvailableParameters();
+    const modelInfo: ModelInfo = {
       available: true,
       modelPath: window.settingsManager?.getSettings().modelPath || 'unknown',
       dimensions: this.originalModelBounds || { width: 0, height: 0 },
       motions,
       expressions,
       hitAreas,
-      availableParameters: this.getAvailableParameters(),
+      availableParameters: allParams,
       parameters: {
         canScale: true,
         currentScale: this.userScale * this.baseScale,
@@ -656,6 +757,91 @@ class Live2DManager implements ILive2DManager {
         baseScale: this.baseScale
       }
     };
+
+    // 如果存在参数映射表，构建 LLM 友好的映射字段
+    if (this.paramMapConfig) {
+      this._enrichModelInfoWithParamMap(modelInfo, allParams, expressions, motions);
+    }
+
+    return modelInfo;
+  }
+
+  /**
+   * 用参数映射表丰富模型信息，将遴选的参数/表情/动作附加语义别名和描述
+   * 前端只提供别名和描述，实际数值范围由模型参数自动填入
+   */
+  private _enrichModelInfoWithParamMap(
+    modelInfo: ModelInfo,
+    allParams: Array<{id: string; value: number; min: number; max: number; default: number}>,
+    expressions: string[],
+    motions: Record<string, { count: number; files: string[] }>
+  ): void {
+    const config = this.paramMapConfig!;
+
+    // 参数映射：查找真实参数范围并合并
+    if (config.parameters && config.parameters.length > 0) {
+      const paramLookup = new Map(allParams.map(p => [p.id, p]));
+      const mapped: ModelInfo['mappedParameters'] = [];
+      for (const entry of config.parameters) {
+        const real = paramLookup.get(entry.id);
+        if (real) {
+          mapped.push({
+            id: entry.id,
+            alias: entry.alias,
+            description: entry.description,
+            min: real.min,
+            max: real.max,
+            default: real.default
+          });
+        } else {
+          window.logger?.warn('[Live2D] 参数映射表引用了不存在的参数', { id: entry.id });
+        }
+      }
+      if (mapped.length > 0) {
+        modelInfo.mappedParameters = mapped;
+      }
+    }
+
+    // 表情映射
+    if (config.expressions && config.expressions.length > 0) {
+      const validExps = new Set(expressions);
+      const mapped: ModelInfo['mappedExpressions'] = [];
+      for (const entry of config.expressions) {
+        if (validExps.has(entry.id)) {
+          mapped.push({ id: entry.id, alias: entry.alias, description: entry.description });
+        } else {
+          window.logger?.warn('[Live2D] 参数映射表引用了不存在的表情', { id: entry.id });
+        }
+      }
+      if (mapped.length > 0) {
+        modelInfo.mappedExpressions = mapped;
+      }
+    }
+
+    // 动作映射（逐个动作级别：group + index）
+    if (config.motions && config.motions.length > 0) {
+      const mapped: ModelInfo['mappedMotions'] = [];
+      for (const entry of config.motions) {
+        const motionGroup = motions[entry.group];
+        if (!motionGroup) {
+          window.logger?.warn('[Live2D] 参数映射表引用了不存在的动作组', { group: entry.group });
+          continue;
+        }
+        if (entry.index < 0 || entry.index >= motionGroup.count) {
+          window.logger?.warn('[Live2D] 参数映射表引用了不存在的动作索引', { group: entry.group, index: entry.index, count: motionGroup.count });
+          continue;
+        }
+        mapped.push({
+          group: entry.group,
+          index: entry.index,
+          alias: entry.alias,
+          description: entry.description
+        });
+      }
+      if (mapped.length > 0) {
+        modelInfo.mappedMotions = mapped;
+      }
+    }
   }
 
   /**
@@ -703,10 +889,6 @@ class Live2DManager implements ILive2DManager {
     
     // 默认配置（兜底）
     return {
-      'Head': { enabled: true, description: '头部触摸' },
-      'Body': { enabled: true, description: '身体触摸' },
-      'Mouth': { enabled: true, description: '嘴部触摸' },
-      'Face': { enabled: true, description: '脸部触摸' },
       'default': { enabled: true, description: '默认触摸' }
     };
   }
@@ -757,7 +939,7 @@ class Live2DManager implements ILive2DManager {
   private async executeAction(action: SyncAction): Promise<void> {
     switch (action.type) {
       case 'motion':
-        if (action.group) {
+        if (action.group !== undefined) {
           this.playMotion(action.group, action.index || 0, action.priority || 2);
         }
         break;
@@ -773,7 +955,16 @@ class Live2DManager implements ILive2DManager {
         break;
       case 'parameter':
         if (action.parameters && action.parameters.length > 0) {
+          // 数组格式（来自 SyncAction 标准格式）
           this.setParameters(action.parameters);
+        } else if (action.parameterId !== undefined && action.value !== undefined) {
+          // 扁平格式（来自 protocol-adapter 的 _actionToSyncAction）
+          this.setParameter(
+            action.parameterId, 
+            action.value, 
+            action.weight ?? 1.0, 
+            action.duration ?? 0  // 0 = 自动计算过渡时长
+          );
         }
         break;
       default:
@@ -854,78 +1045,343 @@ class Live2DManager implements ILive2DManager {
     return this.eyeTrackingEnabled;
   }
 
-  /**
-   * 暂时抑制视线跟随（参数动画期间）
-   * 每次调用重置 500ms 计时器，保证参数动画结束后自动恢复
-   */
-  private suppressEyeTracking(): void {
-    this.isAnimatingParams = true;
-    if (this.animatingParamsTimer) {
-      clearTimeout(this.animatingParamsTimer);
-    }
-    this.animatingParamsTimer = setTimeout(() => {
-      this.isAnimatingParams = false;
-      this.animatingParamsTimer = null;
-    }, 500);
-  }
+  /** 过渡完成后保持目标值的时长（ms），然后开始淡出释放 */
+  private static readonly HOLD_AFTER_TRANSITION_MS = 2000;
+
+  /** 从保持状态淡出到完全释放的时长（ms），权重从 1.0 渐变到 0 */
+  private static readonly RELEASE_DURATION_MS = 500;
+
+  /** 自动计算过渡时长的范围（ms） */
+  private static readonly MIN_AUTO_DURATION_MS = 200;
+  private static readonly MAX_AUTO_DURATION_MS = 900;
+  /** 无法获取参数范围时的回退过渡时长（ms） */
+  private static readonly FALLBACK_AUTO_DURATION_MS = 400;
 
   /**
-   * 与视线跟随相关的参数前缀
-   * 当这些参数被模型控制设置时，暂时抑制视线跟随
+   * 设置模型参数（带缓动过渡动画 + 自动时长计算）
+   * 
+   * 将参数加入覆盖映射，由 beforeModelUpdate 事件每帧计算缓动值并写入。
+   * 参数完整生命周期：过渡 → 保持 → 淡出释放。
+   * 
+   * SDK 每帧末尾 loadParameters() 会恢复快照、擦除外部写入，
+   * 因此不能直接调用 coreModel API，必须通过事件钩子持久注入。
+   * 
+   * @param parameterId 参数ID（如 ParamAngleX, ParamEyeLOpen）
+   * @param value 目标值（必须在参数 min~max 范围内）
+   * @param weight 混合权重 (0-1)
+   * @param duration 过渡动画时长（ms）。0 或不传 = 根据参数变化幅度自动计算
    */
-  private static readonly EYE_TRACKING_PARAM_PREFIXES = [
-    'ParamAngleX', 'ParamAngleY', 'ParamAngleZ',
-    'ParamEyeBallX', 'ParamEyeBallY',
-    'ParamBodyAngleX', 'ParamBodyAngleY', 'ParamBodyAngleZ'
-  ];
-
-  /**
-   * 设置模型参数
-   * @param parameterId 参数ID（如 ParamEyeLOpen, ParamMouthOpenY）
-   * @param value 参数值
-   * @param weight 混合权重 (0-1)，用于平滑过渡
-   */
-  public setParameter(parameterId: string, value: number, weight: number = 1.0): void {
+  public setParameter(parameterId: string, value: number, weight: number = 1.0, duration: number = 0): void {
     if (!this.model) {
       window.logger.warn('[Live2D] 模型未加载，无法设置参数');
       return;
     }
 
-    try {
-      const model = this.model as any;
-      const coreModel = model.internalModel?.coreModel;
-      
-      if (!coreModel) {
-        window.logger.warn('[Live2D] 无法访问模型内部结构');
-        return;
+    // 有参数动画在进行，抑制视线跟随（Map 清空时自动恢复）
+    this.isAnimatingParams = true;
+
+    // 获取当前值作为起始值（如果已在覆盖中，使用当前插值位置）
+    const existing = this.parameterOverrides.get(parameterId);
+    let startValue: number;
+    if (existing) {
+      // 计算当前覆盖的插值位置作为新动画的起始值
+      startValue = this._calculateCurrentOverrideValue(existing);
+    } else {
+      // 尝试从模型获取当前参数值
+      startValue = this._getModelParameterValue(parameterId) ?? value;
+    }
+
+    // 自动计算过渡时长：根据参数值变化幅度 / 参数总范围 线性映射
+    let transitionDuration: number;
+    if (duration > 0) {
+      transitionDuration = duration;
+    } else {
+      transitionDuration = this._computeTransitionDuration(parameterId, startValue, value);
+    }
+
+    const now = Date.now();
+
+    // 添加到覆盖映射，由 beforeModelUpdate 钩子每帧计算缓动
+    this.parameterOverrides.set(parameterId, {
+      targetValue: value,
+      startValue,
+      weight,
+      startTime: now,
+      duration: transitionDuration,
+      holdUntil: now + transitionDuration + Live2DManager.HOLD_AFTER_TRANSITION_MS,
+      releaseEnd: now + transitionDuration + Live2DManager.HOLD_AFTER_TRANSITION_MS + Live2DManager.RELEASE_DURATION_MS
+    });
+
+    window.logger?.debug('[Live2D] 参数缓动已设置', { parameterId, startValue, targetValue: value, weight, duration: transitionDuration });
+  }
+
+  /**
+   * 批量设置模型参数（带缓动过渡动画）
+   * @param params 参数数组
+   */
+  public setParameters(params: Array<{id: string, value: number, blend?: number, duration?: number}>): void {
+    if (!params || params.length === 0) return;
+    
+    params.forEach(param => {
+      this.setParameter(
+        param.id, 
+        param.value, 
+        param.blend !== undefined ? param.blend : 1.0,
+        param.duration !== undefined ? param.duration : 0
+      );
+    });
+  }
+
+  /**
+   * 清除所有参数覆盖
+   */
+  public clearParameterOverrides(): void {
+    this.parameterOverrides.clear();
+    this.isAnimatingParams = false;
+  }
+
+  /**
+   * 在 SDK 的 beforeModelUpdate 事件中注入参数覆盖和口型同步
+   * 
+   * 此事件在每帧所有 SDK 内部处理（动作、表情、物理等）之后、
+   * coreModel.update()（渲染）之前触发。
+   * 在此写入的参数值会直接用于当前帧渲染，不会被 SDK 覆盖。
+   */
+  private setupParameterOverrideHook(live2dModel: any): void {
+    // 清理旧 hook
+    if (this.modelUpdateCleanup) {
+      this.modelUpdateCleanup();
+      this.modelUpdateCleanup = null;
+    }
+
+    const internalModel = live2dModel.internalModel;
+    if (!internalModel) return;
+
+    const handler = () => {
+      this.applyParameterOverrides(internalModel);
+      this.applyLipSync(internalModel);
+    };
+
+    internalModel.on('beforeModelUpdate', handler);
+    this.modelUpdateCleanup = () => {
+      internalModel.off('beforeModelUpdate', handler);
+    };
+
+    window.logger?.info('[Live2D] 参数覆盖钩子已挂载（beforeModelUpdate）');
+  }
+
+  /**
+   * 每帧调用：应用所有活跃的参数覆盖（带缓动插值 + 淡出释放），清理过期条目
+   * 
+   * 参数生命周期三阶段：
+   * 1. 过渡期：easeInOutCubic 从 startValue → targetValue，weight 不变
+   * 2. 保持期：维持 targetValue，weight 不变
+   * 3. 淡出释放期：维持 targetValue，weight 从原始值渐变到 0（平滑交还 SDK 控制）
+   */
+  private applyParameterOverrides(internalModel: any): void {
+    if (this.parameterOverrides.size === 0) return;
+
+    const coreModel = internalModel?.coreModel;
+    if (!coreModel) return;
+
+    const now = Date.now();
+    const expired: string[] = [];
+
+    for (const [paramId, override] of this.parameterOverrides) {
+      // 淡出释放已结束，标记移除
+      if (now >= override.releaseEnd) {
+        expired.push(paramId);
+        continue;
       }
 
-      // 当设置与视线跟随相关的参数时，暂时抑制视线跟随
-      if (Live2DManager.EYE_TRACKING_PARAM_PREFIXES.some(prefix => parameterId.startsWith(prefix))) {
-        this.suppressEyeTracking();
+      try {
+        // 计算缓动插值和有效权重
+        const { value, weight } = this._calculateOverrideState(override);
+        // 权重极小时跳过写入（避免浮点噪声）
+        if (weight > 0.001) {
+          coreModel.setParameterValueById(paramId, value, weight);
+        }
+      } catch {
+        // 参数不存在，移除
+        expired.push(paramId);
       }
+    }
 
-      // 使用 addParameterValueById 带权重设置参数
-      if (typeof coreModel.addParameterValueById === 'function') {
-        coreModel.addParameterValueById(parameterId, value * weight);
-      } else {
-        window.logger.warn('[Live2D] 模型不支持 addParameterValueById 方法');
-      }
-    } catch (error) {
-      window.logger.error('[Live2D] 设置参数失败:', error);
+    // 清理过期条目
+    for (const paramId of expired) {
+      this.parameterOverrides.delete(paramId);
+    }
+
+    // 所有覆盖过期后恢复视线跟随
+    if (this.parameterOverrides.size === 0 && this.isAnimatingParams) {
+      this.isAnimatingParams = false;
     }
   }
 
   /**
-   * 批量设置模型参数
-   * @param params 参数数组
+   * 计算参数覆盖的当前状态（值 + 有效权重）
+   * 
+   * 三阶段模型：
+   * - 过渡期：easeInOutCubic 插值，权重不变
+   * - 保持期：目标值，权重不变
+   * - 淡出释放期：目标值，权重渐变到 0
    */
-  public setParameters(params: Array<{id: string, value: number, blend?: number}>): void {
-    if (!params || params.length === 0) return;
-    
-    params.forEach(param => {
-      this.setParameter(param.id, param.value, param.blend !== undefined ? param.blend : 1.0);
-    });
+  private _calculateOverrideState(override: {
+    targetValue: number;
+    startValue: number;
+    weight: number;
+    startTime: number;
+    duration: number;
+    holdUntil: number;
+    releaseEnd: number;
+  }): { value: number; weight: number } {
+    const now = Date.now();
+    const elapsed = now - override.startTime;
+
+    // 阶段 1: 过渡期 — easeInOutCubic 插值
+    if (override.duration > 0 && elapsed < override.duration) {
+      const t = elapsed / override.duration;
+      const eased = Live2DManager._easeInOutCubic(t);
+      const value = override.startValue + (override.targetValue - override.startValue) * eased;
+      return { value, weight: override.weight };
+    }
+
+    // 阶段 2: 保持期 — 维持目标值
+    if (now < override.holdUntil) {
+      return { value: override.targetValue, weight: override.weight };
+    }
+
+    // 阶段 3: 淡出释放期 — 权重渐变到 0
+    const releaseDuration = override.releaseEnd - override.holdUntil;
+    if (releaseDuration > 0 && now < override.releaseEnd) {
+      const releaseProgress = (now - override.holdUntil) / releaseDuration;
+      const eased = Live2DManager._easeInOutCubic(releaseProgress);
+      const fadedWeight = override.weight * (1 - eased);
+      return { value: override.targetValue, weight: fadedWeight };
+    }
+
+    // 已过期
+    return { value: override.targetValue, weight: 0 };
+  }
+
+  /**
+   * 计算当前覆盖参数的视觉位置值（用于动画衔接时的起始值捕获）
+   * 过渡期返回插值位置，保持期和释放期返回目标值
+   */
+  private _calculateCurrentOverrideValue(override: {
+    targetValue: number;
+    startValue: number;
+    startTime: number;
+    duration: number;
+    holdUntil: number;
+    releaseEnd: number;
+  }): number {
+    const now = Date.now();
+    const elapsed = now - override.startTime;
+
+    // 过渡期：返回当前插值位置
+    if (override.duration > 0 && elapsed < override.duration) {
+      const t = elapsed / override.duration; // 0 → 1
+      const eased = Live2DManager._easeInOutCubic(t);
+      return override.startValue + (override.targetValue - override.startValue) * eased;
+    }
+
+    // 保持期或释放期：返回目标值（新动画从此处开始过渡）
+    return override.targetValue;
+  }
+
+  /**
+   * 根据参数变化幅度自动计算过渡时长
+   * 
+   * 算法：normalizedDelta = |targetValue - startValue| / paramRange
+   * duration = MIN_AUTO_DURATION + normalizedDelta * (MAX_AUTO_DURATION - MIN_AUTO_DURATION)
+   * 
+   * 效果：微小调整（眨眼）≈200ms 快速完成，大幅变化（转头）≈900ms 有重量感
+   */
+  private _computeTransitionDuration(parameterId: string, startValue: number, targetValue: number): number {
+    const range = this._getParameterRange(parameterId);
+    if (range <= 0) {
+      return Live2DManager.FALLBACK_AUTO_DURATION_MS;
+    }
+
+    const normalizedDelta = Math.min(1, Math.abs(targetValue - startValue) / range);
+    const durationRange = Live2DManager.MAX_AUTO_DURATION_MS - Live2DManager.MIN_AUTO_DURATION_MS;
+    return Live2DManager.MIN_AUTO_DURATION_MS + normalizedDelta * durationRange;
+  }
+
+  /**
+   * 获取模型参数的值域范围（max - min）
+   * 用于计算归一化变化幅度
+   */
+  private _getParameterRange(parameterId: string): number {
+    if (!this.model) return 0;
+    try {
+      const model = this.model as any;
+      const coreModel = model.internalModel?.coreModel;
+      if (!coreModel) return 0;
+      const nativeModel = coreModel.getModel ? coreModel.getModel() : coreModel;
+      if (!nativeModel?.parameters) return 0;
+      const index = coreModel.getParameterIndex(parameterId);
+      if (index < 0) return 0;
+      return nativeModel.parameters.maximumValues[index] - nativeModel.parameters.minimumValues[index];
+    } catch {
+      return 0;
+    }
+  }
+
+  /**
+   * 从模型获取当前参数值（用作缓动起始值）
+   */
+  private _getModelParameterValue(parameterId: string): number | null {
+    if (!this.model) return null;
+    try {
+      const model = this.model as any;
+      const coreModel = model.internalModel?.coreModel;
+      if (!coreModel) return null;
+      const index = coreModel.getParameterIndex(parameterId);
+      if (index < 0) return null;
+      return coreModel.getParameterValueByIndex(index);
+    } catch {
+      return null;
+    }
+  }
+
+  /**
+   * easeInOutCubic 缓动函数
+   * t: 0 → 1 的进度值
+   * 返回: 缓动后的 0 → 1 值
+   */
+  private static _easeInOutCubic(t: number): number {
+    return t < 0.5
+      ? 4 * t * t * t
+      : 1 - Math.pow(-2 * t + 2, 3) / 2;
+  }
+
+  /**
+   * 在 beforeModelUpdate 钩子中应用口型同步
+   * 直接在渲染前写入嘴部参数，保证不被 SDK 内部流程覆盖
+   */
+  private applyLipSync(internalModel: any): void {
+    if (!this.lipSyncEnabled) return;
+
+    const coreModel = internalModel?.coreModel;
+    if (!coreModel) return;
+
+    // 非对称平滑：张嘴快（跟上音节）、闭嘴适中（音节间自然合拢）
+    const LIP_SYNC_ATTACK = 0.6;
+    const LIP_SYNC_RELEASE = 0.3;
+    const smoothing = this.lipSyncTarget > this.lipSyncValue ? LIP_SYNC_ATTACK : LIP_SYNC_RELEASE;
+    this.lipSyncValue += (this.lipSyncTarget - this.lipSyncValue) * smoothing;
+
+    const DEFAULT_LIP_SYNC_PARAM = 'ParamMouthOpenY';
+    const params = this.lipSyncParams.length > 0 ? this.lipSyncParams : [DEFAULT_LIP_SYNC_PARAM];
+    for (const paramId of params) {
+      try {
+        coreModel.setParameterValueById(paramId, this.lipSyncValue);
+      } catch {
+        // 参数不存在
+      }
+    }
   }
 
   /**
@@ -981,56 +1437,93 @@ class Live2DManager implements ILive2DManager {
   }
 
   /**
+   * 修补 SDK 内部 hitAreas 对象
+   * SDK 的 setupHitAreas() 以 model3.json 的 Name 为 key 存入对象
+   * 当多个 HitArea 的 Name 都为空字符串时会发生 key 碰撞（后者覆盖前者）
+   * 此方法使用 getHitAreaDefs() 获取完整列表，以 Name（优先）或 Id 为 key 重建
+   */
+  private patchHitAreas(live2dModel: any): void {
+    const internalModel = live2dModel.internalModel;
+    if (!internalModel || typeof internalModel.getHitAreaDefs !== 'function') return;
+
+    const defs: Array<{ id: string; name: string; index: number }> = internalModel.getHitAreaDefs();
+    if (!defs || defs.length === 0) return;
+
+    // 检查是否存在 Name 碰撞
+    const nameSet = new Set(defs.map(d => d.name));
+    const hasCollision = nameSet.size < defs.length;
+    if (!hasCollision) return;
+
+    // 重建 hitAreas：Name 不为空且唯一时用 Name，否则用 Id
+    const usedKeys = new Set<string>();
+    const patchedHitAreas: Record<string, { id: string; name: string; index: number }> = {};
+    for (const def of defs) {
+      let key = def.name;
+      if (!key || usedKeys.has(key)) {
+        // Name 为空或重复，fallback 到 Id
+        key = def.id;
+      }
+      if (key && !usedKeys.has(key)) {
+        usedKeys.add(key);
+        patchedHitAreas[key] = def;
+      }
+    }
+
+    internalModel.hitAreas = patchedHitAreas;
+    window.logger?.info('Live2D修补hitAreas', {
+      original: defs.length,
+      patched: Object.keys(patchedHitAreas)
+    });
+  }
+
+  /**
+   * 检测模型的 LipSync 参数组
+   * 从 model3.json 的 Groups 中读取 LipSync 组的 Ids
+   * 不同模型可能使用 ParamMouthOpenY、ParamA 等不同参数
+   */
+  private detectLipSyncParams(live2dModel: any): void {
+    this.lipSyncParams = [];
+    const internalModel = live2dModel.internalModel;
+    if (!internalModel) return;
+
+    // 尝试从 settings.json.Groups 读取 LipSync 组
+    const groups: Array<{ Target: string; Name: string; Ids: string[] }> | undefined =
+      internalModel.settings?.json?.Groups;
+    if (Array.isArray(groups)) {
+      const LIP_SYNC_GROUP_NAME = 'LipSync';
+      const lipSyncGroup = groups.find(g => g.Name === LIP_SYNC_GROUP_NAME);
+      if (lipSyncGroup && Array.isArray(lipSyncGroup.Ids)) {
+        this.lipSyncParams = lipSyncGroup.Ids;
+        window.logger?.info('Live2D检测到LipSync参数', { params: this.lipSyncParams });
+        return;
+      }
+    }
+
+    window.logger?.debug('Live2D未找到LipSync参数组，将使用默认参数');
+  }
+
+  /**
    * 销毁 Live2D
    */
   public destroy(): void {
+    if (this.modelUpdateCleanup) {
+      this.modelUpdateCleanup();
+      this.modelUpdateCleanup = null;
+    }
+    this.parameterOverrides.clear();
     if (this.app) {
       this.app.destroy(true, { children: true });
       this.app = null;
     }
     this.model = null;
     this.lipSyncEnabled = false;
+    this.lipSyncParams = [];
     this.initialized = false;
   }
 
   /**
-   * 初始化口型同步
-   */
-  private initLipSync(): void {
-    if (!this.model) return;
-    
-    // 启动口型同步更新循环
-    this.lipSyncEnabled = true;
-    this.updateLipSync();
-  }
-
-  /**
-   * 更新口型同步（平滑插值）
-   */
-  private updateLipSync(): void {
-    if (!this.lipSyncEnabled || !this.model) return;
-    
-    // 平滑插值到目标值
-    const smoothing = 0.3;
-    this.lipSyncValue += (this.lipSyncTarget - this.lipSyncValue) * smoothing;
-    
-    // 设置嘴部参数
-    const internalModel = (this.model as any).internalModel;
-    if (internalModel && internalModel.coreModel) {
-      try {
-        // Live2D 标准的嘴部张开参数
-        internalModel.coreModel.setParameterValueById('ParamMouthOpenY', this.lipSyncValue);
-      } catch (error) {
-        // 忽略参数不存在的错误
-      }
-    }
-    
-    // 持续更新
-    requestAnimationFrame(() => this.updateLipSync());
-  }
-
-  /**
    * 设置口型同步目标值（由音频播放器调用）
+   * 实际嘴部参数写入由 beforeModelUpdate 钩子中的 applyLipSync() 完成
    * @param value 0-1 的值，表示嘴部张开程度
    */
   public setLipSync(value: number): void {

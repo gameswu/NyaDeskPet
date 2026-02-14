@@ -168,29 +168,15 @@ class PersonalityPlugin extends AgentPlugin {
   _buildModelCapabilitiesSection() {
     if (!this.modelInfo) return '';
 
-    const parts = ['## 你的身体能力（Live2D 模型）\n以下是你可以执行的动作和表情：'];
+    const parts = ['## 你的身体能力（Live2D 模型）\n你拥有一个 Live2D 模型身体，能做出各种表情和动作。这些会由独立的表情系统根据你的对话内容自动生成，你完全不需要手动指定。'];
 
-    if (this.modelInfo.motions && Object.keys(this.modelInfo.motions).length > 0) {
-      const motionList = Object.entries(this.modelInfo.motions)
-        .map(([group, info]) => `  - ${group}（${info.count} 个变体）`)
-        .join('\n');
-      parts.push(`\n**可用动作组**:\n${motionList}`);
-    }
-
-    if (this.modelInfo.expressions && this.modelInfo.expressions.length > 0) {
-      parts.push(`\n**可用表情**: ${this.modelInfo.expressions.join(', ')}`);
-    }
-
+    // 触碰部位属于交互信息，对话 LLM 需要知道以便做出语言反应
     if (this.modelInfo.hitAreas && this.modelInfo.hitAreas.length > 0) {
       parts.push(`\n**可触碰部位**: ${this.modelInfo.hitAreas.join(', ')}`);
     }
 
-    if (this.modelInfo.availableParameters && this.modelInfo.availableParameters.length > 0) {
-      const paramList = this.modelInfo.availableParameters
-        .map(p => `  - ${p.id}: ${p.min} ~ ${p.max}（默认 ${p.default}）`)
-        .join('\n');
-      parts.push(`\n**可控参数**:\n${paramList}`);
-    }
+    // 动作组、表情、参数等控制能力不在此暴露
+    // 全部由 expression-generator 插件的独立 LLM 负责
 
     return parts.join('');
   }
@@ -202,33 +188,13 @@ class PersonalityPlugin extends AgentPlugin {
 
     return `## 回复格式规范
 
-你的回复可以包含文字对话和动作/表情指令。请按以下格式输出：
+请直接输出纯文字对话内容。你的表情、动作、身体姿态变化全部由独立的表情系统自动生成，你完全不需要也不应该手动控制。
 
-### 纯文字回复
-直接输出对话文字即可。
-
-### 带动作/表情的回复
-在文字中使用 XML 标签来嵌入指令，格式如下：
-
-**播放表情**:
-<expression id="表情名称" />
-
-**播放动作**:
-<motion group="动作组名" index="0" />
-
-**设置参数（精细控制）**:
-<param id="ParamEyeLOpen" value="0.5" />
-
-**组合使用示例**:
-<expression id="happy" />
-好开心能见到你喵~
-<motion group="TapBody" index="0" />
-
-注意事项：
-- 标签应放在对话文字之前或之后，不要放在句子中间
-- 表情和动作标签是可选的，大多数回复只需要纯文字
-- 只在情感变化或需要强调时使用表情和动作
-- 参数控制只在需要精细表达时使用（如眯眼、歪头等）`;
+重要规则：
+- 只输出纯文字对话
+- 禁止输出任何结构化控制指令或格式标记
+- 通过文字本身的情感表达（如语气词、颜文字）来传达情绪
+- 专注于对话质量和角色性格的表现`;
   }
 
   _buildToolsGuidanceSection() {

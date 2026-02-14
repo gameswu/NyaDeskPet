@@ -64,6 +64,7 @@ export interface ElectronAPI {
   onToggleUI: (callback: () => void) => void;
   
   // 内置 Agent 管理
+  agentSetPort: (port: number) => Promise<{ success: boolean; error?: string }>;
   agentStart: () => Promise<{ success: boolean; running?: boolean; port?: number; host?: string; error?: string }>;
   agentStop: () => Promise<{ success: boolean; error?: string }>;
   agentGetStatus: () => Promise<AgentServerStatus>;
@@ -220,6 +221,27 @@ export interface Live2DModel {
   };
 }
 
+/** 参数映射表配置（模型目录下的 param-map.json） */
+export interface ParamMapConfig {
+  version: number;
+  parameters?: Array<{
+    id: string;          // Live2D 原始参数 ID
+    alias: string;       // LLM 友好的语义别名
+    description: string; // 参数功能描述
+  }>;
+  expressions?: Array<{
+    id: string;          // 原始表情 ID
+    alias: string;       // 语义别名
+    description: string; // 表情效果描述
+  }>;
+  motions?: Array<{
+    group: string;       // 原始动作组名
+    index: number;       // 组内动作索引
+    alias: string;       // 语义别名
+    description: string; // 动作效果描述
+  }>;
+}
+
 // Live2D模型信息类型
 export interface ModelInfo {
   available: boolean;
@@ -249,6 +271,26 @@ export interface ModelInfo {
     userScale: number;
     baseScale: number;
   };
+  // 参数映射表（当模型目录存在 param-map.json 时填充）
+  mappedParameters?: Array<{
+    id: string;          // 原始参数 ID
+    alias: string;       // 语义别名
+    description: string; // 功能描述
+    min: number;
+    max: number;
+    default: number;
+  }>;
+  mappedExpressions?: Array<{
+    id: string;          // 原始表情 ID
+    alias: string;       // 语义别名
+    description: string; // 效果描述
+  }>;
+  mappedMotions?: Array<{
+    group: string;       // 原始动作组名
+    index: number;       // 组内动作索引
+    alias: string;       // 语义别名
+    description: string; // 效果描述
+  }>;
 }
 
 // 同步指令类型
@@ -259,6 +301,7 @@ export interface SyncCommandData {
 export interface SyncAction {
   type: 'motion' | 'expression' | 'dialogue' | 'parameter';
   waitComplete?: boolean;
+  /** 过渡动画时长（ms），用于 parameter 类型的缓动过渡 */
   duration?: number;
   // motion
   group?: string;
@@ -268,12 +311,18 @@ export interface SyncAction {
   expressionId?: string;
   // dialogue
   text?: string;
-  // parameter
+  // parameter（数组格式）
   parameters?: Array<{
     id: string;
     value: number;
     blend?: number;
+    /** 过渡动画时长（ms） */
+    duration?: number;
   }>;
+  // parameter（扁平格式，来自 protocol-adapter）
+  parameterId?: string;
+  value?: number;
+  weight?: number;
 }
 
 // 时间轴项类型
@@ -429,9 +478,11 @@ export interface Live2DManager {
   stopLipSync(): void;
   enableEyeTracking(enabled: boolean): void;
   isEyeTrackingEnabled(): boolean;
-  setParameter(parameterId: string, value: number, weight?: number): void;
-  setParameters(params: Array<{id: string, value: number, blend?: number}>): void;
+  /** 设置参数（带缓动过渡动画） duration 为过渡动画时长（ms） */
+  setParameter(parameterId: string, value: number, weight?: number, duration?: number): void;
+  setParameters(params: Array<{id: string, value: number, blend?: number, duration?: number}>): void;
   getAvailableParameters(): Array<{id: string, value: number, min: number, max: number, default: number}>;
+  clearParameterOverrides(): void;
 }
 
 // 后端通信相关类型
@@ -828,6 +879,7 @@ export type ThemeMode = 'light' | 'dark' | 'system';
 export interface AppSettings {
   modelPath: string;
   backendMode: 'builtin' | 'custom';
+  agentPort: number;
   backendUrl: string;
   wsUrl: string;
   autoConnect: boolean;
