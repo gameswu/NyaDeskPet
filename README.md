@@ -83,6 +83,7 @@
 | [开发指南](docs/DEVELOPMENT.md) | 架构设计、核心模块 |
 | [前端插件开发](docs/PLUGINS.md) | 前端插件 WebSocket 协议与开发流程 |
 | [Agent 插件开发](docs/AGENT_PLUGINS.md) | Agent 插件基类、工具注册、Handler 插件 |
+| [更新日志](docs/CHANGELOG.md) | 版本更新记录 |
 
 ## 快速开始
 

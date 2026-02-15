@@ -116,7 +116,7 @@ plugins/                    前端插件（独立进程）
 models/                     Live2D 模型（含 param-map.json 参数映射表）+ ASR 模型
 scripts/                    辅助脚本（check-i18n / migrate-logger / update-version）
 assets/                     图标资源
-docs/                       文档（固定 5 个，禁止新增）
+docs/                       文档（固定 6 个，禁止新增）
 ```
 
 ## 开发原则
