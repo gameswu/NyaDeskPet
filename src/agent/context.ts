@@ -148,8 +148,22 @@ export class SessionManager {
   private sessions: Map<string, SessionRuntime> = new Map();
   private maxHistoryPerConversation: number;
 
+  /** 是否从 LLM 历史上下文中过滤指令消息 */
+  private _filterCommandFromHistory: boolean = true;
+
   constructor(maxHistory: number = 50) {
     this.maxHistoryPerConversation = maxHistory;
+  }
+
+  /** 获取是否过滤指令消息 */
+  get filterCommandFromHistory(): boolean {
+    return this._filterCommandFromHistory;
+  }
+
+  /** 设置是否过滤指令消息 */
+  set filterCommandFromHistory(value: boolean) {
+    this._filterCommandFromHistory = value;
+    logger.info(`[SessionManager] 指令消息过滤: ${value ? '开启' : '关闭'}`);
   }
 
   /** 获取或创建会话 */
@@ -196,7 +210,10 @@ export class SessionManager {
 
     try {
       const records = agentDb.getMessages(session.currentConversationId, this.maxHistoryPerConversation);
-      return records.map(r => this.recordToChatMessage(r));
+      const filtered = this._filterCommandFromHistory
+        ? records.filter(r => r.type !== 'command')
+        : records;
+      return filtered.map(r => this.recordToChatMessage(r));
     } catch {
       // 数据库未初始化时返回空
       return [];
@@ -215,8 +232,8 @@ export class SessionManager {
         tokenCount: 0
       });
 
-      // 自动生成对话标题（第一条用户消息）
-      if (message.role === 'user') {
+      // 自动生成对话标题（第一条用户消息，跳过指令消息）
+      if (message.role === 'user' && !message.isCommand) {
         const conv = agentDb.getConversation(session.currentConversationId);
         if (conv && !conv.title) {
           const title = message.content.slice(0, 50) + (message.content.length > 50 ? '...' : '');
@@ -327,6 +344,12 @@ export class SessionManager {
       content: record.content
     };
 
+    // 斜杠指令消息：标记并直接返回
+    if (record.type === 'command') {
+      msg.isCommand = true;
+      return msg;
+    }
+
     let extra: Record<string, unknown> = {};
     try {
       extra = JSON.parse(record.extra || '{}');
@@ -352,6 +375,11 @@ export class SessionManager {
       msg.toolName = extra.toolName as string;
     }
 
+    // 恢复多模态图片（工具结果）
+    if (extra.images && Array.isArray(extra.images)) {
+      msg.images = extra.images as ChatMessage['images'];
+    }
+
     return msg;
   }
 
@@ -359,6 +387,12 @@ export class SessionManager {
   private chatMessageToRecord(msg: ChatMessage): { type: MessageType; extra: Record<string, unknown> } {
     let type: MessageType = 'text';
     const extra: Record<string, unknown> = {};
+
+    // 斜杠指令消息优先标记
+    if (msg.isCommand) {
+      type = 'command';
+      return { type, extra };
+    }
 
     if (msg.attachment) {
       type = msg.attachment.type === 'image' ? 'image' : 'file';
@@ -375,6 +409,10 @@ export class SessionManager {
       extra.toolCallId = msg.toolCallId;
       if (msg.toolName) {
         extra.toolName = msg.toolName;
+      }
+      // 持久化多模态图片（工具结果）
+      if (msg.images && msg.images.length > 0) {
+        extra.images = msg.images;
       }
     }
 

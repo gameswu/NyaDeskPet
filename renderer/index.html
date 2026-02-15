@@ -206,9 +206,10 @@
               </select>
             </div>
             <div class="setting-item">
-              <label>
+              <label class="setting-toggle">
                 <input type="checkbox" id="setting-auto-connect">
-                <span data-i18n="settings.backend.autoConnect">启动时自动连接后端</span>
+                <span class="setting-toggle-slider"></span>
+                <span class="setting-toggle-label" data-i18n="settings.backend.autoConnect">启动时自动连接后端</span>
               </label>
             </div>
             <div id="builtin-backend-fields">
@@ -240,9 +241,10 @@
           <div class="settings-section">
             <h3 data-i18n="settings.microphone.title">麦克风</h3>
             <div class="setting-item">
-              <label>
+              <label class="setting-toggle">
                 <input type="checkbox" id="setting-mic-background-mode">
-                <span data-i18n="settings.microphone.backgroundMode">允许背景工作</span>
+                <span class="setting-toggle-slider"></span>
+                <span class="setting-toggle-label" data-i18n="settings.microphone.backgroundMode">允许背景工作</span>
               </label>
             </div>
             <div class="setting-item">
@@ -253,9 +255,10 @@
               <input type="range" id="setting-mic-threshold" min="0" max="100" step="1" value="30">
             </div>
             <div class="setting-item">
-              <label>
+              <label class="setting-toggle">
                 <input type="checkbox" id="setting-mic-auto-send" checked>
-                <span data-i18n="settings.microphone.autoSend">识别后自动发送</span>
+                <span class="setting-toggle-slider"></span>
+                <span class="setting-toggle-label" data-i18n="settings.microphone.autoSend">识别后自动发送</span>
               </label>
             </div>
           </div>
@@ -266,9 +269,10 @@
           <div class="settings-section">
             <h3 data-i18n="settings.character.title">角色设置</h3>
             <div class="setting-item">
-              <label>
+              <label class="setting-toggle">
                 <input type="checkbox" id="setting-use-custom-character">
-                <span data-i18n="settings.character.useCustom">启用自定义角色</span>
+                <span class="setting-toggle-slider"></span>
+                <span class="setting-toggle-label" data-i18n="settings.character.useCustom">启用自定义角色</span>
               </label>
             </div>
             
@@ -304,21 +308,24 @@
               </select>
             </div>
             <div class="setting-item">
-              <label>
+              <label class="setting-toggle">
                 <input type="checkbox" id="setting-show-subtitle" checked>
-                <span data-i18n="settings.appearance.showSubtitle">显示对话字幕</span>
+                <span class="setting-toggle-slider"></span>
+                <span class="setting-toggle-label" data-i18n="settings.appearance.showSubtitle">显示对话字幕</span>
               </label>
             </div>
             <div class="setting-item">
-              <label>
+              <label class="setting-toggle">
                 <input type="checkbox" id="setting-enable-eye-tracking" checked>
-                <span data-i18n="settings.appearance.enableEyeTracking">启用视线跟随</span>
+                <span class="setting-toggle-slider"></span>
+                <span class="setting-toggle-label" data-i18n="settings.appearance.enableEyeTracking">启用视线跟随</span>
               </label>
             </div>
             <div class="setting-item">
-              <label>
+              <label class="setting-toggle">
                 <input type="checkbox" id="setting-auto-launch">
-                <span data-i18n="settings.general.autoLaunch">开机自启动</span>
+                <span class="setting-toggle-slider"></span>
+                <span class="setting-toggle-label" data-i18n="settings.general.autoLaunch">开机自启动</span>
               </label>
             </div>
           </div>
@@ -332,9 +339,10 @@
               <span data-i18n="settings.logs.title">日志</span>
             </h3>
             <div class="setting-item">
-              <label>
+              <label class="setting-toggle">
                 <input type="checkbox" id="setting-log-enabled" checked>
-                <span data-i18n="settings.logs.enableLogging">启用日志记录</span>
+                <span class="setting-toggle-slider"></span>
+                <span class="setting-toggle-label" data-i18n="settings.logs.enableLogging">启用日志记录</span>
               </label>
             </div>
           </div>
@@ -344,34 +352,26 @@
               <i data-lucide="filter" style="width: 18px; height: 18px;"></i>
               <span data-i18n="settings.logs.logLevels">日志等级</span>
             </h3>
-            <div class="setting-item">
-              <label>
+            <div class="setting-log-levels-row">
+              <label class="setting-log-level-item">
                 <input type="checkbox" id="log-level-debug" value="debug">
-                <span data-i18n="settings.logs.levelDebug">调试 (Debug)</span>
+                <span data-i18n="settings.logs.levelDebug">调试</span>
               </label>
-            </div>
-            <div class="setting-item">
-              <label>
+              <label class="setting-log-level-item">
                 <input type="checkbox" id="log-level-info" value="info">
-                <span data-i18n="settings.logs.levelInfo">信息 (Info)</span>
+                <span data-i18n="settings.logs.levelInfo">信息</span>
               </label>
-            </div>
-            <div class="setting-item">
-              <label>
+              <label class="setting-log-level-item">
                 <input type="checkbox" id="log-level-warn" value="warn" checked>
-                <span data-i18n="settings.logs.levelWarn">警告 (Warn)</span>
+                <span data-i18n="settings.logs.levelWarn">警告</span>
               </label>
-            </div>
-            <div class="setting-item">
-              <label>
+              <label class="setting-log-level-item">
                 <input type="checkbox" id="log-level-error" value="error" checked>
-                <span data-i18n="settings.logs.levelError">错误 (Error)</span>
+                <span data-i18n="settings.logs.levelError">错误</span>
               </label>
-            </div>
-            <div class="setting-item">
-              <label>
+              <label class="setting-log-level-item">
                 <input type="checkbox" id="log-level-critical" value="critical" checked>
-                <span data-i18n="settings.logs.levelCritical">严重 (Critical)</span>
+                <span data-i18n="settings.logs.levelCritical">严重</span>
               </label>
             </div>
           </div>
@@ -728,6 +728,10 @@
             <p class="agent-plugins-description" data-i18n="agent.commands.description">
               管理已注册的斜杠指令，在对话输入框中输入 / 触发补全
             </p>
+            <div class="agent-toggle-row">
+              <label for="toggle-command-filter" data-i18n="agent.commands.filterLabel">从 LLM 上下文中过滤指令消息</label>
+              <input type="checkbox" id="toggle-command-filter" checked />
+            </div>
             <div class="agent-commands-header">
               <span id="agent-commands-count" class="agent-commands-stats">0 个指令</span>
               <button id="btn-commands-refresh" class="btn-icon-small" title="刷新">

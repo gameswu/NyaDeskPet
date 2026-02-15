@@ -105,20 +105,6 @@ class InfoPlugin extends AgentPlugin {
       );
     }
 
-    // 技术栈
-    if (section === 'all' || section === 'tech') {
-      if (parts.length > 0) parts.push('');
-      parts.push(
-        '🛠️ 技术栈',
-        '   框架: Electron 28 + TypeScript 5.3',
-        '   渲染: PixiJS 7.3 + Live2D Cubism SDK',
-        '   通信: WebSocket（实时双向通信）',
-        '   音频: MediaSource Extensions（MSE 流式播放）',
-        '   语音: Sherpa-ONNX（本地 ASR 语音识别）',
-        '   AI: 多 Provider 支持（OpenAI / Anthropic / Gemini 等）'
-      );
-    }
-
     if (parts.length === 0) {
       return {
         command: 'info',

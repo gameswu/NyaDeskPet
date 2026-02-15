@@ -2,25 +2,77 @@
 
 <div align="center">
   <img src="logo.png" alt="NyaDeskPet Logo" width="320"/>
-  <p>基于 Electron + Live2D + AI Agent 的跨平台桌面宠物应用</p>
+  <p>基于 Live2D + AI Agent 的跨平台桌面宠物应用</p>
 </div>
 
 ---
 
+完全开源的模块化桌宠框架，支持 Live2D 交互、内置 AI Agent。开箱即用，亦可高度定制。欢迎贡献插件、模型和功能！
+
 ## 特性
 
-- 🎭 **Live2D 交互** — 模型渲染、动作/表情/参数控制、视线跟随、触碰反应、滚轮缩放、口型同步
-- 🤖 **内置 AI Agent** — Pipeline 管线架构，支持 5 种 LLM Provider、流式输出、Function Calling 工具循环
-- 🗣️ **语音系统** — Sherpa-ONNX 离线 ASR（中英日韩粤）、双 TTS Provider（Fish Audio / Edge TTS）
-- 🧩 **双插件体系** — 9 个 Agent 插件（主进程 JS）+ 2 个前端插件（独立进程 WebSocket）
-- 🔧 **MCP 支持** — 连接外部 MCP 服务器，自动发现并注册工具
-- 📷 **多模态输入** — 摄像头捕获、文件上传、图片转述
-- 🌐 **国际化** — 中/英双语，自动跟随系统语言
-- 🌙 **主题系统** — 浅色 / 深色 / 跟随系统
-- 💬 **侧边栏对话** — 多会话管理、对话历史持久化、斜杠指令自动补全
-- 🔒 **权限管理** — 5 级危险度审批，插件操作需用户确认
-- 📥 **系统托盘** — 最小化到托盘、动态菜单、双击唤出
-- 🖥️ **跨平台** — Windows / macOS / Linux
+### 🎭 AI 驱动 Live2D 模型
+
+<div align="center">
+  <video src="https://github.com/user-attachments/assets/1cfeda5e-88b6-4662-a4ea-d6bba0f59ebf" width="600" controls>
+    您的浏览器不支持视频标签。
+  </video>
+</div>
+
+
+- 透明无边框窗口，桌宠自然融入桌面
+- AI 驱动的表情和动作，丰富生动的交互体验
+- 触碰反应系统，按部位启用/禁用触碰交互
+- TTS 驱动口型同步 & 流式音频播放
+
+<details>
+<summary>其他demo</summary>
+<div align="center">
+  <img src="docs/assets/demo-live2d-1.png" alt="Demo 1" width="320"/>
+</div>
+</details>
+
+### 🤖 内置 AI Agent
+
+<div align="center">
+  <table>
+    <tr>
+      <td align="center">支持多个主流模型供应商</td>
+      <td align="center">支持函数工具与MCP管理</td>
+      <td align="center">插件化架构</td>
+      <td align="center">支持自定义指令管理</td>
+    </tr>
+    <tr>
+      <td align="center"><img src="docs/assets/demo-agent-1.png" alt="Agent Demo 1" width="300"/></td>
+      <td align="center"><img src="docs/assets/demo-agent-2.png" alt="Agent Demo 2" width="300"/></td>
+      <td align="center"><img src="docs/assets/demo-agent-3.png" alt="Agent Demo 3" width="300"/></td>
+      <td align="center"><img src="docs/assets/demo-agent-4.png" alt="Agent Demo 4" width="300"/></td>
+    </tr>
+  </table>
+</div>
+
+### 🧩 插件体系
+
+<div align="center">
+  <table>
+    <tr>
+      <td align="center">完整的插件管理</td>
+      <td align="center">插件工作鉴权</td>
+    </tr>
+    <tr>
+      <td align="center"><img src="docs/assets/demo-plugin-1.png" alt="Plugin Demo 1" width="300"/></td>
+      <td align="center"><img src="docs/assets/demo-plugin-2.png" alt="Plugin Demo 2" width="300"/></td>
+    </tr>
+  </table>
+</div>
+
+<details>
+<summary>上述演示工作的结果</summary>
+<div align="center">
+  <img src="docs/assets/demo-plugin-3.png" alt="Plugin Result Demo" width="300"/>
+  <img src="docs/assets/demo-plugin-4.png" alt="Plugin Result Demo 2" width="300"/>
+</div>
+</details>
 
 ## 文档
 
@@ -41,72 +93,39 @@ npm install
 # 编译 TypeScript
 npm run compile
 
-# 启动（按平台选择）
+# 开发启动
 npm run dev:mac
 npm run dev:linux
 npm run dev:win
+
+# 打包
+npm run build:mac
+npm run build:linux
+npm run build:win
 ```
 
-## 技术栈
+## 架构
 
-| 组件 | 技术 |
-|------|------|
-| 应用框架 | Electron 28 |
-| 开发语言 | TypeScript 5.3 |
-| 渲染引擎 | PixiJS 7.3 + Live2D Cubism SDK |
-| 数据持久化 | SQLite (better-sqlite3) |
-| 语音识别 | Sherpa-ONNX (Sense-Voice-Small) |
-| 音频格式转换 | FFmpeg |
-| 图标 | Lucide Icons |
+### 分离式架构
 
-## 架构概览
+前端与后端 Agent 通过 WebSocket 完全解耦。前端仅负责展示与交互，后端独立运行 Agent 服务器，任何 WebSocket 客户端均可接入。
 
-```mermaid
-graph TB
-    subgraph Main["主进程"]
-        AgentServer["Agent Server\n(WebSocket)"]
-        Pipeline["Pipeline\n(PreProcess → Process → Respond)"]
-        Providers["LLM / TTS Providers"]
-        Tools["ToolManager + MCPManager"]
-        Plugins["Agent 插件 ×9"]
-        DB["SQLite"]
-        ASR["ASR Service"]
-    end
+<div align="center">
+  <img src="docs/assets/arch.png" alt="架构图" width="600"/>
+</div>
 
-    subgraph Renderer["渲染进程"]
-        Live2D["Live2D Manager"]
-        Chat["对话 UI"]
-        Audio["音频播放器"]
-        PluginUI["插件管理"]
-        Settings["设置管理"]
-    end
+### 内置 Agent 架构
 
-    subgraph External["外部"]
-        FrontendPlugins["前端插件\n(独立进程)"]
-        MCP["MCP 服务器"]
-        LLM["LLM API"]
-    end
+内置 Agent 核心采用 Pipeline 架动设计，消息处理分为多个阶段（思考、工具调用、回复等），每个阶段可注册多个 Handler 插件，灵活定制 Agent 行为。
+<div align="center">
+  <img src="docs/assets/agent-arch.png" alt="Agent 架构图" width="600"/>
+</div>
 
-    Renderer <-->|IPC| Main
-    AgentServer <-->|WebSocket| Renderer
-    Pipeline --> Providers
-    Pipeline --> Tools
-    Pipeline --> Plugins
-    Providers --> LLM
-    Tools --> MCP
-    AgentServer --> Pipeline
-    Providers --> DB
-    FrontendPlugins <-->|WebSocket| Renderer
-```
+## 支持
 
-## 开发辅助
+如果喜欢这个项目，欢迎点个 Star ⭐！如有任何问题或建议，请提交 Issue 或 Pull Request。
 
-```bash
-npm run check-i18n              # 校验国际化键一致性
-npm run migrate-logger:preview  # 预览 console → logger 迁移
-npm run migrate-logger          # 执行迁移
-npm run version                 # 版本号管理
-```
+或者💗[赞助我](https://afdian.com/a/gameswu)💗
 
 ## 许可证
 

@@ -40,6 +40,14 @@ export interface LLMRequest {
   toolChoice?: ToolChoiceOption;
 }
 
+/** 聊天消息中的图片附件（工具结果多模态） */
+export interface ChatMessageImage {
+  /** Base64 编码的图片数据 */
+  data: string;
+  /** MIME 类型（如 image/png、image/jpeg） */
+  mimeType: string;
+}
+
 /** 聊天消息 */
 export interface ChatMessage {
   role: 'system' | 'user' | 'assistant' | 'tool';
@@ -52,6 +60,8 @@ export interface ChatMessage {
     mimeType?: string;
     fileName?: string;
   };
+  /** 图片列表（工具结果多模态，role=tool 时使用） */
+  images?: ChatMessageImage[];
   /** 思维链/推理内容（DeepSeek thinking mode 等） */
   reasoningContent?: string;
   /** 工具调用列表（role=assistant 时，模型请求调用工具） */
@@ -60,6 +70,8 @@ export interface ChatMessage {
   toolCallId?: string;
   /** 工具名称（role=tool 时，标识这是哪个工具的结果） */
   toolName?: string;
+  /** 标记为斜杠指令消息（不参与 LLM 上下文） */
+  isCommand?: boolean;
 }
 
 /** 工具调用信息（LLM 返回的） */
@@ -345,6 +357,45 @@ class ProviderRegistry {
 
 /** 全局 Provider 注册表实例 */
 export const providerRegistry = new ProviderRegistry();
+
+/**
+ * 通用 Provider 能力声明字段
+ * 所有 Provider 的 configSchema 末尾应展开此数组，让用户声明模型支持的能力
+ */
+export const PROVIDER_CAPABILITY_FIELDS: ProviderConfigField[] = [
+  {
+    key: 'supportsText',
+    label: '文字',
+    type: 'boolean',
+    required: false,
+    default: true,
+    description: '模型支持文字输入/输出'
+  },
+  {
+    key: 'supportsVision',
+    label: '图片',
+    type: 'boolean',
+    required: false,
+    default: false,
+    description: '模型支持图片输入（Vision）'
+  },
+  {
+    key: 'supportsFile',
+    label: '文件',
+    type: 'boolean',
+    required: false,
+    default: false,
+    description: '模型支持文件输入（如 PDF、文档等）'
+  },
+  {
+    key: 'supportsToolCalling',
+    label: '工具调用',
+    type: 'boolean',
+    required: false,
+    default: true,
+    description: '模型支持 Function Calling / Tool Use'
+  }
+];
 
 /**
  * 注册 Provider 的便捷函数

@@ -18,7 +18,8 @@ import {
   TokenUsage,
   ToolCallInfo,
   ToolDefinitionSchema,
-  registerProvider
+  registerProvider,
+  PROVIDER_CAPABILITY_FIELDS
 } from '../provider';
 import { logger } from '../../logger';
 
@@ -204,13 +205,27 @@ export class OpenAIProvider extends LLMProvider {
     }
 
     for (const msg of messages) {
-      // 工具结果消息（role=tool）
+      // 工具结果消息（role=tool）— 支持多模态（图片+文本）
       if (msg.role === 'tool') {
-        result.push({
-          role: 'tool',
-          content: msg.content,
-          tool_call_id: msg.toolCallId
-        });
+        if (msg.images && msg.images.length > 0) {
+          // 多模态工具结果：content 为 ContentPart 数组
+          const parts: OpenAIContentPart[] = [
+            { type: 'text', text: msg.content }
+          ];
+          for (const img of msg.images) {
+            parts.push({
+              type: 'image_url',
+              image_url: {
+                url: `data:${img.mimeType};base64,${img.data}`,
+                detail: 'auto'
+              }
+            });
+          }
+          result.push({ role: 'tool', content: parts, tool_call_id: msg.toolCallId });
+        } else {
+          // 纯文本工具结果
+          result.push({ role: 'tool', content: msg.content, tool_call_id: msg.toolCallId });
+        }
         continue;
       }
 
@@ -600,7 +615,8 @@ export const OPENAI_METADATA: ProviderMetadata = {
       required: false,
       default: false,
       description: '启用后 LLM 回复将逐字流式显示，提升响应速度体验。关闭则等待完整回复后一次性显示'
-    }
+    },
+    ...PROVIDER_CAPABILITY_FIELDS
   ]
 };
 

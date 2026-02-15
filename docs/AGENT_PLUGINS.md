@@ -2,6 +2,33 @@
 
 本文档介绍如何为 NyaDeskPet 内置 Agent 开发插件。Agent 插件运行在 Electron 主进程中，可注册 Function Calling 工具供 LLM 调用，或作为 Handler 插件接管核心消息处理逻辑。
 
+## 目录
+- [Agent 插件开发指南](#agent-插件开发指南)
+  - [目录](#目录)
+  - [插件类型](#插件类型)
+  - [内置插件一览](#内置插件一览)
+  - [快速开始](#快速开始)
+    - [目录结构](#目录结构)
+    - [metadata.json](#metadatajson)
+    - [main.js 示例](#mainjs-示例)
+  - [插件 API](#插件-api)
+    - [AgentPlugin 基类](#agentplugin-基类)
+    - [AgentPluginContext](#agentplugincontext)
+      - [通用能力](#通用能力)
+      - [LLM Provider 操作](#llm-provider-操作)
+      - [Handler 插件专用](#handler-插件专用)
+    - [工具定义 (ToolSchema)](#工具定义-toolschema)
+    - [工具返回值 (ToolResult)](#工具返回值-toolresult)
+  - [配置系统](#配置系统)
+  - [Handler 插件开发](#handler-插件开发)
+    - [消息处理钩子](#消息处理钩子)
+    - [MessageContext](#messagecontext)
+    - [会话持久化](#会话持久化)
+    - [工具循环](#工具循环)
+  - [插件间通信](#插件间通信)
+  - [多 Provider 调用](#多-provider-调用)
+  - [常见问题](#常见问题)
+
 ## 插件类型
 
 | 类型 | 说明 | 标记 |
@@ -13,7 +40,7 @@
 
 | 插件 | 类型 | 自动激活 | 说明 |
 |------|------|---------|------|
-| `core-agent` | Handler | ✅ | 核心协调器，依赖下列 4 个插件 |
+| `core-agent` | Handler | ✅ | 核心协调器 |
 | `personality` | 普通 | ✅ | 人格系统，构建结构化系统提示词 |
 | `memory` | 普通 | ✅ | 记忆管理，会话分离上下文 + 自动压缩 |
 | `protocol-adapter` | 普通 | ✅ | 协议适配，纯文本 + 动作 → 前端消息格式 |

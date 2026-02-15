@@ -882,7 +882,37 @@ function renderProviderConfigFields(metadata: any, savedConfig?: Record<string, 
 
   const pid: string = metadata.id || '';
 
-  for (const field of metadata.configSchema) {
+  // 分离能力声明字段（supports*）和普通字段
+  const CAPABILITY_KEY_PREFIX = 'supports';
+  const capabilityFields = metadata.configSchema.filter((f: any) => f.key.startsWith(CAPABILITY_KEY_PREFIX));
+  const regularFields = metadata.configSchema.filter((f: any) => !f.key.startsWith(CAPABILITY_KEY_PREFIX));
+
+  // —— 能力声明：一排勾选框，放在所有配置字段上方 ——
+  if (capabilityFields.length > 0) {
+    const row = document.createElement('div');
+    row.className = 'provider-capability-row';
+    for (const field of capabilityFields) {
+      const val = savedConfig && savedConfig[field.key] !== undefined
+        ? savedConfig[field.key]
+        : field.default;
+      const itemLabel = document.createElement('label');
+      itemLabel.className = 'provider-capability-item';
+      itemLabel.title = tProvider(pid, `fields.${field.key}.description`, field.description || '');
+      const cb = document.createElement('input');
+      cb.type = 'checkbox';
+      cb.checked = val === true || val === 'true';
+      cb.dataset.providerField = field.key;
+      itemLabel.appendChild(cb);
+      const span = document.createElement('span');
+      span.textContent = tProvider(pid, `fields.${field.key}.label`, field.label);
+      itemLabel.appendChild(span);
+      row.appendChild(itemLabel);
+    }
+    container.appendChild(row);
+  }
+
+  // —— 普通配置字段 ——
+  for (const field of regularFields) {
     const div = document.createElement('div');
     div.className = 'provider-field';
 
@@ -2225,6 +2255,21 @@ function initAgentCommandsUI(): void {
   if (btnRefresh) {
     btnRefresh.onclick = () => refreshAgentCommands();
   }
+
+  // 指令消息过滤开关
+  const toggleFilter = document.getElementById('toggle-command-filter') as HTMLInputElement;
+  if (toggleFilter) {
+    // 加载初始状态
+    window.electronAPI.agentGetCommandFilterEnabled().then(result => {
+      toggleFilter.checked = result.enabled;
+    }).catch(() => { /* 忽略 */ });
+
+    toggleFilter.addEventListener('change', () => {
+      window.electronAPI.agentSetCommandFilterEnabled(toggleFilter.checked).catch(err => {
+        window.logger.error('设置指令过滤失败:', err);
+      });
+    });
+  }
 }
 
 /**
@@ -2408,6 +2453,23 @@ function hideChatWindow(): void {
 }
 
 /**
+ * 添加用户指令输入消息到界面（专属样式）
+ */
+function addCommandInputMessage(text: string): void {
+  const messagesContainer = document.getElementById('chat-messages');
+  if (!messagesContainer) return;
+
+  const messageDiv = document.createElement('div');
+  messageDiv.className = 'chat-message user command-input';
+  const cmdTag = document.createElement('span');
+  cmdTag.className = 'command-input-tag';
+  cmdTag.textContent = text;
+  messageDiv.appendChild(cmdTag);
+  messagesContainer.appendChild(messageDiv);
+  messagesContainer.scrollTop = messagesContainer.scrollHeight;
+}
+
+/**
  * 添加聊天消息到界面
  */
 function addChatMessage(text: string, isUser: boolean, options?: { attachment?: { type: 'image' | 'file', url: string, name?: string }; reasoningContent?: string }): void {
@@ -2510,8 +2572,8 @@ async function sendChatMessage(): Promise<void> {
   if (text.startsWith('/')) {
     const parsed = parseCommandInput(text);
     if (parsed) {
-      // 显示用户指令
-      addChatMessage(text, true);
+      // 显示用户指令（使用指令专属样式）
+      addCommandInputMessage(text);
       chatInput.value = '';
       chatInput.style.height = 'auto';
 
@@ -2721,6 +2783,23 @@ async function deleteConversation(conversationId: string): Promise<void> {
 }
 
 /**
+ * 从历史消息中提取指令名（查找当前 assistant command 消息之前最近的 user command 消息）
+ */
+function extractCommandNameFromHistory(messages: any[], currentMsg: any): string {
+  const idx = messages.indexOf(currentMsg);
+  // 向前查找最近的 user command 消息
+  for (let i = idx - 1; i >= 0; i--) {
+    if (messages[i].type === 'command' && messages[i].role === 'user') {
+      const match = messages[i].content.match(/^\/(\S+)/);
+      return match ? match[1] : '';
+    }
+    // 如果遇到非 command 消息则停止查找
+    if (messages[i].type !== 'command') break;
+  }
+  return '';
+}
+
+/**
  * 加载对话的消息记录
  */
 async function loadConversationMessages(conversationId: string): Promise<void> {
@@ -2739,6 +2818,43 @@ async function loadConversationMessages(conversationId: string): Promise<void> {
 
       // 跳过 tool_call 类型（助手发起的工具调用请求）
       if (msg.type === 'tool_call' || msg.type === 'tool_result') return;
+
+      // 指令消息：用户输入使用指令样式，助手结果使用指令结果样式
+      if (msg.type === 'command') {
+        if (msg.role === 'user') {
+          // 用户的指令输入（如 /info）：保持用户底色，内部使用指令标记样式
+          const messageDiv = document.createElement('div');
+          messageDiv.className = 'chat-message user command-input';
+          const cmdTag = document.createElement('span');
+          cmdTag.className = 'command-input-tag';
+          cmdTag.textContent = msg.content;
+          messageDiv.appendChild(cmdTag);
+          messagesContainer.appendChild(messageDiv);
+          return;
+        }
+        // 助手的指令结果
+        const messageDiv = document.createElement('div');
+        messageDiv.className = 'chat-message assistant command-result';
+
+        // 从上一条用户指令消息提取指令名
+        const commandName = extractCommandNameFromHistory(messages, msg);
+        if (commandName) {
+          const header = document.createElement('div');
+          header.className = 'command-result-header';
+          header.innerHTML = `<span class="command-result-prefix">/${commandName}</span>`;
+          messageDiv.appendChild(header);
+        }
+
+        if (msg.content) {
+          const content = document.createElement('div');
+          content.className = 'command-result-content';
+          content.innerHTML = msg.content.replace(/\n/g, '<br>');
+          messageDiv.appendChild(content);
+        }
+
+        messagesContainer.appendChild(messageDiv);
+        return;
+      }
 
       const isUser = msg.role === 'user';
       const messageDiv = document.createElement('div');
@@ -2764,8 +2880,8 @@ async function loadConversationMessages(conversationId: string): Promise<void> {
 
       if (msg.content) {
         const textNode = document.createElement('div');
-        // 后端 IPC 已对 assistant 消息执行 XML 标签清洗，前端直接显示
-        textNode.textContent = msg.content;
+        // 保留换行符：将 \n 渲染为 <br>，其他内容转义
+        textNode.innerHTML = escapeHtml(msg.content).replace(/\n/g, '<br>');
         messageDiv.appendChild(textNode);
       }
 

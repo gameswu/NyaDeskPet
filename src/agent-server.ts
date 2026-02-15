@@ -46,6 +46,9 @@ export class AgentServer {
   private config: AgentServerConfig;
   private startTime: number | null = null;
 
+  /** 实际监听的端口（区别于 config.port，用于检测端口变更） */
+  private listeningPort: number | null = null;
+
   /** 业务逻辑处理器 */
   private handler: AgentHandler;
 
@@ -114,6 +117,7 @@ export class AgentServer {
 
         this.wss.on('listening', () => {
           this.startTime = Date.now();
+          this.listeningPort = this.config.port;
           logger.info(`[AgentServer] 服务器已启动: ws://${this.config.host}:${this.config.port}`);
           logger.info(`[AgentServer] 管线阶段: ${this.pipeline.getStageNames().join(' → ')}`);
           resolve(true);
@@ -189,6 +193,7 @@ export class AgentServer {
         }
         this.wss = null;
         this.startTime = null;
+        this.listeningPort = null;
         logger.info('[AgentServer] 服务器已停止');
         resolve();
       });
@@ -273,6 +278,13 @@ export class AgentServer {
   public updateConfig(config: Partial<AgentServerConfig>): void {
     if (config.port !== undefined) this.config.port = config.port;
     if (config.host !== undefined) this.config.host = config.host;
+  }
+
+  /**
+   * 检查配置的端口是否与实际监听端口一致
+   */
+  public needsRestart(): boolean {
+    return this.wss !== null && this.listeningPort !== null && this.listeningPort !== this.config.port;
   }
 
   /**

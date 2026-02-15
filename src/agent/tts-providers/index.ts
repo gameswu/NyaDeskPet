@@ -11,5 +11,8 @@ export { FishAudioProvider, FISH_AUDIO_METADATA } from './fish-audio';
 // ==================== Edge TTS Provider ====================
 export { EdgeTTSProvider, EDGE_TTS_METADATA } from './edge-tts';
 
-// ==================== 后续可添加更多 TTS Provider ====================
-// export { OpenAITTSProvider, OPENAI_TTS_METADATA } from './openai-tts';
+// ==================== OpenAI TTS Provider ====================
+export { OpenAITTSProvider, OPENAI_TTS_METADATA } from './openai-tts';
+
+// ==================== ElevenLabs TTS Provider ====================
+export { ElevenLabsProvider, ELEVENLABS_METADATA } from './elevenlabs';

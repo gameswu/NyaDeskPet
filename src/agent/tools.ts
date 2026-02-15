@@ -72,6 +72,14 @@ export interface ToolCall {
   arguments: Record<string, unknown>;
 }
 
+/** 工具结果中的图片附件 */
+export interface ToolResultImage {
+  /** Base64 编码的图片数据 */
+  data: string;
+  /** MIME 类型（如 image/png、image/jpeg） */
+  mimeType: string;
+}
+
 /** 工具执行结果 */
 export interface ToolResult {
   /** 调用 ID */
@@ -80,7 +88,9 @@ export interface ToolResult {
   content: string;
   /** 是否执行成功 */
   success: boolean;
-  /** 额外数据（如图片等） */
+  /** 图片附件列表（多模态工具结果） */
+  images?: ToolResultImage[];
+  /** 额外数据 */
   data?: Record<string, unknown>;
 }
 

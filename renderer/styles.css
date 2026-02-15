@@ -1523,6 +1523,39 @@ details.reasoning-block[open] > .reasoning-summary::after {
   font-weight: 500;
 }
 
+/* Provider 能力声明勾选框行 */
+.provider-capability-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 16px;
+  padding: 8px 10px;
+  margin-bottom: 6px;
+  background: #f5f7fa;
+  border-radius: 8px;
+  border: 1px solid #e9ecef;
+}
+
+.provider-capability-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  cursor: pointer;
+  font-size: 13px;
+  color: #555;
+  font-weight: 500;
+  user-select: none;
+  white-space: nowrap;
+}
+
+.provider-capability-item input[type="checkbox"] {
+  width: 15px;
+  height: 15px;
+  cursor: pointer;
+  accent-color: #4a9eff;
+  margin: 0;
+  flex-shrink: 0;
+}
+
 /* Provider 配置字段 Toggle 开关（boolean 类型字段） */
 .provider-field-toggle {
   display: inline-flex;
@@ -2492,6 +2525,91 @@ details.reasoning-block[open] > .reasoning-summary::after {
   line-height: 1.4;
 }
 
+/* 设置页 Toggle 开关（与 Provider 风格一致） */
+.setting-toggle {
+  display: inline-flex !important;
+  align-items: center;
+  gap: 10px;
+  cursor: pointer;
+  user-select: none;
+  margin-bottom: 0 !important;
+}
+
+.setting-toggle input[type="checkbox"] {
+  display: none;
+}
+
+.setting-toggle-slider {
+  position: relative;
+  width: 36px;
+  height: 20px;
+  background: #ccc;
+  border-radius: 10px;
+  transition: background 0.3s ease;
+  flex-shrink: 0;
+}
+
+.setting-toggle-slider::after {
+  content: '';
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 16px;
+  height: 16px;
+  background: #fff;
+  border-radius: 50%;
+  transition: transform 0.3s ease;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.15);
+}
+
+.setting-toggle input[type="checkbox"]:checked + .setting-toggle-slider {
+  background: #4a9eff;
+}
+
+.setting-toggle input[type="checkbox"]:checked + .setting-toggle-slider::after {
+  transform: translateX(16px);
+}
+
+.setting-toggle-label {
+  font-size: 14px;
+  color: #555;
+  font-weight: 500;
+}
+
+/* 日志等级紧凑勾选框行 */
+.setting-log-levels-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 16px;
+  padding: 8px 10px;
+  margin-bottom: 10px;
+  background: #f5f7fa;
+  border-radius: 8px;
+  border: 1px solid #e9ecef;
+}
+
+.setting-log-level-item {
+  display: inline-flex !important;
+  align-items: center;
+  gap: 5px;
+  cursor: pointer;
+  font-size: 13px;
+  color: #555;
+  font-weight: 500;
+  user-select: none;
+  white-space: nowrap;
+  margin-bottom: 0 !important;
+}
+
+.setting-log-level-item input[type="checkbox"] {
+  width: 15px;
+  height: 15px;
+  cursor: pointer;
+  accent-color: #4a9eff;
+  margin: 0;
+  flex-shrink: 0;
+}
+
 .setting-item select {
   width: 100%;
   padding: 8px 12px;
@@ -3247,6 +3365,15 @@ body.dark-theme {
   color: #bbb;
 }
 
+.dark-theme .provider-capability-row {
+  background: #2a2a2a;
+  border-color: #444;
+}
+
+.dark-theme .provider-capability-item {
+  color: #bbb;
+}
+
 .dark-theme .agent-provider-instance-desc {
   color: #888;
 }
@@ -3671,6 +3798,19 @@ body.dark-theme {
 
 .dark-theme .setting-item label {
   color: #e0e0e0;
+}
+
+.dark-theme .setting-toggle-label {
+  color: #bbb;
+}
+
+.dark-theme .setting-log-levels-row {
+  background: #2a2a2a;
+  border-color: #444;
+}
+
+.dark-theme .setting-log-level-item {
+  color: #bbb;
 }
 
 .dark-theme .setting-item textarea {
@@ -6203,6 +6343,19 @@ body.dark-theme {
   margin-top: -16px;
 }
 
+/* 用户指令输入样式 */
+
+.chat-message.user.command-input {
+  padding: 6px 10px;
+}
+
+.command-input-tag {
+  font-family: monospace;
+  font-weight: 600;
+  font-size: 12px;
+  letter-spacing: 0.3px;
+}
+
 /* 指令执行结果样式 */
 
 .command-result .command-result-header {
@@ -6232,6 +6385,22 @@ body.dark-theme {
 }
 
 /* Agent 面板 — 指令标签页 */
+
+.agent-toggle-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 6px 0;
+  margin-bottom: 8px;
+  font-size: 13px;
+  color: #555;
+}
+
+.agent-toggle-row input[type="checkbox"] {
+  width: 16px;
+  height: 16px;
+  cursor: pointer;
+}
 
 .agent-commands-header {
   display: flex;
@@ -6403,6 +6572,10 @@ body.dark-theme {
   color: #666;
 }
 
+.dark-theme .command-input-tag {
+  color: rgba(255, 255, 255, 0.95);
+}
+
 .dark-theme .command-result-prefix {
   background: #2e3d2e;
   color: #66bb6a;
@@ -6410,6 +6583,10 @@ body.dark-theme {
 
 .dark-theme .command-result-error {
   color: #ef5350;
+}
+
+.dark-theme .agent-toggle-row {
+  color: #aaa;
 }
 
 .dark-theme .agent-command-item {

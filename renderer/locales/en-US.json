@@ -180,7 +180,8 @@
     "commands": {
       "title": "Command Management",
       "description": "Manage registered slash commands, enable or disable commands",
-      "empty": "No registered commands"
+      "empty": "No registered commands",
+      "filterLabel": "Filter command messages from LLM context"
     },
     "serverStatus": "Server Status",
     "status": "Status",
@@ -253,6 +254,22 @@
           "stream": {
             "label": "Streaming Output",
             "description": "When enabled, LLM responses will be displayed token by token for faster perceived response. When disabled, the full response is shown at once"
+          },
+          "supportsText": {
+            "label": "Text",
+            "description": "Model supports text input/output"
+          },
+          "supportsVision": {
+            "label": "Vision",
+            "description": "Model supports image input (Vision). When enabled, images from tool results are sent directly to the model; otherwise auto-transcribed to text"
+          },
+          "supportsFile": {
+            "label": "File",
+            "description": "Model supports file input (e.g. PDF, documents)"
+          },
+          "supportsToolCalling": {
+            "label": "Tool Calling",
+            "description": "Model supports Function Calling / Tool Use. When disabled, tool definitions will not be sent to the model"
           }
         }
       },
@@ -271,11 +288,8 @@
           },
           "model": {
             "label": "Model",
-            "description": "deepseek-chat for general conversation, deepseek-reasoner for complex reasoning tasks",
-            "options": {
-              "deepseek-chat": "deepseek-chat",
-              "deepseek-reasoner": "deepseek-reasoner"
-            }
+            "placeholder": "deepseek-chat",
+            "description": "Enter model ID, e.g. deepseek-chat (general), deepseek-reasoner (complex reasoning)"
           },
           "timeout": {
             "label": "Timeout (seconds)",
@@ -289,6 +303,22 @@
           "stream": {
             "label": "Streaming Output",
             "description": "When enabled, LLM responses will be displayed token by token for faster perceived response"
+          },
+          "supportsText": {
+            "label": "Text",
+            "description": "Model supports text input/output"
+          },
+          "supportsVision": {
+            "label": "Vision",
+            "description": "Model supports image input (Vision). When enabled, images from tool results are sent directly to the model; otherwise auto-transcribed to text"
+          },
+          "supportsFile": {
+            "label": "File",
+            "description": "Model supports file input (e.g. PDF, documents)"
+          },
+          "supportsToolCalling": {
+            "label": "Tool Calling",
+            "description": "Model supports Function Calling / Tool Use. When disabled, tool definitions will not be sent to the model"
           }
         }
       },
@@ -318,6 +348,22 @@
           "stream": {
             "label": "Streaming Output",
             "description": "When enabled, LLM responses will be displayed token by token for faster perceived response"
+          },
+          "supportsText": {
+            "label": "Text",
+            "description": "Model supports text input/output"
+          },
+          "supportsVision": {
+            "label": "Vision",
+            "description": "Model supports image input (Vision). When enabled, images from tool results are sent directly to the model; otherwise auto-transcribed to text"
+          },
+          "supportsFile": {
+            "label": "File",
+            "description": "Model supports file input (e.g. PDF, documents)"
+          },
+          "supportsToolCalling": {
+            "label": "Tool Calling",
+            "description": "Model supports Function Calling / Tool Use. When disabled, tool definitions will not be sent to the model"
           }
         }
       },
@@ -336,17 +382,8 @@
           },
           "model": {
             "label": "Model",
-            "description": "Select a model. Custom model IDs are supported. Full list at https://cloud.siliconflow.cn/models",
-            "options": {
-              "Qwen/Qwen2.5-7B-Instruct": "Qwen2.5-7B-Instruct (Free)",
-              "Qwen/Qwen3-8B": "Qwen3-8B",
-              "Qwen/Qwen3-32B": "Qwen3-32B",
-              "Pro/zai-org/GLM-4.7": "GLM-4.7 (Pro)",
-              "deepseek-ai/DeepSeek-V3": "DeepSeek-V3",
-              "deepseek-ai/DeepSeek-R1": "DeepSeek-R1",
-              "Pro/deepseek-ai/DeepSeek-V3": "DeepSeek-V3 (Pro)",
-              "Pro/deepseek-ai/DeepSeek-R1": "DeepSeek-R1 (Pro)"
-            }
+            "placeholder": "Qwen/Qwen2.5-7B-Instruct",
+            "description": "Enter model ID, e.g. Qwen/Qwen2.5-7B-Instruct, deepseek-ai/DeepSeek-V3. Full list at https://cloud.siliconflow.cn/models"
           },
           "timeout": {
             "label": "Timeout (seconds)",
@@ -360,6 +397,414 @@
           "stream": {
             "label": "Streaming Output",
             "description": "When enabled, LLM responses will be displayed token by token for faster perceived response"
+          },
+          "supportsText": {
+            "label": "Text",
+            "description": "Model supports text input/output"
+          },
+          "supportsVision": {
+            "label": "Vision",
+            "description": "Model supports image input (Vision). When enabled, images from tool results are sent directly to the model; otherwise auto-transcribed to text"
+          },
+          "supportsFile": {
+            "label": "File",
+            "description": "Model supports file input (e.g. PDF, documents)"
+          },
+          "supportsToolCalling": {
+            "label": "Tool Calling",
+            "description": "Model supports Function Calling / Tool Use. When disabled, tool definitions will not be sent to the model"
+          }
+        }
+      },
+      "gemini": {
+        "name": "Google Gemini",
+        "description": "Google Gemini models, supporting multimodal understanding, Function Calling, reasoning, with generous free tier",
+        "fields": {
+          "apiKey": {
+            "label": "API Key",
+            "placeholder": "AIza...",
+            "description": "API Key from Google AI Studio (https://aistudio.google.com/apikey)"
+          },
+          "baseUrl": {
+            "label": "API Base URL",
+            "description": "Gemini OpenAI compatible endpoint, usually no need to change. Change if using proxy"
+          },
+          "model": {
+            "label": "Model",
+            "placeholder": "gemini-2.5-flash",
+            "description": "Enter model ID, e.g. gemini-2.5-flash, gemini-2.5-pro, gemini-2.0-flash"
+          },
+          "timeout": {
+            "label": "Timeout (seconds)",
+            "description": "Request timeout, increase for reasoning models"
+          },
+          "proxy": {
+            "label": "Proxy Address",
+            "placeholder": "http://127.0.0.1:7890",
+            "description": "HTTP/HTTPS proxy (if needed)"
+          },
+          "stream": {
+            "label": "Streaming Output",
+            "description": "When enabled, LLM responses will be displayed token by token for faster perceived response"
+          },
+          "supportsText": {
+            "label": "Text",
+            "description": "Model supports text input/output"
+          },
+          "supportsVision": {
+            "label": "Vision",
+            "description": "Model supports image input (Vision). When enabled, images from tool results are sent directly to the model; otherwise auto-transcribed to text"
+          },
+          "supportsFile": {
+            "label": "File",
+            "description": "Model supports file input (e.g. PDF, documents)"
+          },
+          "supportsToolCalling": {
+            "label": "Tool Calling",
+            "description": "Model supports Function Calling / Tool Use. When disabled, tool definitions will not be sent to the model"
+          }
+        }
+      },
+      "dashscope": {
+        "name": "DashScope (Alibaba)",
+        "description": "Alibaba DashScope platform, Qwen series models, supporting Vision, Function Calling, deep reasoning. Direct connection in China",
+        "fields": {
+          "apiKey": {
+            "label": "API Key",
+            "placeholder": "sk-...",
+            "description": "API Key from Alibaba DashScope (https://bailian.console.aliyun.com/#/key-manage)"
+          },
+          "baseUrl": {
+            "label": "API Base URL",
+            "description": "DashScope OpenAI compatible endpoint, usually no need to change"
+          },
+          "model": {
+            "label": "Model",
+            "placeholder": "qwen-plus",
+            "description": "Enter model ID, e.g. qwen-plus, qwen-turbo, qwen-max, qwen-long, qwq-plus"
+          },
+          "timeout": {
+            "label": "Timeout (seconds)",
+            "description": "Request timeout, increase for reasoning models"
+          },
+          "proxy": {
+            "label": "Proxy Address",
+            "placeholder": "http://127.0.0.1:7890",
+            "description": "HTTP/HTTPS proxy (usually not needed in China)"
+          },
+          "stream": {
+            "label": "Streaming Output",
+            "description": "When enabled, LLM responses will be displayed token by token for faster perceived response"
+          },
+          "supportsText": {
+            "label": "Text",
+            "description": "Model supports text input/output"
+          },
+          "supportsVision": {
+            "label": "Vision",
+            "description": "Model supports image input (Vision). When enabled, images from tool results are sent directly to the model; otherwise auto-transcribed to text"
+          },
+          "supportsFile": {
+            "label": "File",
+            "description": "Model supports file input (e.g. PDF, documents)"
+          },
+          "supportsToolCalling": {
+            "label": "Tool Calling",
+            "description": "Model supports Function Calling / Tool Use. When disabled, tool definitions will not be sent to the model"
+          }
+        }
+      },
+      "zhipu": {
+        "name": "Zhipu AI (GLM)",
+        "description": "Zhipu AI Open Platform, GLM-4 series models. glm-4-flash is free. Supports Vision and Function Calling. Direct connection in China",
+        "fields": {
+          "apiKey": {
+            "label": "API Key",
+            "placeholder": "your_api_key",
+            "description": "API Key from Zhipu AI (https://open.bigmodel.cn/usercenter/apikeys)"
+          },
+          "baseUrl": {
+            "label": "API Base URL",
+            "description": "Zhipu AI API address, usually no need to change"
+          },
+          "model": {
+            "label": "Model",
+            "placeholder": "glm-4-flash",
+            "description": "Enter model ID, e.g. glm-4-flash, glm-4-plus, glm-4-long, glm-4v-plus"
+          },
+          "timeout": {
+            "label": "Timeout (seconds)",
+            "description": "Request timeout"
+          },
+          "proxy": {
+            "label": "Proxy Address",
+            "placeholder": "http://127.0.0.1:7890",
+            "description": "HTTP/HTTPS proxy (usually not needed in China)"
+          },
+          "stream": {
+            "label": "Streaming Output",
+            "description": "When enabled, LLM responses will be displayed token by token for faster perceived response"
+          },
+          "supportsText": {
+            "label": "Text",
+            "description": "Model supports text input/output"
+          },
+          "supportsVision": {
+            "label": "Vision",
+            "description": "Model supports image input (Vision). When enabled, images from tool results are sent directly to the model; otherwise auto-transcribed to text"
+          },
+          "supportsFile": {
+            "label": "File",
+            "description": "Model supports file input (e.g. PDF, documents)"
+          },
+          "supportsToolCalling": {
+            "label": "Tool Calling",
+            "description": "Model supports Function Calling / Tool Use. When disabled, tool definitions will not be sent to the model"
+          }
+        }
+      },
+      "volcengine": {
+        "name": "Volcengine (Doubao)",
+        "description": "Volcengine Ark platform, Doubao models. Uses Endpoint ID. Supports Function Calling and Vision. Direct connection in China",
+        "fields": {
+          "apiKey": {
+            "label": "API Key",
+            "placeholder": "your_api_key",
+            "description": "API Key from Volcengine Ark (https://console.volcengine.com/ark/region:ark+cn-beijing/apiKey)"
+          },
+          "baseUrl": {
+            "label": "API Base URL",
+            "description": "Volcengine Ark API address, usually no need to change"
+          },
+          "model": {
+            "label": "Endpoint ID",
+            "placeholder": "ep-20240901xxxxx-xxxxx",
+            "description": "Endpoint ID created in Ark Console (NOT model name). Create at: https://console.volcengine.com/ark/region:ark+cn-beijing/endpoint"
+          },
+          "timeout": {
+            "label": "Timeout (seconds)",
+            "description": "Request timeout"
+          },
+          "proxy": {
+            "label": "Proxy Address",
+            "placeholder": "http://127.0.0.1:7890",
+            "description": "HTTP/HTTPS proxy (usually not needed in China)"
+          },
+          "stream": {
+            "label": "Streaming Output",
+            "description": "When enabled, LLM responses will be displayed token by token for faster perceived response"
+          },
+          "supportsText": {
+            "label": "Text",
+            "description": "Model supports text input/output"
+          },
+          "supportsVision": {
+            "label": "Vision",
+            "description": "Model supports image input (Vision). When enabled, images from tool results are sent directly to the model; otherwise auto-transcribed to text"
+          },
+          "supportsFile": {
+            "label": "File",
+            "description": "Model supports file input (e.g. PDF, documents)"
+          },
+          "supportsToolCalling": {
+            "label": "Tool Calling",
+            "description": "Model supports Function Calling / Tool Use. When disabled, tool definitions will not be sent to the model"
+          }
+        }
+      },
+      "groq": {
+        "name": "Groq",
+        "description": "Groq ultra-fast LPU inference platform, supporting Llama, DeepSeek, Qwen, Gemma. Free tier available. extremely fast",
+        "fields": {
+          "apiKey": {
+            "label": "API Key",
+            "placeholder": "gsk_...",
+            "description": "API Key from Groq Console (https://console.groq.com/keys)"
+          },
+          "baseUrl": {
+            "label": "API Base URL",
+            "description": "Groq API address, usually no need to change"
+          },
+          "model": {
+            "label": "Model",
+            "placeholder": "llama-3.3-70b-versatile",
+            "description": "Enter model ID, e.g. llama-3.3-70b-versatile, llama-3.1-8b-instant. Full list at https://console.groq.com/docs/models"
+          },
+          "timeout": {
+            "label": "Timeout (seconds)",
+            "description": "Request timeout"
+          },
+          "proxy": {
+            "label": "Proxy Address",
+            "placeholder": "http://127.0.0.1:7890",
+            "description": "HTTP/HTTPS proxy (if needed)"
+          },
+          "stream": {
+            "label": "Streaming Output",
+            "description": "When enabled, LLM responses will be displayed token by token for faster perceived response"
+          },
+          "supportsText": {
+            "label": "Text",
+            "description": "Model supports text input/output"
+          },
+          "supportsVision": {
+            "label": "Vision",
+            "description": "Model supports image input (Vision). When enabled, images from tool results are sent directly to the model; otherwise auto-transcribed to text"
+          },
+          "supportsFile": {
+            "label": "File",
+            "description": "Model supports file input (e.g. PDF, documents)"
+          },
+          "supportsToolCalling": {
+            "label": "Tool Calling",
+            "description": "Model supports Function Calling / Tool Use. When disabled, tool definitions will not be sent to the model"
+          }
+        }
+      },
+      "mistral": {
+        "name": "Mistral AI",
+        "description": "Mistral AI official API, supporting Mistral Large/Small, Codestral, Pixtral. European company, GDPR compliant",
+        "fields": {
+          "apiKey": {
+            "label": "API Key",
+            "placeholder": "your_api_key",
+            "description": "API Key from Mistral AI Console (https://console.mistral.ai/api-keys/)"
+          },
+          "baseUrl": {
+            "label": "API Base URL",
+            "description": "Mistral AI API address, usually no need to change"
+          },
+          "model": {
+            "label": "Model",
+            "placeholder": "mistral-small-latest",
+            "description": "Enter model ID, e.g. mistral-small-latest, mistral-large-latest, codestral-latest"
+          },
+          "timeout": {
+            "label": "Timeout (seconds)",
+            "description": "Request timeout"
+          },
+          "proxy": {
+            "label": "Proxy Address",
+            "placeholder": "http://127.0.0.1:7890",
+            "description": "HTTP/HTTPS proxy (if needed)"
+          },
+          "stream": {
+            "label": "Streaming Output",
+            "description": "When enabled, LLM responses will be displayed token by token for faster perceived response"
+          },
+          "supportsText": {
+            "label": "Text",
+            "description": "Model supports text input/output"
+          },
+          "supportsVision": {
+            "label": "Vision",
+            "description": "Model supports image input (Vision). When enabled, images from tool results are sent directly to the model; otherwise auto-transcribed to text"
+          },
+          "supportsFile": {
+            "label": "File",
+            "description": "Model supports file input (e.g. PDF, documents)"
+          },
+          "supportsToolCalling": {
+            "label": "Tool Calling",
+            "description": "Model supports Function Calling / Tool Use. When disabled, tool definitions will not be sent to the model"
+          }
+        }
+      },
+      "anthropic": {
+        "name": "Anthropic (Claude)",
+        "description": "Anthropic official API, Claude Sonnet/Opus/Haiku series. Leading reasoning and coding capabilities. Supports Vision and Function Calling",
+        "fields": {
+          "apiKey": {
+            "label": "API Key",
+            "placeholder": "sk-ant-...",
+            "description": "API Key from Anthropic Console (https://console.anthropic.com/settings/keys)"
+          },
+          "baseUrl": {
+            "label": "API Base URL",
+            "description": "Anthropic API address. Change if using proxy"
+          },
+          "model": {
+            "label": "Model",
+            "placeholder": "claude-sonnet-4-20250514",
+            "description": "Enter model ID, e.g. claude-sonnet-4-20250514, claude-opus-4-20250514, claude-haiku-3-5-20241022"
+          },
+          "timeout": {
+            "label": "Timeout (seconds)",
+            "description": "Request timeout, increase for Opus model"
+          },
+          "proxy": {
+            "label": "Proxy Address",
+            "placeholder": "http://127.0.0.1:7890",
+            "description": "HTTP/HTTPS proxy (if needed)"
+          },
+          "stream": {
+            "label": "Streaming Output",
+            "description": "When enabled, LLM responses will be displayed token by token for faster perceived response"
+          },
+          "supportsText": {
+            "label": "Text",
+            "description": "Model supports text input/output"
+          },
+          "supportsVision": {
+            "label": "Vision",
+            "description": "Model supports image input (Vision). When enabled, images from tool results are sent directly to the model; otherwise auto-transcribed to text"
+          },
+          "supportsFile": {
+            "label": "File",
+            "description": "Model supports file input (e.g. PDF, documents)"
+          },
+          "supportsToolCalling": {
+            "label": "Tool Calling",
+            "description": "Model supports Function Calling / Tool Use. When disabled, tool definitions will not be sent to the model"
+          }
+        }
+      },
+      "xai": {
+        "name": "xAI (Grok)",
+        "description": "xAI official API, Grok series. Strong reasoning and real-time info capabilities. Supports Vision and Function Calling",
+        "fields": {
+          "apiKey": {
+            "label": "API Key",
+            "placeholder": "xai-...",
+            "description": "API Key from xAI Console (https://console.x.ai/)"
+          },
+          "baseUrl": {
+            "label": "API Base URL",
+            "description": "xAI API address, usually no need to change"
+          },
+          "model": {
+            "label": "Model",
+            "placeholder": "grok-3-mini",
+            "description": "Enter model ID, e.g. grok-3, grok-3-mini, grok-2"
+          },
+          "timeout": {
+            "label": "Timeout (seconds)",
+            "description": "Request timeout"
+          },
+          "proxy": {
+            "label": "Proxy Address",
+            "placeholder": "http://127.0.0.1:7890",
+            "description": "HTTP/HTTPS proxy (if needed)"
+          },
+          "stream": {
+            "label": "Streaming Output",
+            "description": "When enabled, LLM responses will be displayed token by token for faster perceived response"
+          },
+          "supportsText": {
+            "label": "Text",
+            "description": "Model supports text input/output"
+          },
+          "supportsVision": {
+            "label": "Vision",
+            "description": "Model supports image input (Vision). When enabled, images from tool results are sent directly to the model; otherwise auto-transcribed to text"
+          },
+          "supportsFile": {
+            "label": "File",
+            "description": "Model supports file input (e.g. PDF, documents)"
+          },
+          "supportsToolCalling": {
+            "label": "Tool Calling",
+            "description": "Model supports Function Calling / Tool Use. When disabled, tool definitions will not be sent to the model"
           }
         }
       }
@@ -400,12 +845,8 @@
           },
           "model": {
             "label": "TTS Model",
-            "description": "TTS engine model version",
-            "options": {
-              "s1": "S1 (Latest, Recommended)",
-              "speech-1.6": "Speech 1.6 (Stable)",
-              "speech-1.5": "Speech 1.5 (Legacy)"
-            }
+            "placeholder": "s1",
+            "description": "Enter model ID, e.g. s1, speech-1.6, speech-1.5"
           },
           "format": {
             "label": "Audio Format",
@@ -435,6 +876,140 @@
           },
           "proxy": {
             "label": "Proxy",
+            "placeholder": "http://127.0.0.1:7890",
+            "description": "HTTP/HTTPS proxy (if needed)"
+          }
+        }
+      },
+      "edge-tts": {
+        "name": "Edge TTS",
+        "description": "Microsoft Edge free TTS, supports multiple languages, natural sounding",
+        "fields": {
+          "voice": {
+            "label": "Voice",
+            "description": "Select voice",
+            "options": {
+              "en-US-JennyNeural": "Jenny (US Female)",
+              "en-US-GuyNeural": "Guy (US Male)",
+              "en-GB-SoniaNeural": "Sonia (UK Female)",
+              "zh-CN-XiaoxiaoNeural": "Xiaoxiao (CN Female)",
+              "zh-CN-YunxiNeural": "Yunxi (CN Male)"
+            }
+          },
+          "rate": {
+            "label": "Rate",
+            "description": "Speech rate adjustment (+50%, -10%, etc.)"
+          },
+          "pitch": {
+            "label": "Pitch",
+            "description": "Speech pitch adjustment (+10Hz, -10Hz, etc.)"
+          },
+          "volume": {
+            "label": "Volume",
+            "description": "Volume adjustment (+10%, -10%, etc.)"
+          }
+        }
+      },
+      "openai-tts": {
+        "name": "OpenAI TTS",
+        "description": "OpenAI Speech API, 6 preset voices, high quality (tts-1-hd) and low latency (tts-1) modes. Supports compatible services",
+        "fields": {
+          "apiKey": {
+            "label": "API Key",
+            "placeholder": "sk-...",
+            "description": "API Key from OpenAI or compatible provider"
+          },
+          "baseUrl": {
+            "label": "API Base URL",
+            "placeholder": "https://api.openai.com/v1",
+            "description": "API Endpoint. Change for compatible services"
+          },
+          "voiceId": {
+            "label": "Voice",
+            "description": "Select voice. Custom voice ID supported",
+            "options": {
+              "alloy": "Alloy (Neutral)",
+              "echo": "Echo (Warm Male)",
+              "fable": "Fable (British)",
+              "onyx": "Onyx (Deep Male)",
+              "nova": "Nova (Friendly Female)",
+              "shimmer": "Shimmer (Lively Female)"
+            }
+          },
+          "model": {
+            "label": "TTS Model",
+            "placeholder": "tts-1",
+            "description": "Enter model ID, e.g. tts-1 (low latency), tts-1-hd (high quality)"
+          },
+          "format": {
+            "label": "Format",
+            "description": "Output audio format",
+            "options": {
+              "mp3": "MP3",
+              "opus": "Opus",
+              "aac": "AAC",
+              "flac": "FLAC",
+              "wav": "WAV",
+              "pcm": "PCM"
+            }
+          },
+          "speed": {
+            "label": "Speed",
+            "description": "Speech speed, 0.25 - 4.0"
+          },
+          "timeout": {
+            "label": "Timeout (seconds)",
+            "description": "Request timeout"
+          },
+          "proxy": {
+            "label": "Proxy Address",
+            "placeholder": "http://127.0.0.1:7890",
+            "description": "HTTP/HTTPS proxy (if needed)"
+          }
+        }
+      },
+      "elevenlabs": {
+        "name": "ElevenLabs",
+        "description": "Leading AI speech synthesis, 29+ languages, voice cloning, high quality, streaming support",
+        "fields": {
+          "apiKey": {
+            "label": "API Key",
+            "placeholder": "your_api_key",
+            "description": "API Key from ElevenLabs (https://elevenlabs.io/app/settings/api-keys)"
+          },
+          "voiceId": {
+            "label": "Voice ID",
+            "placeholder": "JBFqnCBsd6RMkjVDRZzb",
+            "description": "Voice ID from https://elevenlabs.io/voice-library. Default is George"
+          },
+          "model": {
+            "label": "TTS Model",
+            "placeholder": "eleven_multilingual_v2",
+            "description": "Enter model ID, e.g. eleven_multilingual_v2, eleven_flash_v2_5, eleven_flash_v2"
+          },
+          "format": {
+            "label": "Format",
+            "description": "Output audio format",
+            "options": {
+              "mp3": "MP3",
+              "pcm": "PCM",
+              "opus": "Opus"
+            }
+          },
+          "stability": {
+            "label": "Stability",
+            "description": "Voice stability (0.0 - 1.0). Higher is more stable, lower is more expressive"
+          },
+          "similarityBoost": {
+            "label": "Similarity Boost",
+            "description": "Voice similarity boost (0.0 - 1.0). Higher is closer to original voice"
+          },
+          "timeout": {
+            "label": "Timeout (seconds)",
+            "description": "Request timeout"
+          },
+          "proxy": {
+            "label": "Proxy Address",
             "placeholder": "http://127.0.0.1:7890",
             "description": "HTTP/HTTPS proxy (if needed)"
           }

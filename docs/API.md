@@ -2,13 +2,47 @@
 
 本文档定义 NyaDeskPet 前后端 WebSocket 通信协议与消息格式。
 
+## 目录
+- [API 接口规范](#api-接口规范)
+  - [目录](#目录)
+  - [通信概述](#通信概述)
+  - [前端 - 后端消息](#前端---后端消息)
+    - [user\_input — 用户输入](#user_input--用户输入)
+    - [model\_info — 模型信息](#model_info--模型信息)
+    - [tap\_event — 触碰事件](#tap_event--触碰事件)
+    - [character\_info — 角色信息](#character_info--角色信息)
+    - [file\_upload — 文件上传](#file_upload--文件上传)
+    - [plugin\_response — 插件响应转发](#plugin_response--插件响应转发)
+    - [plugin\_status — 插件状态通知](#plugin_status--插件状态通知)
+    - [tool\_confirm\_response — 工具确认响应](#tool_confirm_response--工具确认响应)
+    - [command\_execute — 斜杠指令执行](#command_execute--斜杠指令执行)
+    - [plugin\_message — 插件主动消息](#plugin_message--插件主动消息)
+  - [后端 - 前端消息](#后端---前端消息)
+    - [dialogue — 对话消息](#dialogue--对话消息)
+    - [流式对话](#流式对话)
+    - [tool\_confirm — 工具调用确认请求](#tool_confirm--工具调用确认请求)
+    - [流式音频传输](#流式音频传输)
+      - [时间轴 timing 格式](#时间轴-timing-格式)
+    - [live2d — Live2D 控制](#live2d--live2d-控制)
+    - [sync\_command — 组合指令](#sync_command--组合指令)
+    - [plugin\_invoke — 插件调用请求](#plugin_invoke--插件调用请求)
+    - [commands\_register — 指令注册](#commands_register--指令注册)
+  - [前端插件协议](#前端插件协议)
+    - [连接握手](#连接握手)
+    - [配置请求](#配置请求)
+    - [权限请求](#权限请求)
+    - [语言切换](#语言切换)
+    - [富内容响应类型](#富内容响应类型)
+  - [消息优先级](#消息优先级)
+  - [消息持久化](#消息持久化)
+
 ## 通信概述
 
 - 传输协议：WebSocket
 - 消息格式：JSON，所有消息包含 `type` 字段
 - 内置 Agent 服务器地址：`ws://localhost:8011`（可在设置中修改）
 
-## 前端 → 后端消息
+## 前端 - 后端消息
 
 ### user_input — 用户输入
 
@@ -206,7 +240,7 @@
 - `metadata`：可选，附加结构化数据
 - 消息会被持久化到会话历史中（格式：`[插件 pluginName] text`）
 
-## 后端 → 前端消息
+## 后端 - 前端消息
 
 ### dialogue — 对话消息
 
@@ -227,7 +261,7 @@
 
 - `attachment` 可选
 
-### 流式对话（三段式）
+### 流式对话
 
 LLM 配置 `stream: true` 时使用，实现逐字输出：
 
@@ -289,7 +323,7 @@ LLM 请求调用插件来源的工具时，先向前端发送确认：
 - `source`：`function`（内置）/ `mcp`（MCP 服务器）/ `plugin`（前端插件）
 - 仅 `plugin` 来源需要确认，超时自动视为拒绝
 
-### 流式音频传输（三段式）
+### 流式音频传输
 
 **audio_stream_start**
 ```json

@@ -104,6 +104,8 @@ export interface ElectronAPI {
   agentDeleteTool: (toolId: string) => Promise<{ success: boolean }>;
   agentGetToolStats: () => Promise<{ total: number; enabled: number; function: number; mcp: number }>;
   agentSetToolCallingEnabled: (enabled: boolean) => Promise<{ success: boolean }>;
+  agentSetCommandFilterEnabled: (enabled: boolean) => Promise<{ success: boolean }>;
+  agentGetCommandFilterEnabled: () => Promise<{ enabled: boolean }>;
   onAgentToolsChanged: (callback: () => void) => void;
   
   // MCP 管理

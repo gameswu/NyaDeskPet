@@ -10,6 +10,7 @@ export {
   type LLMResponse,
   type LLMStreamChunk,
   type ChatMessage,
+  type ChatMessageImage,
   type TokenUsage,
   type ProviderConfig,
   type ProviderMetadata,
@@ -18,7 +19,8 @@ export {
   type ToolDefinitionSchema,
   type ToolChoiceOption,
   providerRegistry,
-  registerProvider
+  registerProvider,
+  PROVIDER_CAPABILITY_FIELDS
 } from './provider';
 
 // TTS Provider 基础层
@@ -106,6 +108,7 @@ export {
   type ToolDefinition,
   type ToolCall,
   type ToolResult,
+  type ToolResultImage,
   type ToolHandler,
   type OpenAIToolFormat
 } from './tools';

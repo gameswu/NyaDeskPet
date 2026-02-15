@@ -12,7 +12,8 @@
 import {
   ProviderConfig,
   ProviderMetadata,
-  registerProvider
+  registerProvider,
+  PROVIDER_CAPABILITY_FIELDS
 } from '../provider';
 import { OpenAIProvider } from './openai';
 
@@ -67,14 +68,11 @@ export const DEEPSEEK_METADATA: ProviderMetadata = {
     {
       key: 'model',
       label: '模型',
-      type: 'select',
+      type: 'string',
       required: false,
       default: 'deepseek-chat',
-      options: [
-        { value: 'deepseek-chat', label: 'deepseek-chat' },
-        { value: 'deepseek-reasoner', label: 'deepseek-reasoner' }
-      ],
-      description: 'deepseek-chat 适合通用对话，deepseek-reasoner 适合复杂推理任务'
+      placeholder: 'deepseek-chat',
+      description: '填写模型 ID，如 deepseek-chat（通用对话）、deepseek-reasoner（复杂推理）'
     },
     {
       key: 'timeout',
@@ -99,7 +97,8 @@ export const DEEPSEEK_METADATA: ProviderMetadata = {
       required: false,
       default: false,
       description: '启用后 LLM 回复将逐字流式显示，提升响应速度体验'
-    }
+    },
+    ...PROVIDER_CAPABILITY_FIELDS
   ]
 };
 

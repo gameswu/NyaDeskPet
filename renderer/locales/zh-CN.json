@@ -106,11 +106,11 @@
       "title": "日志管理",
       "enableLogging": "启用日志记录",
       "logLevels": "日志级别",
-      "levelDebug": "调试 (Debug)",
-      "levelInfo": "信息 (Info)",
-      "levelWarn": "警告 (Warn)",
-      "levelError": "错误 (Error)",
-      "levelCritical": "严重 (Critical)",
+      "levelDebug": "调试",
+      "levelInfo": "信息",
+      "levelWarn": "警告",
+      "levelError": "错误",
+      "levelCritical": "严重",
       "retention": "日志保留",
       "retentionDays": "保留天数",
       "logFiles": "日志文件",
@@ -181,7 +181,8 @@
     "commands": {
       "title": "指令管理",
       "description": "管理已注册的斜杠指令，可启用或禁用指令",
-      "empty": "暂无已注册的指令"
+      "empty": "暂无已注册的指令",
+      "filterLabel": "从 LLM 上下文中过滤指令消息"
     },
     "serverStatus": "服务状态",
     "status": "状态",
@@ -254,6 +255,22 @@
           "stream": {
             "label": "流式输出",
             "description": "启用后 LLM 回复将逐字流式显示，提升响应速度体验。关闭则等待完整回复后一次性显示"
+          },
+          "supportsText": {
+            "label": "文字",
+            "description": "模型支持文字输入/输出"
+          },
+          "supportsVision": {
+            "label": "图片",
+            "description": "模型支持图片输入（Vision）。开启后工具返回的图片将直接发送给模型，否则自动转述为文字"
+          },
+          "supportsFile": {
+            "label": "文件",
+            "description": "模型支持文件输入（如 PDF、文档等）"
+          },
+          "supportsToolCalling": {
+            "label": "工具调用",
+            "description": "模型支持 Function Calling / Tool Use。关闭后将不会向模型发送工具定义"
           }
         }
       },
@@ -272,11 +289,8 @@
           },
           "model": {
             "label": "模型",
-            "description": "deepseek-chat 适合通用对话，deepseek-reasoner 适合复杂推理任务",
-            "options": {
-              "deepseek-chat": "deepseek-chat",
-              "deepseek-reasoner": "deepseek-reasoner"
-            }
+            "placeholder": "deepseek-chat",
+            "description": "填写模型 ID，如 deepseek-chat（通用对话）、deepseek-reasoner（复杂推理）"
           },
           "timeout": {
             "label": "超时时间（秒）",
@@ -290,6 +304,22 @@
           "stream": {
             "label": "流式输出",
             "description": "启用后 LLM 回复将逐字流式显示，提升响应速度体验"
+          },
+          "supportsText": {
+            "label": "文字",
+            "description": "模型支持文字输入/输出"
+          },
+          "supportsVision": {
+            "label": "图片",
+            "description": "模型支持图片输入（Vision）。开启后工具返回的图片将直接发送给模型，否则自动转述为文字"
+          },
+          "supportsFile": {
+            "label": "文件",
+            "description": "模型支持文件输入（如 PDF、文档等）"
+          },
+          "supportsToolCalling": {
+            "label": "工具调用",
+            "description": "模型支持 Function Calling / Tool Use。关闭后将不会向模型发送工具定义"
           }
         }
       },
@@ -319,6 +349,22 @@
           "stream": {
             "label": "流式输出",
             "description": "启用后 LLM 回复将逐字流式显示，提升响应速度体验"
+          },
+          "supportsText": {
+            "label": "文字",
+            "description": "模型支持文字输入/输出"
+          },
+          "supportsVision": {
+            "label": "图片",
+            "description": "模型支持图片输入（Vision）。开启后工具返回的图片将直接发送给模型，否则自动转述为文字"
+          },
+          "supportsFile": {
+            "label": "文件",
+            "description": "模型支持文件输入（如 PDF、文档等）"
+          },
+          "supportsToolCalling": {
+            "label": "工具调用",
+            "description": "模型支持 Function Calling / Tool Use。关闭后将不会向模型发送工具定义"
           }
         }
       },
@@ -337,17 +383,8 @@
           },
           "model": {
             "label": "模型",
-            "description": "选择模型。支持自定义输入模型 ID，完整列表见 https://cloud.siliconflow.cn/models",
-            "options": {
-              "Qwen/Qwen2.5-7B-Instruct": "Qwen2.5-7B-Instruct（免费）",
-              "Qwen/Qwen3-8B": "Qwen3-8B",
-              "Qwen/Qwen3-32B": "Qwen3-32B",
-              "Pro/zai-org/GLM-4.7": "GLM-4.7（Pro）",
-              "deepseek-ai/DeepSeek-V3": "DeepSeek-V3",
-              "deepseek-ai/DeepSeek-R1": "DeepSeek-R1",
-              "Pro/deepseek-ai/DeepSeek-V3": "DeepSeek-V3（Pro）",
-              "Pro/deepseek-ai/DeepSeek-R1": "DeepSeek-R1（Pro）"
-            }
+            "placeholder": "Qwen/Qwen2.5-7B-Instruct",
+            "description": "填写模型 ID，如 Qwen/Qwen2.5-7B-Instruct、deepseek-ai/DeepSeek-V3。完整列表见 https://cloud.siliconflow.cn/models"
           },
           "timeout": {
             "label": "超时时间（秒）",
@@ -361,6 +398,414 @@
           "stream": {
             "label": "流式输出",
             "description": "启用后 LLM 回复将逐字流式显示，提升响应速度体验"
+          },
+          "supportsText": {
+            "label": "文字",
+            "description": "模型支持文字输入/输出"
+          },
+          "supportsVision": {
+            "label": "图片",
+            "description": "模型支持图片输入（Vision）。开启后工具返回的图片将直接发送给模型，否则自动转述为文字"
+          },
+          "supportsFile": {
+            "label": "文件",
+            "description": "模型支持文件输入（如 PDF、文档等）"
+          },
+          "supportsToolCalling": {
+            "label": "工具调用",
+            "description": "模型支持 Function Calling / Tool Use。关闭后将不会向模型发送工具定义"
+          }
+        }
+      },
+      "gemini": {
+        "name": "Google Gemini",
+        "description": "Google Gemini 系列模型，支持多模态理解与生成、Function Calling、思考推理，免费额度慷慨",
+        "fields": {
+          "apiKey": {
+            "label": "API Key",
+            "placeholder": "AIza...",
+            "description": "从 Google AI Studio 获取的 API 密钥（https://aistudio.google.com/apikey）"
+          },
+          "baseUrl": {
+            "label": "API Base URL",
+            "description": "Gemini OpenAI 兼容端点，通常无需修改。如需代理可修改"
+          },
+          "model": {
+            "label": "模型",
+            "placeholder": "gemini-2.5-flash",
+            "description": "填写模型 ID，如 gemini-2.5-flash、gemini-2.5-pro、gemini-2.0-flash"
+          },
+          "timeout": {
+            "label": "超时时间（秒）",
+            "description": "请求超时时间，推理模型建议适当增大"
+          },
+          "proxy": {
+            "label": "代理地址",
+            "placeholder": "http://127.0.0.1:7890",
+            "description": "HTTP/HTTPS 代理（如需翻墙访问）"
+          },
+          "stream": {
+            "label": "流式输出",
+            "description": "启用后 LLM 回复将逐字流式显示，提升响应速度体验"
+          },
+          "supportsText": {
+            "label": "文字",
+            "description": "模型支持文字输入/输出"
+          },
+          "supportsVision": {
+            "label": "图片",
+            "description": "模型支持图片输入（Vision）。开启后工具返回的图片将直接发送给模型，否则自动转述为文字"
+          },
+          "supportsFile": {
+            "label": "文件",
+            "description": "模型支持文件输入（如 PDF、文档等）"
+          },
+          "supportsToolCalling": {
+            "label": "工具调用",
+            "description": "模型支持 Function Calling / Tool Use。关闭后将不会向模型发送工具定义"
+          }
+        }
+      },
+      "dashscope": {
+        "name": "DashScope（阿里云百炼）",
+        "description": "阿里云百炼平台，通义千问全系列模型（Qwen），支持 Vision、Function Calling、深度思考，国内直连",
+        "fields": {
+          "apiKey": {
+            "label": "API Key",
+            "placeholder": "sk-...",
+            "description": "从阿里云百炼平台获取的 API 密钥（https://bailian.console.aliyun.com/#/key-manage）"
+          },
+          "baseUrl": {
+            "label": "API Base URL",
+            "description": "DashScope OpenAI 兼容端点，通常无需修改"
+          },
+          "model": {
+            "label": "模型",
+            "placeholder": "qwen-plus",
+            "description": "填写模型 ID，如 qwen-plus、qwen-turbo、qwen-max、qwen-long、qwq-plus"
+          },
+          "timeout": {
+            "label": "超时时间（秒）",
+            "description": "请求超时时间，推理模型建议适当增大"
+          },
+          "proxy": {
+            "label": "代理地址",
+            "placeholder": "http://127.0.0.1:7890",
+            "description": "HTTP/HTTPS 代理（国内一般无需使用）"
+          },
+          "stream": {
+            "label": "流式输出",
+            "description": "启用后 LLM 回复将逐字流式显示，提升响应速度体验"
+          },
+          "supportsText": {
+            "label": "文字",
+            "description": "模型支持文字输入/输出"
+          },
+          "supportsVision": {
+            "label": "图片",
+            "description": "模型支持图片输入（Vision）。开启后工具返回的图片将直接发送给模型，否则自动转述为文字"
+          },
+          "supportsFile": {
+            "label": "文件",
+            "description": "模型支持文件输入（如 PDF、文档等）"
+          },
+          "supportsToolCalling": {
+            "label": "工具调用",
+            "description": "模型支持 Function Calling / Tool Use。关闭后将不会向模型发送工具定义"
+          }
+        }
+      },
+      "zhipu": {
+        "name": "智谱 AI（GLM）",
+        "description": "智谱 AI 开放平台，GLM-4 系列模型，glm-4-flash 免费使用，支持 Vision 和 Function Calling，国内直连",
+        "fields": {
+          "apiKey": {
+            "label": "API Key",
+            "placeholder": "your_api_key",
+            "description": "从智谱 AI 开放平台获取的 API 密钥（https://open.bigmodel.cn/usercenter/apikeys）"
+          },
+          "baseUrl": {
+            "label": "API Base URL",
+            "description": "智谱 AI API 地址，通常无需修改"
+          },
+          "model": {
+            "label": "模型",
+            "placeholder": "glm-4-flash",
+            "description": "填写模型 ID，如 glm-4-flash、glm-4-plus、glm-4-long、glm-4v-plus"
+          },
+          "timeout": {
+            "label": "超时时间（秒）",
+            "description": "请求超时时间"
+          },
+          "proxy": {
+            "label": "代理地址",
+            "placeholder": "http://127.0.0.1:7890",
+            "description": "HTTP/HTTPS 代理（国内一般无需使用）"
+          },
+          "stream": {
+            "label": "流式输出",
+            "description": "启用后 LLM 回复将逐字流式显示，提升响应速度体验"
+          },
+          "supportsText": {
+            "label": "文字",
+            "description": "模型支持文字输入/输出"
+          },
+          "supportsVision": {
+            "label": "图片",
+            "description": "模型支持图片输入（Vision）。开启后工具返回的图片将直接发送给模型，否则自动转述为文字"
+          },
+          "supportsFile": {
+            "label": "文件",
+            "description": "模型支持文件输入（如 PDF、文档等）"
+          },
+          "supportsToolCalling": {
+            "label": "工具调用",
+            "description": "模型支持 Function Calling / Tool Use。关闭后将不会向模型发送工具定义"
+          }
+        }
+      },
+      "volcengine": {
+        "name": "火山引擎（豆包）",
+        "description": "火山引擎方舟平台，豆包大模型（Doubao），使用推理接入点 ID 访问，支持 Function Calling 和 Vision，国内直连",
+        "fields": {
+          "apiKey": {
+            "label": "API Key",
+            "placeholder": "your_api_key",
+            "description": "从火山引擎方舟平台获取的 API 密钥（https://console.volcengine.com/ark/region:ark+cn-beijing/apiKey）"
+          },
+          "baseUrl": {
+            "label": "API Base URL",
+            "description": "火山引擎方舟 API 地址，通常无需修改"
+          },
+          "model": {
+            "label": "推理接入点 ID",
+            "placeholder": "ep-20240901xxxxx-xxxxx",
+            "description": "在方舟控制台创建的推理接入点 ID（Endpoint ID），非模型名称。创建地址：https://console.volcengine.com/ark/region:ark+cn-beijing/endpoint"
+          },
+          "timeout": {
+            "label": "超时时间（秒）",
+            "description": "请求超时时间"
+          },
+          "proxy": {
+            "label": "代理地址",
+            "placeholder": "http://127.0.0.1:7890",
+            "description": "HTTP/HTTPS 代理（国内一般无需使用）"
+          },
+          "stream": {
+            "label": "流式输出",
+            "description": "启用后 LLM 回复将逐字流式显示，提升响应速度体验"
+          },
+          "supportsText": {
+            "label": "文字",
+            "description": "模型支持文字输入/输出"
+          },
+          "supportsVision": {
+            "label": "图片",
+            "description": "模型支持图片输入（Vision）。开启后工具返回的图片将直接发送给模型，否则自动转述为文字"
+          },
+          "supportsFile": {
+            "label": "文件",
+            "description": "模型支持文件输入（如 PDF、文档等）"
+          },
+          "supportsToolCalling": {
+            "label": "工具调用",
+            "description": "模型支持 Function Calling / Tool Use。关闭后将不会向模型发送工具定义"
+          }
+        }
+      },
+      "groq": {
+        "name": "Groq",
+        "description": "Groq 超快 LPU 推理平台，支持 Llama、DeepSeek、Qwen、Gemma 等开源模型，有免费额度，推理速度极快",
+        "fields": {
+          "apiKey": {
+            "label": "API Key",
+            "placeholder": "gsk_...",
+            "description": "从 Groq 控制台获取的 API 密钥（https://console.groq.com/keys）"
+          },
+          "baseUrl": {
+            "label": "API Base URL",
+            "description": "Groq API 地址，通常无需修改"
+          },
+          "model": {
+            "label": "模型",
+            "placeholder": "llama-3.3-70b-versatile",
+            "description": "填写模型 ID，如 llama-3.3-70b-versatile、llama-3.1-8b-instant。完整列表见 https://console.groq.com/docs/models"
+          },
+          "timeout": {
+            "label": "超时时间（秒）",
+            "description": "请求超时时间"
+          },
+          "proxy": {
+            "label": "代理地址",
+            "placeholder": "http://127.0.0.1:7890",
+            "description": "HTTP/HTTPS 代理（如需翻墙访问）"
+          },
+          "stream": {
+            "label": "流式输出",
+            "description": "启用后 LLM 回复将逐字流式显示，提升响应速度体验"
+          },
+          "supportsText": {
+            "label": "文字",
+            "description": "模型支持文字输入/输出"
+          },
+          "supportsVision": {
+            "label": "图片",
+            "description": "模型支持图片输入（Vision）。开启后工具返回的图片将直接发送给模型，否则自动转述为文字"
+          },
+          "supportsFile": {
+            "label": "文件",
+            "description": "模型支持文件输入（如 PDF、文档等）"
+          },
+          "supportsToolCalling": {
+            "label": "工具调用",
+            "description": "模型支持 Function Calling / Tool Use。关闭后将不会向模型发送工具定义"
+          }
+        }
+      },
+      "mistral": {
+        "name": "Mistral AI",
+        "description": "Mistral AI 官方 API，支持 Mistral Large/Small、Codestral 代码模型、Pixtral 多模态模型，欧洲公司注重数据安全",
+        "fields": {
+          "apiKey": {
+            "label": "API Key",
+            "placeholder": "your_api_key",
+            "description": "从 Mistral AI 控制台获取的 API 密钥（https://console.mistral.ai/api-keys/）"
+          },
+          "baseUrl": {
+            "label": "API Base URL",
+            "description": "Mistral AI API 地址，通常无需修改"
+          },
+          "model": {
+            "label": "模型",
+            "placeholder": "mistral-small-latest",
+            "description": "填写模型 ID，如 mistral-small-latest、mistral-large-latest、codestral-latest"
+          },
+          "timeout": {
+            "label": "超时时间（秒）",
+            "description": "请求超时时间"
+          },
+          "proxy": {
+            "label": "代理地址",
+            "placeholder": "http://127.0.0.1:7890",
+            "description": "HTTP/HTTPS 代理（如需翻墙访问）"
+          },
+          "stream": {
+            "label": "流式输出",
+            "description": "启用后 LLM 回复将逐字流式显示，提升响应速度体验"
+          },
+          "supportsText": {
+            "label": "文字",
+            "description": "模型支持文字输入/输出"
+          },
+          "supportsVision": {
+            "label": "图片",
+            "description": "模型支持图片输入（Vision）。开启后工具返回的图片将直接发送给模型，否则自动转述为文字"
+          },
+          "supportsFile": {
+            "label": "文件",
+            "description": "模型支持文件输入（如 PDF、文档等）"
+          },
+          "supportsToolCalling": {
+            "label": "工具调用",
+            "description": "模型支持 Function Calling / Tool Use。关闭后将不会向模型发送工具定义"
+          }
+        }
+      },
+      "anthropic": {
+        "name": "Anthropic（Claude）",
+        "description": "Anthropic 官方 API，Claude Sonnet/Opus/Haiku 系列模型，业界领先的推理和代码能力，支持 Vision 和 Function Calling",
+        "fields": {
+          "apiKey": {
+            "label": "API Key",
+            "placeholder": "sk-ant-...",
+            "description": "从 Anthropic 控制台获取的 API 密钥（https://console.anthropic.com/settings/keys）"
+          },
+          "baseUrl": {
+            "label": "API Base URL",
+            "description": "Anthropic API 地址。如需代理可修改此地址"
+          },
+          "model": {
+            "label": "模型",
+            "placeholder": "claude-sonnet-4-20250514",
+            "description": "填写模型 ID，如 claude-sonnet-4-20250514、claude-opus-4-20250514、claude-haiku-3-5-20241022"
+          },
+          "timeout": {
+            "label": "超时时间（秒）",
+            "description": "请求超时时间，Opus 模型建议适当增大"
+          },
+          "proxy": {
+            "label": "代理地址",
+            "placeholder": "http://127.0.0.1:7890",
+            "description": "HTTP/HTTPS 代理（如需翻墙访问）"
+          },
+          "stream": {
+            "label": "流式输出",
+            "description": "启用后 LLM 回复将逐字流式显示，提升响应速度体验"
+          },
+          "supportsText": {
+            "label": "文字",
+            "description": "模型支持文字输入/输出"
+          },
+          "supportsVision": {
+            "label": "图片",
+            "description": "模型支持图片输入（Vision）。开启后工具返回的图片将直接发送给模型，否则自动转述为文字"
+          },
+          "supportsFile": {
+            "label": "文件",
+            "description": "模型支持文件输入（如 PDF、文档等）"
+          },
+          "supportsToolCalling": {
+            "label": "工具调用",
+            "description": "模型支持 Function Calling / Tool Use。关闭后将不会向模型发送工具定义"
+          }
+        }
+      },
+      "xai": {
+        "name": "xAI（Grok）",
+        "description": "xAI 官方 API，Grok 系列模型，强大的推理和实时信息获取能力，支持 Vision 和 Function Calling",
+        "fields": {
+          "apiKey": {
+            "label": "API Key",
+            "placeholder": "xai-...",
+            "description": "从 xAI 控制台获取的 API 密钥（https://console.x.ai/）"
+          },
+          "baseUrl": {
+            "label": "API Base URL",
+            "description": "xAI API 地址，通常无需修改"
+          },
+          "model": {
+            "label": "模型",
+            "placeholder": "grok-3-mini",
+            "description": "填写模型 ID，如 grok-3、grok-3-mini、grok-2"
+          },
+          "timeout": {
+            "label": "超时时间（秒）",
+            "description": "请求超时时间"
+          },
+          "proxy": {
+            "label": "代理地址",
+            "placeholder": "http://127.0.0.1:7890",
+            "description": "HTTP/HTTPS 代理（如需翻墙访问）"
+          },
+          "stream": {
+            "label": "流式输出",
+            "description": "启用后 LLM 回复将逐字流式显示，提升响应速度体验"
+          },
+          "supportsText": {
+            "label": "文字",
+            "description": "模型支持文字输入/输出"
+          },
+          "supportsVision": {
+            "label": "图片",
+            "description": "模型支持图片输入（Vision）。开启后工具返回的图片将直接发送给模型，否则自动转述为文字"
+          },
+          "supportsFile": {
+            "label": "文件",
+            "description": "模型支持文件输入（如 PDF、文档等）"
+          },
+          "supportsToolCalling": {
+            "label": "工具调用",
+            "description": "模型支持 Function Calling / Tool Use。关闭后将不会向模型发送工具定义"
           }
         }
       }
@@ -401,12 +846,8 @@
           },
           "model": {
             "label": "TTS 模型",
-            "description": "TTS 引擎模型版本",
-            "options": {
-              "s1": "S1（最新，推荐）",
-              "speech-1.6": "Speech 1.6（稳定）",
-              "speech-1.5": "Speech 1.5（旧版）"
-            }
+            "placeholder": "s1",
+            "description": "填写模型 ID，如 s1、speech-1.6、speech-1.5"
           },
           "format": {
             "label": "音频格式",
@@ -438,6 +879,140 @@
             "label": "代理地址",
             "placeholder": "http://127.0.0.1:7890",
             "description": "HTTP/HTTPS 代理（如需使用）"
+          }
+        }
+      },
+      "edge-tts": {
+        "name": "Edge TTS",
+        "description": "微软 Edge 浏览器免费 TTS，支持多种语言，效果自然",
+        "fields": {
+          "voice": {
+            "label": "音色",
+            "description": "选择音色",
+            "options": {
+              "en-US-JennyNeural": "Jenny (US Female)",
+              "en-US-GuyNeural": "Guy (US Male)",
+              "en-GB-SoniaNeural": "Sonia (UK Female)",
+              "zh-CN-XiaoxiaoNeural": "晓晓 (CN Female)",
+              "zh-CN-YunxiNeural": "云希 (CN Male)"
+            }
+          },
+          "rate": {
+            "label": "语速",
+            "description": "语速调节（+50%, -10%, etc.）"
+          },
+          "pitch": {
+            "label": "音调",
+            "description": "音调调节（+10Hz, -10Hz, etc.）"
+          },
+          "volume": {
+            "label": "音量",
+            "description": "音量调节（+10%, -10%, etc.）"
+          }
+        }
+      },
+      "openai-tts": {
+        "name": "OpenAI TTS",
+        "description": "OpenAI 语音合成 API，6 种预制音色，支持高质量（tts-1-hd）和低延迟（tts-1）模式，多种音频格式，兼容 OpenAI TTS API 的其他服务也可使用",
+        "fields": {
+          "apiKey": {
+            "label": "API Key",
+            "placeholder": "sk-...",
+            "description": "从 OpenAI 或兼容服务商获取的 API 密钥"
+          },
+          "baseUrl": {
+            "label": "API Base URL",
+            "placeholder": "https://api.openai.com/v1",
+            "description": "API 地址。兼容服务可修改此地址"
+          },
+          "voiceId": {
+            "label": "音色",
+            "description": "选择音色。支持自定义输入音色 ID",
+            "options": {
+              "alloy": "Alloy（中性平衡）",
+              "echo": "Echo（温暖男声）",
+              "fable": "Fable（英式口音）",
+              "onyx": "Onyx（深沉男声）",
+              "nova": "Nova（友好女声）",
+              "shimmer": "Shimmer（活泼女声）"
+            }
+          },
+          "model": {
+            "label": "TTS 模型",
+            "placeholder": "tts-1",
+            "description": "填写模型 ID，如 tts-1（低延迟）、tts-1-hd（高音质）"
+          },
+          "format": {
+            "label": "音频格式",
+            "description": "输出音频格式",
+            "options": {
+              "mp3": "MP3",
+              "opus": "Opus",
+              "aac": "AAC",
+              "flac": "FLAC",
+              "wav": "WAV",
+              "pcm": "PCM"
+            }
+          },
+          "speed": {
+            "label": "语速",
+            "description": "语速调节，范围 0.25 - 4.0"
+          },
+          "timeout": {
+            "label": "超时时间（秒）",
+            "description": "请求超时时间"
+          },
+          "proxy": {
+            "label": "代理地址",
+            "placeholder": "http://127.0.0.1:7890",
+            "description": "HTTP/HTTPS 代理（如需翻墙访问）"
+          }
+        }
+      },
+      "elevenlabs": {
+        "name": "ElevenLabs",
+        "description": "业界领先的 AI 语音合成服务，支持 29+ 语言，音色克隆，多种模型，超高音质，流式传输",
+        "fields": {
+          "apiKey": {
+            "label": "API Key",
+            "placeholder": "your_api_key",
+            "description": "从 ElevenLabs 获取的 API 密钥（https://elevenlabs.io/app/settings/api-keys）"
+          },
+          "voiceId": {
+            "label": "音色 ID",
+            "placeholder": "JBFqnCBsd6RMkjVDRZzb",
+            "description": "音色 ID，可从 https://elevenlabs.io/voice-library 获取。默认为 George"
+          },
+          "model": {
+            "label": "TTS 模型",
+            "placeholder": "eleven_multilingual_v2",
+            "description": "填写模型 ID，如 eleven_multilingual_v2、eleven_flash_v2_5、eleven_flash_v2"
+          },
+          "format": {
+            "label": "音频格式",
+            "description": "输出音频格式",
+            "options": {
+              "mp3": "MP3",
+              "pcm": "PCM",
+              "opus": "Opus"
+            }
+          },
+          "stability": {
+            "label": "稳定性",
+            "description": "语音稳定性，范围 0.0 - 1.0。越高越稳定，越低越有表现力"
+          },
+          "similarityBoost": {
+            "label": "相似度增强",
+            "description": "音色相似度增强，范围 0.0 - 1.0。越高越接近原始音色"
+          },
+          "timeout": {
+            "label": "超时时间（秒）",
+            "description": "请求超时时间"
+          },
+          "proxy": {
+            "label": "代理地址",
+            "placeholder": "http://127.0.0.1:7890",
+            "description": "HTTP/HTTPS 代理（如需翻墙访问）"
           }
         }
       }

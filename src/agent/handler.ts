@@ -572,6 +572,16 @@ export class AgentHandler {
     this.enableToolCalling = enabled;
   }
 
+  /** 设置是否从 LLM 上下文中过滤指令消息 */
+  public setCommandFilterEnabled(enabled: boolean): void {
+    this.sessions.filterCommandFromHistory = enabled;
+  }
+
+  /** 获取指令消息过滤状态 */
+  public getCommandFilterEnabled(): boolean {
+    return this.sessions.filterCommandFromHistory;
+  }
+
   // ==================== 自动连接 ====================
 
   /** 自动连接所有已启用的 Provider 实例 */
@@ -1243,13 +1253,19 @@ export class AgentHandler {
 
       const results: ToolResult[] = await toolManager.executeToolCalls(toolCalls);
 
-      // 将工具结果追加到消息
+      // 视觉能力降级：主 Provider 不支持 Vision 时，自动将图片转述为文字
+      if (!this.getPrimaryCapabilities().vision) {
+        await this.transcribeToolResultImages(results);
+      }
+
+      // 将工具结果追加到消息（保留多模态图片数据）
       for (const result of results) {
         const toolMsg: ChatMessage = {
           role: 'tool',
           content: result.content,
           toolCallId: result.toolCallId,
-          toolName: toolCalls.find(tc => tc.id === result.toolCallId)?.name
+          toolName: toolCalls.find(tc => tc.id === result.toolCallId)?.name,
+          ...(result.images && result.images.length > 0 && { images: result.images })
         };
         currentRequest.messages.push(toolMsg);
         this.sessions.addMessage(ctx.sessionId, toolMsg);
@@ -1281,6 +1297,68 @@ export class AgentHandler {
     if (!this.primaryInstanceId) return false;
     const entry = this.providerInstances.get(this.primaryInstanceId);
     return !!(entry?.config.config?.stream);
+  }
+
+  /**
+   * 获取主 LLM Provider 的能力声明
+   */
+  private getPrimaryCapabilities(): { text: boolean; vision: boolean; file: boolean; toolCalling: boolean } {
+    const defaults = { text: true, vision: false, file: false, toolCalling: true };
+    if (!this.primaryInstanceId) return defaults;
+    const entry = this.providerInstances.get(this.primaryInstanceId);
+    if (!entry) return defaults;
+    const cfg = entry.config.config;
+    return {
+      text: cfg?.supportsText !== false,
+      vision: !!(cfg?.supportsVision),
+      file: !!(cfg?.supportsFile),
+      toolCalling: cfg?.supportsToolCalling !== false
+    };
+  }
+
+  /**
+   * 对工具结果中的图片进行视觉降级处理
+   * 当主 Provider 不支持 Vision 时，尝试用 image-transcriber 将图片转述为文字
+   */
+  private async transcribeToolResultImages(results: ToolResult[]): Promise<void> {
+    const transcriber = agentPluginManager.getPluginInstance('image-transcriber') as {
+      isAvailable?: () => boolean;
+      transcribeImage?: (data: string, mime: string, prompt?: string) => Promise<{ success: boolean; description?: string; error?: string }>;
+    } | null;
+
+    for (const result of results) {
+      if (!result.images || result.images.length === 0) continue;
+
+      const descriptions: string[] = [];
+      for (const img of result.images) {
+        if (transcriber?.isAvailable?.() && transcriber.transcribeImage) {
+          try {
+            const resp = await transcriber.transcribeImage(
+              img.data, img.mimeType,
+              '请详细描述这张图片的内容，包括画面中的主要元素、文字、颜色、布局等。用中文回复。'
+            );
+            if (resp.success && resp.description) {
+              descriptions.push(resp.description);
+            } else {
+              descriptions.push(`[图片转述失败: ${resp.error || '未知错误'}]`);
+            }
+          } catch (e) {
+            descriptions.push(`[图片转述异常: ${(e as Error).message}]`);
+          }
+        } else {
+          descriptions.push('[图片无法转述：未配置视觉 Provider]');
+        }
+      }
+
+      // 将图片占位符替换为详细描述、移除 images 字段
+      let newContent = result.content;
+      for (const desc of descriptions) {
+        // 替换第一个占位符 [图片: ...]
+        newContent = newContent.replace(/\[图片: [^\]]*\]/, `[图片描述: ${desc}]`);
+      }
+      result.content = newContent;
+      delete result.images;
+    }
   }
 
   /**
@@ -1503,13 +1581,19 @@ export class AgentHandler {
 
       const results: ToolResult[] = await toolManager.executeToolCalls(toolCalls);
 
-      // 将工具结果追加到消息
+      // 视觉能力降级：主 Provider 不支持 Vision 时，自动将图片转述为文字
+      if (!this.getPrimaryCapabilities().vision) {
+        await this.transcribeToolResultImages(results);
+      }
+
+      // 将工具结果追加到消息（保留多模态图片数据）
       for (const result of results) {
         const toolMsg: ChatMessage = {
           role: 'tool',
           content: result.content,
           toolCallId: result.toolCallId,
-          toolName: toolCalls.find(tc => tc.id === result.toolCallId)?.name
+          toolName: toolCalls.find(tc => tc.id === result.toolCallId)?.name,
+          ...(result.images && result.images.length > 0 && { images: result.images })
         };
         currentRequest.messages.push(toolMsg);
         this.sessions.addMessage(ctx.sessionId, toolMsg);
@@ -1715,17 +1799,17 @@ export class AgentHandler {
 
     logger.info(`[AgentHandler] 执行指令: /${data.command}`);
 
-    // 持久化指令输入
+    // 持久化指令输入（标记为 command 类型）
     const argsStr = data.args && Object.keys(data.args).length > 0 ? ' ' + JSON.stringify(data.args) : '';
-    this.sessions.addMessage(ctx.sessionId, { role: 'user', content: `/${data.command}${argsStr}` });
+    this.sessions.addMessage(ctx.sessionId, { role: 'user', content: `/${data.command}${argsStr}`, isCommand: true });
 
     const result = await commandRegistry.execute(data.command, data.args || {}, ctx.sessionId);
 
-    // 持久化指令执行结果
+    // 持久化指令执行结果（标记为 command 类型）
     const resultText = result.success
       ? (result.text || `指令 /${data.command} 执行成功`)
       : `指令 /${data.command} 失败: ${result.error || '未知错误'}`;
-    this.sessions.addMessage(ctx.sessionId, { role: 'assistant', content: resultText });
+    this.sessions.addMessage(ctx.sessionId, { role: 'assistant', content: resultText, isCommand: true });
 
     ctx.addReply({
       type: 'command_response',

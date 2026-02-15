@@ -708,19 +708,58 @@ ipcMain.handle('asr-recognize', async (_event: IpcMainInvokeEvent, audioData: st
 });
 
 /**
- * 比较版本号
+ * 比较版本号，支持预发布后缀
+ * 
+ * 版本格式：x.y.z[-type-timestamp]
+ * - 正式版：1.0.0
+ * - 开发版：1.0.0-beta-2602150042
+ * - 热修复：1.0.0-hotfix-2602150042
+ * 
+ * 优先级（同基础版本下）：beta < hotfix < release
+ * 同类型按时间戳数值比较
+ * 
  * @returns 1 如果 v1 > v2, -1 如果 v1 < v2, 0 如果相等
  */
 function compareVersions(v1: string, v2: string): number {
-  const parts1 = v1.split('.').map(Number);
-  const parts2 = v2.split('.').map(Number);
-  
-  for (let i = 0; i < Math.max(parts1.length, parts2.length); i++) {
-    const p1 = parts1[i] || 0;
-    const p2 = parts2[i] || 0;
+  // 预发布类型优先级（数字越大优先级越高）
+  const PRE_RELEASE_PRIORITY: Record<string, number> = {
+    'beta': 0,
+    'hotfix': 1
+  };
+  const RELEASE_PRIORITY = 2; // 正式版优先级最高
+
+  function parse(v: string) {
+    const parts = v.split('-');
+    const versionParts = parts[0].split('.').map(Number);
+    const type = parts[1] || null;     // 'beta' | 'hotfix' | null(正式版)
+    const timestamp = parts[2] || '0'; // 时间戳字符串
+    return { versionParts, type, timestamp };
+  }
+
+  const a = parse(v1);
+  const b = parse(v2);
+
+  // 1. 先比较基础版本号 x.y.z
+  const maxLen = Math.max(a.versionParts.length, b.versionParts.length);
+  for (let i = 0; i < maxLen; i++) {
+    const p1 = a.versionParts[i] || 0;
+    const p2 = b.versionParts[i] || 0;
     if (p1 > p2) return 1;
     if (p1 < p2) return -1;
   }
+
+  // 2. 基础版本相同，比较预发布类型优先级
+  const aPriority = a.type === null ? RELEASE_PRIORITY : (PRE_RELEASE_PRIORITY[a.type] ?? -1);
+  const bPriority = b.type === null ? RELEASE_PRIORITY : (PRE_RELEASE_PRIORITY[b.type] ?? -1);
+  if (aPriority > bPriority) return 1;
+  if (aPriority < bPriority) return -1;
+
+  // 3. 同类型，比较时间戳（纯数字字符串，直接数值比较）
+  const aTs = Number(a.timestamp);
+  const bTs = Number(b.timestamp);
+  if (aTs > bTs) return 1;
+  if (aTs < bTs) return -1;
+
   return 0;
 }
 
@@ -1251,7 +1290,12 @@ ipcMain.handle('agent:set-port', async (_event: IpcMainInvokeEvent, port: number
  */
 ipcMain.handle('agent:start', async () => {
   try {
-    if (agentServer.isRunning()) {
+    // 检测端口变更：如果服务器正在运行但端口已变更，自动重启
+    if (agentServer.isRunning() && agentServer.needsRestart()) {
+      logger.info('[Agent] 检测到端口变更，正在重启 Agent 服务器...');
+      await agentServer.stop();
+      // 继续执行下方的 start 逻辑
+    } else if (agentServer.isRunning()) {
       return { success: true, ...agentServer.getStatus() };
     }
     const result = await agentServer.start();
@@ -1512,6 +1556,23 @@ ipcMain.handle('agent:set-tool-calling-enabled', (_event, enabled: boolean) => {
   const handler = agentServer.getHandler();
   handler.setToolCallingEnabled(enabled);
   return { success: true };
+});
+
+/**
+ * 设置是否从 LLM 上下文中过滤指令消息
+ */
+ipcMain.handle('agent:set-command-filter-enabled', (_event, enabled: boolean) => {
+  const handler = agentServer.getHandler();
+  handler.setCommandFilterEnabled(enabled);
+  return { success: true };
+});
+
+/**
+ * 获取指令消息过滤状态
+ */
+ipcMain.handle('agent:get-command-filter-enabled', () => {
+  const handler = agentServer.getHandler();
+  return { enabled: handler.getCommandFilterEnabled() };
 });
 
 // ==================== MCP 管理 IPC ====================

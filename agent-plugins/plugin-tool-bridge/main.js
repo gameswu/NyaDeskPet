@@ -218,33 +218,62 @@ class PluginToolBridgePlugin extends AgentPlugin {
   async _invokePlugin(pluginId, action, params) {
     try {
       const result = await this.invokeSender(pluginId, action, params);
-      return {
-        toolCallId: '',
-        content: result.success ? this._formatPluginResult(result) : (result.error || '插件执行失败'),
-        success: result.success
-      };
+      if (!result.success) {
+        return { toolCallId: '', content: result.error || '插件执行失败', success: false };
+      }
+      const { text, images } = this._formatPluginResult(result);
+      const toolResult = { toolCallId: '', content: text, success: true };
+      if (images.length > 0) {
+        toolResult.images = images;
+      }
+      return toolResult;
     } catch (error) {
       return { toolCallId: '', content: `插件调用失败: ${error.message}`, success: false };
     }
   }
 
+  /**
+   * 格式化插件结果，返回 { text, images }
+   * 图片数据保留为 base64，由上层传递给多模态 LLM
+   */
   _formatPluginResult(result) {
-    if (!result.result) return '执行成功（无返回数据）';
+    const images = [];
+    const text = this._extractContent(result.result, images);
+    return { text, images };
+  }
 
-    switch (result.result.type) {
+  /**
+   * 递归提取插件结果中的文本和图片
+   * @param {object} content - PluginResultContent
+   * @param {Array} images - 收集的图片数组 [{ data, mimeType }]
+   * @returns {string} 文本描述
+   */
+  _extractContent(content, images) {
+    if (!content) return '执行成功（无返回数据）';
+
+    switch (content.type) {
       case 'text':
-        return result.result.content?.text || result.result.content?.output || JSON.stringify(result.result.content);
-      case 'image':
-        return `[图片: ${result.result.content?.filename || 'screenshot'}, ${result.result.content?.width}x${result.result.content?.height}]`;
-      case 'data':
-        return JSON.stringify(result.result.content, null, 2);
-      case 'mixed':
-        if (Array.isArray(result.result.content)) {
-          return result.result.content.map(item => this._formatPluginResult({ success: true, result: item })).join('\n');
+        return content.content?.text || content.content?.output || JSON.stringify(content.content);
+      case 'image': {
+        const imgData = content.content;
+        if (imgData?.data) {
+          const formatToMime = { png: 'image/png', jpeg: 'image/jpeg', gif: 'image/gif', webp: 'image/webp' };
+          images.push({
+            data: imgData.data,
+            mimeType: formatToMime[imgData.format] || 'image/png'
+          });
         }
-        return JSON.stringify(result.result.content);
+        return `[图片: ${imgData?.filename || 'screenshot'}, ${imgData?.width || '?'}x${imgData?.height || '?'}]`;
+      }
+      case 'data':
+        return JSON.stringify(content.content, null, 2);
+      case 'mixed':
+        if (Array.isArray(content.content)) {
+          return content.content.map(item => this._extractContent(item, images)).join('\n');
+        }
+        return JSON.stringify(content.content);
       default:
-        return JSON.stringify(result.result.content);
+        return JSON.stringify(content.content);
     }
   }
 

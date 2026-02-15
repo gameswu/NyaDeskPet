@@ -30,7 +30,7 @@ export interface ConversationRecord {
 }
 
 /** 消息类型 */
-export type MessageType = 'text' | 'image' | 'file' | 'tool_call' | 'tool_result' | 'system';
+export type MessageType = 'text' | 'image' | 'file' | 'tool_call' | 'tool_result' | 'system' | 'command';
 
 /** 消息记录 */
 export interface MessageRecord {

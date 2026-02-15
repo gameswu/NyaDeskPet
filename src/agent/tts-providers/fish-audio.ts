@@ -371,15 +371,11 @@ export const FISH_AUDIO_METADATA: ProviderMetadata = {
     {
       key: 'model',
       label: 'TTS 模型',
-      type: 'select',
+      type: 'string',
       required: false,
       default: 's1',
-      options: [
-        { label: 'S1', value: 's1' },
-        { label: 'Speech 1.6', value: 'speech-1.6' },
-        { label: 'Speech 1.5', value: 'speech-1.5' }
-      ],
-      description: 'TTS 引擎模型版本'
+      placeholder: 's1',
+      description: '填写模型 ID，如 s1、speech-1.6、speech-1.5'
     },
     {
       key: 'format',

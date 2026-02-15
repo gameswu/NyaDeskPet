@@ -18,7 +18,8 @@ import { HttpsProxyAgent } from 'https-proxy-agent';
 import {
   ProviderConfig,
   ProviderMetadata,
-  registerProvider
+  registerProvider,
+  PROVIDER_CAPABILITY_FIELDS
 } from '../provider';
 import { OpenAIProvider } from './openai';
 import { logger } from '../../logger';
@@ -240,7 +241,8 @@ export const OPENROUTER_METADATA: ProviderMetadata = {
       required: false,
       default: false,
       description: '启用后 LLM 回复将逐字流式显示，提升响应速度体验'
-    }
+    },
+    ...PROVIDER_CAPABILITY_FIELDS
   ]
 };
 

@@ -121,6 +121,8 @@ const electronAPI = {
   agentDeleteTool: (toolId: string) => ipcRenderer.invoke('agent:delete-tool', toolId),
   agentGetToolStats: () => ipcRenderer.invoke('agent:get-tool-stats'),
   agentSetToolCallingEnabled: (enabled: boolean) => ipcRenderer.invoke('agent:set-tool-calling-enabled', enabled),
+  agentSetCommandFilterEnabled: (enabled: boolean) => ipcRenderer.invoke('agent:set-command-filter-enabled', enabled),
+  agentGetCommandFilterEnabled: () => ipcRenderer.invoke('agent:get-command-filter-enabled'),
   onAgentToolsChanged: (callback: () => void) => {
     ipcRenderer.on('agent-tools-changed', () => callback());
   },

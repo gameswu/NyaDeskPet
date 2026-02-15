@@ -21,7 +21,8 @@
 import {
   ProviderConfig,
   ProviderMetadata,
-  registerProvider
+  registerProvider,
+  PROVIDER_CAPABILITY_FIELDS
 } from '../provider';
 import { OpenAIProvider } from './openai';
 
@@ -76,20 +77,11 @@ export const SILICONFLOW_METADATA: ProviderMetadata = {
     {
       key: 'model',
       label: '模型',
-      type: 'select',
+      type: 'string',
       required: false,
       default: 'Qwen/Qwen2.5-7B-Instruct',
-      options: [
-        { value: 'Qwen/Qwen2.5-7B-Instruct', label: 'Qwen2.5-7B-Instruct（免费）' },
-        { value: 'Qwen/Qwen3-8B', label: 'Qwen3-8B' },
-        { value: 'Qwen/Qwen3-32B', label: 'Qwen3-32B' },
-        { value: 'Pro/zai-org/GLM-4.7', label: 'GLM-4.7（Pro）' },
-        { value: 'deepseek-ai/DeepSeek-V3', label: 'DeepSeek-V3' },
-        { value: 'deepseek-ai/DeepSeek-R1', label: 'DeepSeek-R1' },
-        { value: 'Pro/deepseek-ai/DeepSeek-V3', label: 'DeepSeek-V3（Pro）' },
-        { value: 'Pro/deepseek-ai/DeepSeek-R1', label: 'DeepSeek-R1（Pro）' }
-      ],
-      description: '选择模型。支持自定义输入模型 ID，完整列表见 https://cloud.siliconflow.cn/models'
+      placeholder: 'Qwen/Qwen2.5-7B-Instruct',
+      description: '填写模型 ID，如 Qwen/Qwen2.5-7B-Instruct、deepseek-ai/DeepSeek-V3。完整列表见 https://cloud.siliconflow.cn/models'
     },
     {
       key: 'timeout',
@@ -114,7 +106,8 @@ export const SILICONFLOW_METADATA: ProviderMetadata = {
       required: false,
       default: false,
       description: '启用后 LLM 回复将逐字流式显示，提升响应速度体验'
-    }
+    },
+    ...PROVIDER_CAPABILITY_FIELDS
   ]
 };
 

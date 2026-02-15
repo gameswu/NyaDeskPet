@@ -2,6 +2,46 @@
 
 本文档介绍 NyaDeskPet 的架构设计、核心模块与开发相关技术细节。
 
+## 目录
+- [开发指南](#开发指南)
+  - [目录](#目录)
+  - [架构总览](#架构总览)
+  - [文件结构](#文件结构)
+  - [快速开始](#快速开始)
+    - [环境要求](#环境要求)
+    - [安装与启动](#安装与启动)
+    - [打包分发](#打包分发)
+  - [Agent 框架](#agent-框架)
+    - [LLM Provider 层](#llm-provider-层)
+    - [TTS Provider 层](#tts-provider-层)
+    - [消息管线 (Pipeline)](#消息管线-pipeline)
+    - [会话管理 (Context)](#会话管理-context)
+    - [数据持久化 (Database)](#数据持久化-database)
+    - [工具系统 (Tools)](#工具系统-tools)
+    - [MCP 客户端](#mcp-客户端)
+    - [业务处理器 (Handler)](#业务处理器-handler)
+    - [Agent 插件系统](#agent-插件系统)
+    - [斜杠指令系统](#斜杠指令系统)
+  - [渲染进程模块](#渲染进程模块)
+    - [Live2D 管理器](#live2d-管理器)
+    - [后端通信客户端](#后端通信客户端)
+    - [音频播放器](#音频播放器)
+    - [对话管理器](#对话管理器)
+    - [设置管理器](#设置管理器)
+    - [插件系统](#插件系统)
+    - [国际化系统](#国际化系统)
+    - [主题管理器](#主题管理器)
+    - [摄像头管理器](#摄像头管理器)
+    - [麦克风管理器](#麦克风管理器)
+    - [响应优先级控制](#响应优先级控制)
+  - [ASR 服务](#asr-服务)
+  - [版本管理](#版本管理)
+  - [开发辅助脚本](#开发辅助脚本)
+  - [平台优化](#平台优化)
+    - [Windows GPU 渲染](#windows-gpu-渲染)
+  - [技术栈](#技术栈)
+  - [添加新模块](#添加新模块)
+
 ## 架构总览
 
 ```mermaid
@@ -55,59 +95,96 @@ graph TB
 ## 文件结构
 
 ```
-src/                        主进程 TypeScript → dist/
-  main.ts                   Electron 主进程、~88 个 IPC Handler
-  preload.ts                IPC 安全桥接
-  agent-server.ts           内置 WebSocket Agent 服务器
-  asr-service.ts            Sherpa-ONNX ASR 服务
-  logger.ts                 主进程日志
-  agent/                    Agent 框架
-    index.ts                Barrel export
-    provider.ts             LLM Provider 抽象层 + 注册表
-    tts-provider.ts         TTS Provider 抽象层 + 注册表
-    pipeline.ts             消息管线（3 Stage 洋葱模型）
-    context.ts              PipelineContext + SessionManager
-    handler.ts              业务处理器（含工具循环 + 流式输出）
-    database.ts             SQLite 数据库（better-sqlite3，WAL 模式）
-    tools.ts                FC 工具管理器
-    mcp-client.ts           MCP 客户端（stdio / SSE）
-    commands.ts             斜杠指令注册表
-    agent-plugin.ts         Agent 插件框架（基类 + Manager）
-    providers/              LLM 实现：openai / deepseek / openrouter / siliconflow
-    tts-providers/          TTS 实现：fish-audio / edge-tts
+NyaDeskPet/
+├── src/                        # 主进程源代码
+│   ├── main.ts                 # Electron 主进程入口
+│   ├── preload.ts              # IPC 安全桥接
+│   ├── agent-server.ts         # 内置 WebSocket Agent 服务器
+│   ├── asr-service.ts          # Sherpa-ONNX 离线语音识别服务
+│   ├── logger.ts               # 主进程日志管理
+│   └── agent/                  # Agent 核心逻辑框架
+│       ├── index.ts            # 模块出口
+│       ├── provider.ts         # LLM Provider 抽象层与注册表
+│       ├── tts-provider.ts     # TTS Provider 抽象层与注册表
+│       ├── pipeline.ts         # 消息处理管线
+│       ├── context.ts          # Pipeline 上下文与会话管理
+│       ├── handler.ts          # 业务逻辑
+│       ├── database.ts         # SQLite 存储
+│       ├── tools.ts            # Function Calling 工具管理器
+│       ├── mcp-client.ts       # MCP 协议客户端 (stdio/SSE)
+│       ├── commands.ts         # 斜杠指令注册表
+│       ├── agent-plugin.ts     # Agent 插件基类与管理框架
+│       ├── providers/          # LLM 各平台具体实现
+│       └── tts-providers/      # TTS 各平台具体实现
+├── renderer/                   # 渲染进程
+│   ├── index.html              # 主窗口页面
+│   ├── styles.css              # 全局样式
+│   ├── tsconfig.json           # 渲染进程专属 TS 配置
+│   ├── locales/                # 国际化多语言
+│   ├── lib/                    # 核心库
+│   ├── types/                  # 类型定义
+│   │   └── global.d.ts         # 全局 IPC 接口与 API 类型定义
+│   └── js/                     # 前端业务逻辑
+│       ├── renderer.ts         # 渲染进程主协调器
+│       ├── settings-manager.ts # localStorage 设置持久化
+│       ├── live2d-manager.ts   # Live2D 模型加载、渲染与交互
+│       ├── backend-client.ts   # 通信层
+│       ├── dialogue-manager.ts # UI 对话气泡管理
+│       ├── audio-player.ts     # 音频播放
+│       ├── camera-manager.ts   # 视觉输入管理
+│       ├── microphone-manager.ts # 音频采集与 ASR 调度
+│       ├── i18n-manager.ts     # 语言切换管理
+│       ├── theme-manager.ts    # 皮肤/主题切换
+│       ├── plugin-connector.ts # 外部插件通信桥接
+│       ├── plugin-ui.ts        # 插件中心交互界面
+│       ├── plugin-config-ui.ts # 动态插件配置表单
+│       ├── plugin-permission.ts# 插件权限审批管理
+│       ├── response-ctrl.ts    # 响应优先级状态机
+│       └── logger.ts           # 渲染进程日志记录
+├── agent-plugins/              # Agent 功能扩展插件
+├── plugins/                    # 渲染进程独立插件
+├── models/                     # 资源目录 (Live2D 模型、ASR 模型文件)
+├── scripts/                    # 开发与构建辅助脚本
+├── assets/                     # 静态资源
+├── docs/                       # 项目文档
+├── package.json                # 项目元数据与依赖配置
+└── tsconfig.json               # 全局 TypeScript 配置
+```
 
-renderer/                   渲染进程（*.ts 原地编译为 *.js）
-  index.html                主页面
-  styles.css                样式
-  tsconfig.json             渲染进程编译配置
-  types/global.d.ts         全局类型定义（所有接口唯一来源）
-  locales/                  i18n：zh-CN.json / en-US.json
-  lib/                      PixiJS / Live2D SDK / Lucide Icons
-  js/
-    renderer.ts             主协调（初始化、事件、对话管理、指令 UI）
-    settings-manager.ts     设置管理（localStorage）
-    live2d-manager.ts       Live2D 渲染与交互
-    backend-client.ts       WebSocket + HTTP 通信
-    dialogue-manager.ts     对话气泡
-    audio-player.ts         MSE 流式音频 + 口型同步
-    camera-manager.ts       摄像头管理
-    microphone-manager.ts   麦克风 + ASR 集成
-    i18n-manager.ts         国际化
-    theme-manager.ts        主题切换
-    plugin-connector.ts     前端插件进程 + WebSocket 管理
-    plugin-ui.ts            插件管理面板
-    plugin-config-manager.ts  插件配置读写
-    plugin-config-ui.ts     插件配置表单（9 种类型）
-    plugin-permission-manager.ts  权限审批（5 级危险度）
-    response-controller.ts  响应优先级控制
-    logger.ts               渲染进程日志
+## 快速开始
 
-agent-plugins/              Agent 插件（10 个，纯 JS CommonJS）
-plugins/                    前端插件（独立进程，WebSocket）
-models/                     Live2D 模型 + ASR 模型
-scripts/                    辅助脚本
-assets/                     图标资源
-docs/                       文档（固定 5 个）
+### 环境要求
+
+- Node.js 18+
+- npm
+- FFmpeg（语音识别需要，用于音频格式转换）
+
+### 安装与启动
+
+```bash
+npm install
+npm run compile
+
+# 开发模式（按平台选择）
+npm run dev:mac
+npm run dev:linux
+npm run dev:win
+
+# 生产模式
+npm start
+```
+
+| 模式 | 特点 |
+|------|------|
+| 开发模式 | 窗口可调整大小、显示在任务栏、适合调试 |
+| 生产模式 | 无边框透明窗口、置顶显示、系统托盘、关闭时隐藏到托盘 |
+
+### 打包分发
+
+```bash
+npm run build:win     # Windows
+npm run build:mac     # macOS
+npm run build:linux   # Linux
 ```
 
 ## Agent 框架
@@ -118,7 +195,7 @@ docs/                       文档（固定 5 个）
 
 - `LLMProvider` 抽象基类：定义 `chat()` / `chatStream()` 接口
 - `providerRegistry`：全局注册表，`registerProvider()` 注册实现
-- 4 种实现：`openai`、`deepseek`、`openrouter`、`siliconflow`
+- 12 种实现：`openai`、`deepseek`、`openrouter`、`siliconflow`、`gemini`、`dashscope`、`zhipu`、`volcengine`、`groq`、`mistral`、`anthropic`、`xai`
 - 支持多实例共存，通过 `instanceId` 区分
 
 扩展示例：
@@ -146,7 +223,7 @@ registerProvider(new MyProvider({ id: 'my-llm', name: 'My LLM' }).getMetadata(),
 ### TTS Provider 层
 
 - `TTSProvider` 抽象基类：定义 `synthesize()` 流式音频合成接口
-- 2 种实现：`fish-audio`、`edge-tts`
+- 4 种实现：`fish-audio`、`edge-tts`、`openai-tts`、`elevenlabs`
 - 同样支持多实例共存与注册表
 
 ### 消息管线 (Pipeline)
@@ -419,6 +496,8 @@ npm run version major           # 主版本 +1
 | `npm run check-i18n` | 校验 zh-CN / en-US 键一致性 |
 | `npm run migrate-logger:preview` | 预览 console → logger 迁移 |
 | `npm run migrate-logger` | 执行迁移（排除 logger.ts 自身） |
+| `npm run version` | 生成 version.json（版本号 + 构建时间） |
+| `npm run check-live2d` | 校验 models/ 下 Live2D 模型的 param-map.json 映射完整性 |
 
 ## 平台优化
 
