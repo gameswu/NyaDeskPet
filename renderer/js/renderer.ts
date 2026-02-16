@@ -173,21 +173,22 @@ async function initializeApp(): Promise<void> {
     // 7. 初始化 ASR 服务
     window.logger.info('初始化 ASR 服务...');
     try {
-      const asrResult = await window.electronAPI.asrInitialize();
+      const asrModel = settings.asrModel || 'sense-voice-small';
+      const asrResult = await window.electronAPI.asrInitialize(asrModel);
       if (asrResult.success) {
         window.logger.info('ASR 服务初始化成功');
-        window.logger.info('ASR语音识别服务初始化成功');
         appState.asrReady = true;
       } else {
         window.logger.warn('ASR 服务初始化失败，语音识别功能将不可用');
-        window.logger.warn('ASR语音识别服务初始化失败');
         appState.asrReady = false;
       }
     } catch (error) {
       window.logger.error('ASR 服务初始化异常:', error);
-      window.logger.error('ASR语音识别服务初始化异常', { error });
       appState.asrReady = false;
     }
+
+    // 更新麦克风按钮状态（ASR 不可用时显示灰色）
+    updateMicButtonState();
     
     // 设置麦克风 ASR 回调
     window.microphoneManager.setASRCallback((text: string) => {
@@ -522,6 +523,9 @@ function showAgentPanel(): void {
 
   // 初始化指令管理 UI
   initAgentCommandsUI();
+
+  // 初始化技能管理 UI
+  initAgentSkillsUI();
 
   // 初始化标签页切换
   initAgentTabs();
@@ -1924,6 +1928,11 @@ function initAgentTabs(): void {
       if (tabName === 'commands') {
         refreshAgentCommands();
       }
+
+      // 如果是技能标签，刷新技能列表
+      if (tabName === 'skills') {
+        refreshAgentSkills();
+      }
     });
   });
 }
@@ -2272,6 +2281,18 @@ function initAgentCommandsUI(): void {
   }
 }
 
+// ==================== 技能管理 ====================
+
+/**
+ * 初始化技能管理 UI
+ */
+function initAgentSkillsUI(): void {
+  const btnRefresh = document.getElementById('btn-skills-refresh');
+  if (btnRefresh) {
+    btnRefresh.onclick = () => refreshAgentSkills();
+  }
+}
+
 /**
  * 刷新指令列表
  */
@@ -2334,6 +2355,79 @@ async function refreshAgentCommands(): Promise<void> {
     }
   } catch (error) {
     window.logger.error('加载指令列表失败:', error);
+  }
+}
+
+/**
+ * 刷新技能列表
+ */
+async function refreshAgentSkills(): Promise<void> {
+  try {
+    const skills = await window.electronAPI.agentGetSkills();
+    const container = document.getElementById('agent-skill-list');
+    const countEl = document.getElementById('agent-skills-count');
+    if (!container) return;
+
+    if (countEl) {
+      const enabledCount = skills.filter(s => s.enabled).length;
+      countEl.textContent = `${skills.length} 个技能 (${enabledCount} 已启用)`;
+    }
+
+    if (!skills || skills.length === 0) {
+      container.innerHTML = `<div class="agent-skill-empty">${window.i18nManager?.t('agent.skills.empty') || '暂无已注册的技能'}</div>`;
+      return;
+    }
+
+    container.innerHTML = '';
+
+    // 按分类名映射
+    const categoryLabels: Record<string, string> = {
+      system: '系统',
+      knowledge: '知识',
+      creative: '创意',
+      automation: '自动化',
+      communication: '通信',
+    };
+
+    skills.forEach((skill) => {
+      const item = document.createElement('div');
+      item.className = 'agent-skill-item';
+
+      const categoryLabel = categoryLabels[skill.category] || skill.category;
+      const paramsHtml = skill.parameterNames.map((p: string) =>
+        `<span class="agent-skill-param">${escapeHtml(p)}</span>`
+      ).join('');
+
+      item.innerHTML = `
+        <div class="agent-skill-info">
+          <div class="agent-skill-name">${escapeHtml(skill.name)}</div>
+          <div class="agent-skill-desc">${escapeHtml(skill.description)}</div>
+          <div class="agent-skill-meta">
+            <span class="agent-skill-category">${escapeHtml(categoryLabel)}</span>
+            <span class="agent-skill-source">${escapeHtml(skill.source)}</span>
+            ${paramsHtml ? `<div class="agent-skill-params">${paramsHtml}</div>` : ''}
+          </div>
+        </div>
+        <label class="toggle-switch-small">
+          <input type="checkbox" ${skill.enabled ? 'checked' : ''} data-skill="${escapeHtml(skill.name)}">
+          <span class="toggle-slider-small"></span>
+        </label>
+      `;
+
+      const toggle = item.querySelector('input[type="checkbox"]') as HTMLInputElement;
+      if (toggle) {
+        toggle.addEventListener('change', async () => {
+          const skillName = toggle.getAttribute('data-skill');
+          if (skillName) {
+            await window.electronAPI.agentSetSkillEnabled(skillName, toggle.checked);
+          }
+        });
+      }
+
+      container.appendChild(item);
+    });
+  } catch (error) {
+    window.logger.error('加载技能列表失败:', error);
   }
 }
 
@@ -3173,6 +3267,14 @@ function initializeChatWindow(): void {
   const btnVoice = document.getElementById('btn-voice');
   if (btnVoice) {
     btnVoice.addEventListener('click', async () => {
+      // ASR 不可用时拒绝操作并提示
+      if (!appState.asrReady) {
+        const status = await window.electronAPI.asrGetStatus();
+        const errorMsg = status.error || window.i18nManager?.t('chatWindow.asrUnavailable') || '语音识别不可用，请在设置中检查 ASR 模型';
+        window.dialogueManager?.showQuick(errorMsg, 3000);
+        return;
+      }
+
       try {
         const isActive = window.microphoneManager.isActive();
         if (isActive) {
@@ -3363,6 +3465,9 @@ function showSettingsPanel(): void {
   (document.getElementById('mic-threshold-value') as HTMLSpanElement).textContent = String(settings.micVolumeThreshold || 30);
   (document.getElementById('setting-mic-auto-send') as HTMLInputElement).checked = settings.micAutoSend !== false;
 
+  // 加载 ASR 模型列表
+  loadASRModelList(settings.asrModel || 'sense-voice-small');
+
   // 加载开机自启动状态（从主进程获取）
   window.electronAPI.getAutoLaunch().then(result => {
     (document.getElementById('setting-auto-launch') as HTMLInputElement).checked = result.enabled;
@@ -3420,6 +3525,7 @@ async function saveSettings(): Promise<void> {
   const micBackgroundMode = (document.getElementById('setting-mic-background-mode') as HTMLInputElement).checked;
   const micVolumeThreshold = parseFloat((document.getElementById('setting-mic-threshold') as HTMLInputElement).value);
   const micAutoSend = (document.getElementById('setting-mic-auto-send') as HTMLInputElement).checked;
+  const asrModel = (document.getElementById('setting-asr-model') as HTMLSelectElement).value;
   const autoLaunch = (document.getElementById('setting-auto-launch') as HTMLInputElement).checked;
 
   // 获取日志配置
@@ -3458,6 +3564,7 @@ async function saveSettings(): Promise<void> {
     micBackgroundMode,
     micVolumeThreshold,
     micAutoSend,
+    asrModel,
     autoLaunch
   });
 
@@ -4213,3 +4320,134 @@ window.app = appDebug;
 
 window.logger.info('渲染进程脚本加载完成');
 window.logger.info('调试命令: window.app');
+
+// ==================== ASR 模型管理 ====================
+
+/**
+ * 更新麦克风按钮状态
+ * ASR 不可用时显示灰色 + 禁用样式
+ */
+function updateMicButtonState(): void {
+  const btnVoice = document.getElementById('btn-voice');
+  if (!btnVoice) return;
+
+  if (appState.asrReady) {
+    btnVoice.classList.remove('asr-disabled');
+    btnVoice.title = window.i18nManager?.t('chatWindow.voice') || '语音输入';
+  } else {
+    btnVoice.classList.add('asr-disabled');
+    btnVoice.title = window.i18nManager?.t('chatWindow.asrUnavailable') || '语音识别不可用';
+  }
+}
+
+/**
+ * 加载 ASR 模型列表到设置下拉框
+ */
+async function loadASRModelList(currentModel: string): Promise<void> {
+  const select = document.getElementById('setting-asr-model') as HTMLSelectElement;
+  const statusEl = document.getElementById('asr-model-status') as HTMLSpanElement;
+  if (!select) return;
+
+  try {
+    const { models } = await window.electronAPI.asrListModels();
+
+    // 清空选项
+    select.innerHTML = '';
+
+    if (models.length === 0) {
+      const opt = document.createElement('option');
+      opt.value = '';
+      opt.textContent = window.i18nManager?.t('settings.microphone.asrNoModel') || '未找到 ASR 模型';
+      select.appendChild(opt);
+      select.disabled = true;
+      if (statusEl) {
+        statusEl.textContent = '✗';
+        statusEl.className = 'asr-model-status error';
+      }
+      return;
+    }
+
+    select.disabled = false;
+    for (const model of models) {
+      const opt = document.createElement('option');
+      opt.value = model.name;
+      const sizeMB = (model.size / 1024 / 1024).toFixed(0);
+      opt.textContent = `${model.name} (${sizeMB}MB)`;
+      if (model.name === currentModel) opt.selected = true;
+      select.appendChild(opt);
+    }
+
+    // 更新状态指示
+    if (statusEl) {
+      if (appState.asrReady) {
+        statusEl.textContent = '✓';
+        statusEl.className = 'asr-model-status ready';
+      } else {
+        statusEl.textContent = '✗';
+        statusEl.className = 'asr-model-status error';
+      }
+    }
+
+    // 监听切换事件（实时切换模型）
+    select.onchange = async () => {
+      const newModel = select.value;
+      if (!newModel) return;
+
+      if (statusEl) {
+        statusEl.textContent = '⟳';
+        statusEl.className = 'asr-model-status loading';
+      }
+
+      try {
+        const result = await window.electronAPI.asrSwitchModel(newModel);
+        if (result.success) {
+          appState.asrReady = true;
+          window.settingsManager.setSetting('asrModel', newModel);
+          window.logger.info(`ASR 模型切换成功: ${newModel}`);
+          if (statusEl) {
+            statusEl.textContent = '✓';
+            statusEl.className = 'asr-model-status ready';
+          }
+        } else {
+          appState.asrReady = false;
+          window.logger.error(`ASR 模型切换失败: ${result.error}`);
+          if (statusEl) {
+            statusEl.textContent = '✗';
+            statusEl.className = 'asr-model-status error';
+          }
+          window.dialogueManager?.showQuick(result.error || 'ASR 模型切换失败', 3000);
+        }
+        updateMicButtonState();
+      } catch (error) {
+        appState.asrReady = false;
+        updateMicButtonState();
+        window.logger.error('ASR 模型切换异常:', error);
+        if (statusEl) {
+          statusEl.textContent = '✗';
+          statusEl.className = 'asr-model-status error';
+        }
+      }
+    };
+  } catch (error) {
+    window.logger.error('加载 ASR 模型列表失败:', error);
+  }
+}
+
+// ==================== 使用帮助 ====================
+
+/**
+ * 初始化使用帮助按钮（打开独立窗口）
+ */
+(function setupUsageHelp(): void {
+  const linkHelp = document.getElementById('link-usage-help');
+  if (linkHelp) {
+    linkHelp.addEventListener('click', (e: Event) => {
+      e.preventDefault();
+      const theme = window.themeManager?.getEffectiveTheme?.() || 'light';
+      const locale = window.i18nManager?.getLocale?.() || 'zh-CN';
+      window.electronAPI.openHelpWindow(theme, locale).catch(err => {
+        window.logger.error('打开帮助窗口失败:', err);
+      });
+    });
+  }
+})();

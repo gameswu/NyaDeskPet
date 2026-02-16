@@ -32,6 +32,7 @@ import {
 } from './tts-provider';
 import { type PipelineContext, type Sendable, SessionManager } from './context';
 import { toolManager, type ToolCall, type ToolResult } from './tools';
+import { skillManager } from './skills';
 import { commandRegistry } from './commands';
 import { agentPluginManager, type HandlerAccessor, type MessageContext, type PluginInvokeSender } from './agent-plugin';
 
@@ -1251,7 +1252,25 @@ export class AgentHandler {
         }
       }
 
-      const results: ToolResult[] = await toolManager.executeToolCalls(toolCalls);
+      // 分离技能调用和普通工具调用
+      const skillCalls = toolCalls.filter(tc => skillManager.isSkillToolCall(tc.name));
+      const normalCalls = toolCalls.filter(tc => !skillManager.isSkillToolCall(tc.name));
+
+      // 执行普通工具
+      const normalResults: ToolResult[] = normalCalls.length > 0
+        ? await toolManager.executeToolCalls(normalCalls)
+        : [];
+
+      // 执行技能工具
+      const skillResults: ToolResult[] = [];
+      for (const sc of skillCalls) {
+        const skillCtx = this.createSkillContext();
+        const result = await skillManager.handleToolCall(sc.name, sc.arguments, skillCtx);
+        result.toolCallId = sc.id;
+        skillResults.push(result);
+      }
+
+      const results: ToolResult[] = [...normalResults, ...skillResults];
 
       // 视觉能力降级：主 Provider 不支持 Vision 时，自动将图片转述为文字
       if (!this.getPrimaryCapabilities().vision) {
@@ -1579,9 +1598,25 @@ export class AgentHandler {
         }
       }
 
-      const results: ToolResult[] = await toolManager.executeToolCalls(toolCalls);
+      // 分离技能调用和普通工具调用
+      const skillCalls = toolCalls.filter(tc => skillManager.isSkillToolCall(tc.name));
+      const normalCalls = toolCalls.filter(tc => !skillManager.isSkillToolCall(tc.name));
 
-      // 视觉能力降级：主 Provider 不支持 Vision 时，自动将图片转述为文字
+      // 执行普通工具
+      const normalResults: ToolResult[] = normalCalls.length > 0
+        ? await toolManager.executeToolCalls(normalCalls)
+        : [];
+
+      // 执行技能工具
+      const skillResults: ToolResult[] = [];
+      for (const sc of skillCalls) {
+        const skillCtx = this.createSkillContext();
+        const result = await skillManager.handleToolCall(sc.name, sc.arguments, skillCtx);
+        result.toolCallId = sc.id;
+        skillResults.push(result);
+      }
+
+      const results: ToolResult[] = [...normalResults, ...skillResults];
       if (!this.getPrimaryCapabilities().vision) {
         await this.transcribeToolResultImages(results);
       }
@@ -2076,8 +2111,14 @@ export class AgentHandler {
       hasTTS: () => handler.getPrimaryTTSProvider() !== null,
       getPluginInvokeSender: () => (handler.activeWs && handler.activeSendFn) ? handler.createPluginInvokeSender() : null,
       isToolCallingEnabled: () => handler.enableToolCalling,
-      getOpenAITools: () => (handler.enableToolCalling && toolManager.hasEnabledTools()) ? toolManager.toOpenAITools() : undefined,
-      hasEnabledTools: () => toolManager.hasEnabledTools(),
+      getOpenAITools: () => {
+        if (!handler.enableToolCalling) return undefined;
+        const tools = toolManager.hasEnabledTools() ? toolManager.toOpenAITools() : [];
+        const skillTools = skillManager.toToolSchemas().map(s => ({ type: 'function' as const, function: s }));
+        const merged = [...tools, ...skillTools];
+        return merged.length > 0 ? merged : undefined;
+      },
+      hasEnabledTools: () => toolManager.hasEnabledTools() || skillManager.getEnabledCount() > 0,
       executeWithToolLoop: (request: LLMRequest, ctx: MessageContext) => {
         const provider = handler.getPrimaryProvider();
         if (!provider) throw new Error('未配置主 LLM Provider');
@@ -2106,5 +2147,27 @@ export class AgentHandler {
 
   public getCharacterInfo(): CharacterInfo | null {
     return this.characterInfo;
+  }
+
+  /**
+   * 创建 SkillContext（供技能执行使用）
+   */
+  private createSkillContext(): import('./skills').SkillContext {
+    const handler = this;
+    return {
+      callProvider: async (request: LLMRequest) => {
+        const provider = handler.getPrimaryProvider();
+        if (!provider) throw new Error('未配置主 LLM Provider');
+        return provider.chat(request);
+      },
+      executeTool: async (toolName: string, args: Record<string, unknown>) => {
+        return toolManager.executeTool({ id: `skill_${Date.now()}`, name: toolName, arguments: args });
+      },
+      logger: {
+        info: (msg: string) => logger.info(`[Skill] ${msg}`),
+        warn: (msg: string) => logger.warn(`[Skill] ${msg}`),
+        error: (msg: string) => logger.error(`[Skill] ${msg}`),
+      },
+    };
   }
 }

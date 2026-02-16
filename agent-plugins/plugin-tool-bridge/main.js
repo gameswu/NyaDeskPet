@@ -6,107 +6,48 @@
  * 
  * 工作流程：
  * 1. 从前端收集已连接插件的 capabilities 和 metadata
- * 2. 为每个插件能力生成 ToolSchema（OpenAI Function Calling 格式）
+ * 2. 从各插件目录读取 tools.json 工具定义（或自动生成通用 schema）
  * 3. 注册到 ToolManager
  * 4. LLM 调用工具时 → 通过 WebSocket 转发到前端 → 前端调用插件 → 返回结果
  * 
- * 内置插件映射：
- * - terminal: execute(command, cwd) — 执行终端命令
- * - ui-automation: screenshot(), click(x, y), type(text) — UI 自动化
+ * tools.json 格式：
+ * [
+ *   {
+ *     "name": "tool_name",
+ *     "description": "工具描述",
+ *     "action": "pluginCapabilityName",
+ *     "parameters": { ... OpenAI Function Calling schema ... },
+ *     "defaults": { "key": "defaultValue" }  // 可选
+ *   }
+ * ]
  */
 
+const fs = require('fs');
+const path = require('path');
 const { AgentPlugin } = require('../../dist/agent/agent-plugin');
 
-// ==================== 内置插件的工具定义 ====================
-
-const BUILTIN_PLUGIN_TOOLS = {
-  'terminal': [
-    {
-      name: 'terminal_execute',
-      description: '在用户的终端中执行一条 Shell 命令。可以用来查看文件、安装软件、运行脚本等。注意：命令将在用户的操作系统上实际执行，请谨慎使用。',
-      parameters: {
-        type: 'object',
-        properties: {
-          command: { type: 'string', description: '要执行的 Shell 命令' },
-          cwd: { type: 'string', description: '命令执行的工作目录（可选，默认为用户主目录）' },
-          timeout: { type: 'number', description: '命令超时时间（毫秒），默认 30000' }
-        },
-        required: ['command']
-      }
-    }
-  ],
-  'ui-automation': [
-    {
-      name: 'ui_screenshot',
-      description: '对用户的屏幕进行截图。返回截图的 Base64 图片数据。',
-      parameters: {
-        type: 'object',
-        properties: {
-          region: { type: 'string', description: '截图区域（可选）：full（全屏）、active（活动窗口）' }
-        },
-        required: []
-      }
-    },
-    {
-      name: 'ui_click',
-      description: '在屏幕上指定坐标执行鼠标点击。',
-      parameters: {
-        type: 'object',
-        properties: {
-          x: { type: 'number', description: '点击的 X 坐标（像素）' },
-          y: { type: 'number', description: '点击的 Y 坐标（像素）' },
-          button: { type: 'string', description: '鼠标按钮：left（左键）、right（右键）、middle（中键）', enum: ['left', 'right', 'middle'] }
-        },
-        required: ['x', 'y']
-      }
-    },
-    {
-      name: 'ui_type_text',
-      description: '在当前焦点位置输入文本。',
-      parameters: {
-        type: 'object',
-        properties: {
-          text: { type: 'string', description: '要输入的文本' }
-        },
-        required: ['text']
-      }
-    }
-  ]
-};
-
-/** 内置插件的动作映射 */
-const ACTION_MAPPINGS = {
-  'terminal_execute': {
-    pluginId: 'terminal',
-    action: 'execute',
-    paramMapper: (args) => ({ command: args.command, cwd: args.cwd || undefined, timeout: args.timeout || 30000 })
-  },
-  'ui_screenshot': {
-    pluginId: 'ui-automation',
-    action: 'screenshot',
-    paramMapper: (args) => ({ region: args.region || 'full' })
-  },
-  'ui_click': {
-    pluginId: 'ui-automation',
-    action: 'click',
-    paramMapper: (args) => ({ x: args.x, y: args.y, button: args.button || 'left' })
-  },
-  'ui_type_text': {
-    pluginId: 'ui-automation',
-    action: 'typeText',
-    paramMapper: (args) => ({ text: args.text })
-  }
-};
+/** 前端插件根目录（相对于本插件目录） */
+const FRONTEND_PLUGINS_DIR = path.resolve(__dirname, '../../plugins');
 
 class PluginToolBridgePlugin extends AgentPlugin {
 
   /** 已桥接的工具列表 Map<toolId, { toolId, pluginId, action, schema }> */
   bridgedTools = new Map();
 
+  /**
+   * 动态加载的动作映射 Map<toolName, { pluginId, action, defaults }>
+   * 由 _loadToolDefinitions() 在注册工具时填充
+   */
+  actionMappings = new Map();
+
+  /** pluginId → 目录绝对路径 的缓存 */
+  pluginDirCache = new Map();
+
   /** 插件调用发送器 */
   invokeSender = null;
 
   async initialize() {
+    this._buildPluginDirCache();
     this.ctx.logger.info('插件工具桥接已初始化');
   }
 
@@ -132,16 +73,37 @@ class PluginToolBridgePlugin extends AgentPlugin {
     this.unregisterAll();
 
     for (const plugin of connectedPlugins) {
-      const builtinSchemas = BUILTIN_PLUGIN_TOOLS[plugin.pluginId];
+      const toolDefs = this._loadToolDefinitions(plugin.pluginId);
 
-      if (builtinSchemas) {
-        for (const schema of builtinSchemas) {
+      if (toolDefs) {
+        for (const def of toolDefs) {
+          // 构建 FC schema（name + description + parameters）
+          const schema = {
+            name: def.name,
+            description: def.description,
+            parameters: def.parameters
+          };
           this._registerSingleTool(plugin.pluginId, schema);
+
+          // 记录动作映射
+          this.actionMappings.set(def.name, {
+            pluginId: plugin.pluginId,
+            action: def.action,
+            defaults: def.defaults || {}
+          });
         }
       } else {
+        // 没有 tools.json，退化为通用 schema
         for (const capability of plugin.capabilities) {
           const schema = this._generateGenericSchema(plugin.pluginId, plugin.pluginName, capability);
           this._registerSingleTool(plugin.pluginId, schema);
+
+          // 通用 schema 也要注册到 actionMappings，避免 _executePluginAction 中的 split 推断出错
+          this.actionMappings.set(schema.name, {
+            pluginId: plugin.pluginId,
+            action: capability,
+            defaults: {}
+          });
         }
       }
     }
@@ -157,6 +119,7 @@ class PluginToolBridgePlugin extends AgentPlugin {
       this.ctx.unregisterTool(tool.schema.name);
     }
     this.bridgedTools.clear();
+    this.actionMappings.clear();
   }
 
   /**
@@ -175,6 +138,75 @@ class PluginToolBridgePlugin extends AgentPlugin {
 
   // ==================== 内部方法 ====================
 
+  /**
+   * 扫描前端插件目录，构建 pluginId → 目录绝对路径 的缓存
+   * 读取每个子目录的 metadata.json 获取 id 字段
+   */
+  _buildPluginDirCache() {
+    this.pluginDirCache.clear();
+    try {
+      if (!fs.existsSync(FRONTEND_PLUGINS_DIR)) {
+        this.ctx.logger.debug('前端插件目录不存在: ' + FRONTEND_PLUGINS_DIR);
+        return;
+      }
+      const entries = fs.readdirSync(FRONTEND_PLUGINS_DIR, { withFileTypes: true });
+      for (const entry of entries) {
+        if (!entry.isDirectory()) continue;
+        const metaPath = path.join(FRONTEND_PLUGINS_DIR, entry.name, 'metadata.json');
+        try {
+          if (!fs.existsSync(metaPath)) continue;
+          const meta = JSON.parse(fs.readFileSync(metaPath, 'utf-8'));
+          if (meta.id) {
+            this.pluginDirCache.set(meta.id, path.join(FRONTEND_PLUGINS_DIR, entry.name));
+          }
+        } catch (_) {
+          // 忽略无法解析的 metadata
+        }
+      }
+      this.ctx.logger.debug(`已构建插件目录缓存: ${Array.from(this.pluginDirCache.entries()).map(([id, dir]) => `${id} → ${path.basename(dir)}`).join(', ')}`);
+    } catch (err) {
+      this.ctx.logger.warn('扫描前端插件目录失败: ' + err.message);
+    }
+  }
+
+  /**
+   * 从插件目录读取 tools.json 工具定义
+   * @param {string} pluginId
+   * @returns {Array|null} 工具定义数组，文件不存在或解析失败返回 null
+   */
+  _loadToolDefinitions(pluginId) {
+    // 通过缓存查找插件实际目录
+    let pluginDir = this.pluginDirCache.get(pluginId);
+    if (!pluginDir) {
+      // 缓存未命中，尝试重建
+      this._buildPluginDirCache();
+      pluginDir = this.pluginDirCache.get(pluginId);
+    }
+    if (!pluginDir) {
+      this.ctx.logger.debug(`插件 ${pluginId} 未找到对应目录，将使用通用 schema`);
+      return null;
+    }
+
+    const toolsPath = path.join(pluginDir, 'tools.json');
+    try {
+      if (!fs.existsSync(toolsPath)) {
+        this.ctx.logger.debug(`插件 ${pluginId} 未提供 tools.json，将使用通用 schema`);
+        return null;
+      }
+      const content = fs.readFileSync(toolsPath, 'utf-8');
+      const defs = JSON.parse(content);
+      if (!Array.isArray(defs)) {
+        this.ctx.logger.warn(`插件 ${pluginId} 的 tools.json 格式无效（应为数组）`);
+        return null;
+      }
+      this.ctx.logger.debug(`插件 ${pluginId} 加载了 ${defs.length} 个工具定义`);
+      return defs;
+    } catch (err) {
+      this.ctx.logger.warn(`读取插件 ${pluginId} 的 tools.json 失败: ${err.message}`);
+      return null;
+    }
+  }
+
   _registerSingleTool(pluginId, schema) {
     const toolId = `bridge_${pluginId}_${schema.name}`;
 
@@ -192,14 +224,16 @@ class PluginToolBridgePlugin extends AgentPlugin {
       return { toolCallId: '', content: '插件调用系统未初始化', success: false };
     }
 
-    // 解析目标插件和动作
-    const mapping = ACTION_MAPPINGS[toolName];
+    // 从动态加载的映射中查找
+    const mapping = this.actionMappings.get(toolName);
     let pluginId, action, params;
     if (mapping) {
       pluginId = mapping.pluginId;
       action = mapping.action;
-      params = mapping.paramMapper(args);
+      // 合并默认值：defaults 中的值作为兜底，args 中的值优先
+      params = { ...mapping.defaults, ...args };
     } else {
+      // 通用 schema 退化路径：从工具名推断插件 ID 和动作
       const parts = toolName.split('_');
       pluginId = parts[0];
       action = parts.slice(1).join('_');

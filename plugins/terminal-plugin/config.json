@@ -129,5 +129,21 @@
         "hint": "JSON format key-value pairs, e.g. {\"PATH\": \"/custom/path\"}"
       }
     }
+  },
+  "ui_port": {
+    "type": "int",
+    "description": "UI 进程通信端口",
+    "hint": "终端 UI 窗口的 UDP 通信端口，不同插件应使用不同端口以避免冲突",
+    "default": 19099,
+    "i18n": {
+      "zh-CN": {
+        "description": "UI 进程通信端口",
+        "hint": "终端 UI 窗口的 UDP 通信端口，不同插件应使用不同端口以避免冲突"
+      },
+      "en-US": {
+        "description": "UI process communication port",
+        "hint": "UDP port for terminal UI window communication, each plugin should use a different port to avoid conflicts"
+      }
+    }
   }
 }

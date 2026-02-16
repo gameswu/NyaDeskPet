@@ -241,6 +241,15 @@
           <div class="settings-section">
             <h3 data-i18n="settings.microphone.title">麦克风</h3>
             <div class="setting-item">
+              <label for="setting-asr-model" data-i18n="settings.microphone.asrModel">语音识别模型</label>
+              <div class="asr-model-select-wrapper">
+                <select id="setting-asr-model" class="setting-select">
+                  <option value="" data-i18n="settings.microphone.asrModelLoading">加载中...</option>
+                </select>
+                <span id="asr-model-status" class="asr-model-status"></span>
+              </div>
+            </div>
+            <div class="setting-item">
               <label class="setting-toggle">
                 <input type="checkbox" id="setting-mic-background-mode">
                 <span class="setting-toggle-slider"></span>
@@ -430,21 +439,21 @@
             <div id="update-status" class="update-status hidden"></div>
           </div>
 
-          <!-- 项目链接卡片 -->
-          <div class="about-cards">
-            <a href="#" class="about-card about-card-github" id="link-github">
-              <div class="about-card-icon">
-                <svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor"><path d="M12 0C5.37 0 0 5.37 0 12c0 5.31 3.435 9.795 8.205 11.385.6.105.825-.255.825-.57 0-.285-.015-1.23-.015-2.235-3.015.555-3.795-.735-4.035-1.41-.135-.345-.72-1.41-1.23-1.695-.42-.225-1.02-.78-.015-.795.945-.015 1.62.87 1.845 1.23 1.08 1.815 2.805 1.305 3.495.99.105-.78.42-1.305.765-1.605-2.67-.3-5.46-1.335-5.46-5.925 0-1.305.465-2.385 1.23-3.225-.12-.3-.54-1.53.12-3.18 0 0 1.005-.315 3.3 1.23.96-.27 1.98-.405 3-.405s2.04.135 3 .405c2.295-1.56 3.3-1.23 3.3-1.23.66 1.65.24 2.88.12 3.18.765.84 1.23 1.905 1.23 3.225 0 4.605-2.805 5.625-5.475 5.925.435.375.81 1.095.81 2.22 0 1.605-.015 2.895-.015 3.3 0 .315.225.69.825.57A12.02 12.02 0 0 0 24 12c0-6.63-5.37-12-12-12z"/></svg>
-              </div>
-              <span class="about-card-title" data-i18n="settings.about.projectRepo">项目地址</span>
-              <i data-lucide="external-link" class="about-card-arrow"></i>
+          <!-- 项目链接 -->
+          <div class="about-links-bar">
+            <a href="#" class="about-link about-link-github" id="link-github">
+              <svg viewBox="0 0 24 24" width="13" height="13" fill="currentColor"><path d="M12 0C5.37 0 0 5.37 0 12c0 5.31 3.435 9.795 8.205 11.385.6.105.825-.255.825-.57 0-.285-.015-1.23-.015-2.235-3.015.555-3.795-.735-4.035-1.41-.135-.345-.72-1.41-1.23-1.695-.42-.225-1.02-.78-.015-.795.945-.015 1.62.87 1.845 1.23 1.08 1.815 2.805 1.305 3.495.99.105-.78.42-1.305.765-1.605-2.67-.3-5.46-1.335-5.46-5.925 0-1.305.465-2.385 1.23-3.225-.12-.3-.54-1.53.12-3.18 0 0 1.005-.315 3.3 1.23.96-.27 1.98-.405 3-.405s2.04.135 3 .405c2.295-1.56 3.3-1.23 3.3-1.23.66 1.65.24 2.88.12 3.18.765.84 1.23 1.905 1.23 3.225 0 4.605-2.805 5.625-5.475 5.925.435.375.81 1.095.81 2.22 0 1.605-.015 2.895-.015 3.3 0 .315.225.69.825.57A12.02 12.02 0 0 0 24 12c0-6.63-5.37-12-12-12z"/></svg>
+              <span data-i18n="settings.about.projectRepo">项目地址</span>
             </a>
-            <a href="#" class="about-card about-card-donate" id="link-donate">
-              <div class="about-card-icon">
-                <svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor"><path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"/></svg>
-              </div>
-              <span class="about-card-title" data-i18n="settings.about.donate">捐赠支持</span>
-              <i data-lucide="external-link" class="about-card-arrow"></i>
+            <span class="about-link-sep">·</span>
+            <a href="#" class="about-link about-link-donate" id="link-donate">
+              <svg viewBox="0 0 24 24" width="13" height="13" fill="currentColor"><path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"/></svg>
+              <span data-i18n="settings.about.donate">捐赠支持</span>
+            </a>
+            <span class="about-link-sep">·</span>
+            <a href="#" class="about-link about-link-help" id="link-usage-help">
+              <i data-lucide="book-open" style="width: 13px; height: 13px;"></i>
+              <span data-i18n="settings.about.usageHelp">使用帮助</span>
             </a>
           </div>
         </div>
@@ -518,6 +527,10 @@
         <button class="agent-tab" data-agent-tab="commands">
           <i data-lucide="terminal" style="width: 16px; height: 16px;"></i>
           <span data-i18n="agent.tabs.commands">指令</span>
+        </button>
+        <button class="agent-tab" data-agent-tab="skills">
+          <i data-lucide="sparkles" style="width: 16px; height: 16px;"></i>
+          <span data-i18n="agent.tabs.skills">技能</span>
         </button>
       </div>
       
@@ -742,6 +755,30 @@
           <div id="agent-command-list" class="agent-command-list">
             <div class="agent-command-empty" data-i18n="agent.commands.empty">
               暂无已注册的指令
+            </div>
+          </div>
+        </div>
+
+        <!-- 技能标签页 -->
+        <div class="agent-tab-content" data-agent-tab-content="skills">
+          <div class="agent-section">
+            <h3>
+              <i data-lucide="sparkles" style="width: 15px; height: 15px;"></i>
+              <span data-i18n="agent.skills.title">Agent 技能</span>
+            </h3>
+            <p class="agent-plugins-description" data-i18n="agent.skills.description">
+              管理 Agent 技能，技能是可组合多个工具和 LLM 调用的高级能力，由 Agent 插件注册
+            </p>
+            <div class="agent-skills-header">
+              <span id="agent-skills-count" class="agent-skills-stats">0 个技能</span>
+              <button id="btn-skills-refresh" class="btn-icon-small" title="刷新">
+                <i data-lucide="refresh-cw" style="width: 14px; height: 14px;"></i>
+              </button>
+            </div>
+          </div>
+          <div id="agent-skill-list" class="agent-skill-list">
+            <div class="agent-skill-empty" data-i18n="agent.skills.empty">
+              暂无已注册的技能
             </div>
           </div>
         </div>

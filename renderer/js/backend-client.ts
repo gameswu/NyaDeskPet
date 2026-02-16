@@ -696,6 +696,7 @@ class BackendClient implements IBackendClient {
     panel.appendChild(title);
 
     // 工具列表
+    const ARGS_COLLAPSE_THRESHOLD = 80;
     for (const tc of data.toolCalls) {
       const toolItem = document.createElement('div');
       toolItem.style.cssText = `
@@ -703,12 +704,33 @@ class BackendClient implements IBackendClient {
         margin-bottom: 8px; font-size: 13px;
       `;
       const sourceLabel = tc.source === 'plugin' ? '🧩' : tc.source === 'mcp' ? '🔌' : '⚙️';
+      const argsStr = JSON.stringify(tc.arguments, null, 0);
+      const argsPretty = JSON.stringify(tc.arguments, null, 2);
+
+      let argsHtml: string;
+      if (argsStr.length > ARGS_COLLAPSE_THRESHOLD) {
+        // 超长参数使用 <details> 折叠
+        const preview = argsStr.length > ARGS_COLLAPSE_THRESHOLD
+          ? argsStr.slice(0, ARGS_COLLAPSE_THRESHOLD) + '…'
+          : argsStr;
+        argsHtml = `
+          <details style="color: rgba(255,255,255,0.5); font-size: 11px; word-break: break-all; cursor: pointer;">
+            <summary style="outline: none; user-select: none;">参数: ${preview}</summary>
+            <pre style="margin: 4px 0 0; white-space: pre-wrap; font-size: 11px; color: rgba(255,255,255,0.6); background: rgba(0,0,0,0.2); border-radius: 4px; padding: 6px; max-height: 200px; overflow-y: auto;">${argsPretty}</pre>
+          </details>
+        `;
+      } else {
+        argsHtml = `
+          <div style="color: rgba(255,255,255,0.5); font-size: 11px; word-break: break-all;">
+            参数: ${argsStr}
+          </div>
+        `;
+      }
+
       toolItem.innerHTML = `
         <div style="font-weight: 500; margin-bottom: 4px;">${sourceLabel} ${tc.name}</div>
         ${tc.description ? `<div style="color: rgba(255,255,255,0.6); font-size: 12px; margin-bottom: 4px;">${tc.description}</div>` : ''}
-        <div style="color: rgba(255,255,255,0.5); font-size: 11px; word-break: break-all;">
-          参数: ${JSON.stringify(tc.arguments, null, 0)}
-        </div>
+        ${argsHtml}
       `;
       panel.appendChild(toolItem);
     }

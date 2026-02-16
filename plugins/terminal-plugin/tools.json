@@ -1,0 +1,19 @@
+[
+  {
+    "name": "terminal_execute",
+    "description": "在用户的终端中执行一条 Shell 命令。可以用来查看文件、安装软件、运行脚本等。注意：命令将在用户的操作系统上实际执行，请谨慎使用。",
+    "action": "execute",
+    "parameters": {
+      "type": "object",
+      "properties": {
+        "command": { "type": "string", "description": "要执行的 Shell 命令" },
+        "cwd": { "type": "string", "description": "命令执行的工作目录（可选，默认为用户主目录）" },
+        "timeout": { "type": "number", "description": "命令超时时间（毫秒），默认 30000" }
+      },
+      "required": ["command"]
+    },
+    "defaults": {
+      "timeout": 30000
+    }
+  }
+]

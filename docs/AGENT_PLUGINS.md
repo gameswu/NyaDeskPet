@@ -148,7 +148,7 @@ abstract class AgentPlugin {
 | `registerTool(schema, handler)` | 注册 FC 工具 |
 | `unregisterTool(name)` | 注销工具 |
 | `registerCommand(schema, handler)` | 注册斜杠指令 |
-| `logger.info/warn/error(msg)` | 日志（自动带插件名前缀） |
+| `logger.debug/info/warn/error(msg)` | 日志（自动带插件名前缀） |
 | `getConfig()` | 获取插件配置 |
 | `saveConfig(config)` | 保存配置到磁盘 |
 | `getDataPath()` | 获取插件专属数据目录 |
@@ -422,7 +422,7 @@ A: 可以，插件运行在主进程中，可 `require('electron')`。但推荐�
 A: 开发模式 (`npm run dev`) 下日志输出到终端。也可用 VS Code 附加到主进程打断点。
 
 **Q: 如何打日志？**
-A: `this.ctx.logger.info/warn/error()`，自动带 `[Plugin:插件名]` 前缀。
+A: `this.ctx.logger.debug/info/warn/error()`，自动带 `[Plugin:插件名]` 前缀。
 
 **Q: 循环依赖怎么办？**
 A: 系统会检测并记录警告，跳过相关插件的自动激活。请重新设计依赖关系。

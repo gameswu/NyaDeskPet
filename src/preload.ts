@@ -35,9 +35,12 @@ const electronAPI = {
   getAppVersion: () => ipcRenderer.invoke('get-app-version'),
   
   // ASR 服务
-  asrInitialize: () => ipcRenderer.invoke('asr-initialize'),
+  asrInitialize: (modelName?: string) => ipcRenderer.invoke('asr-initialize', modelName),
   asrIsReady: () => ipcRenderer.invoke('asr-is-ready'),
   asrRecognize: (audioData: string) => ipcRenderer.invoke('asr-recognize', audioData),
+  asrListModels: () => ipcRenderer.invoke('asr-list-models'),
+  asrSwitchModel: (modelName: string) => ipcRenderer.invoke('asr-switch-model', modelName),
+  asrGetStatus: () => ipcRenderer.invoke('asr-get-status'),
   
   // 日志系统
   loggerUpdateConfig: (config: any) => ipcRenderer.invoke('logger-update-config', config),
@@ -148,6 +151,13 @@ const electronAPI = {
   // 指令系统
   agentGetCommands: () => ipcRenderer.invoke('agent:get-commands'),
   agentSetCommandEnabled: (name: string, enabled: boolean) => ipcRenderer.invoke('agent:set-command-enabled', name, enabled),
+  
+  // 技能系统
+  agentGetSkills: () => ipcRenderer.invoke('agent:get-skills'),
+  agentSetSkillEnabled: (name: string, enabled: boolean) => ipcRenderer.invoke('agent:set-skill-enabled', name, enabled),
+  
+  // 使用帮助
+  openHelpWindow: (theme?: string, locale?: string) => ipcRenderer.invoke('open-help-window', theme, locale),
   
   // 对话管理
   agentGetConversations: (limit?: number) => ipcRenderer.invoke('agent:get-conversations', limit),

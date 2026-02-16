@@ -27,6 +27,7 @@ class SettingsManager implements ISettingsManager {
     micBackgroundMode: false,
     micVolumeThreshold: 30,
     micAutoSend: true,
+    asrModel: 'sense-voice-small',
     enableEyeTracking: true,
     autoLaunch: false,
     logEnabled: false,

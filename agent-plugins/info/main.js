@@ -6,47 +6,29 @@
  */
 
 const { AgentPlugin } = require('../../dist/agent/agent-plugin');
-const path = require('path');
-const fs = require('fs');
+
+/** 硬编码的项目信息 */
+const PROJECT_INFO = {
+  name: 'NyaDeskPet',
+  version: '1.0.0',
+  description: '跨平台 Live2D 桌面宠物应用',
+  author: 'gameswu',
+  license: 'MIT',
+  repository: 'https://github.com/gameswu/NyaDeskPet'
+};
 
 class InfoPlugin extends AgentPlugin {
 
-  /** 项目信息（从 package.json 读取） */
-  projectInfo = {
-    name: 'NyaDeskPet',
-    version: '未知',
-    description: '跨平台 Live2D 桌面宠物应用',
-    author: 'gameswu',
-    license: 'MIT',
-    repository: 'https://github.com/gameswu/NyaDeskPet'
-  };
-
   async initialize() {
-    // 尝试从 package.json 读取项目信息
-    this._loadPackageInfo();
-
     // 注册 /info 指令
     this.ctx.registerCommand(
       {
         name: 'info',
         description: '显示 NyaDeskPet 项目信息和仓库地址',
         category: '系统',
-        params: [
-          {
-            name: 'section',
-            description: '查看指定部分：basic（基本信息）、tech（技术栈）、all（全部），默认 all',
-            type: 'string',
-            required: false,
-            default: 'all',
-            choices: [
-              { name: '全部', value: 'all' },
-              { name: '基本信息', value: 'basic' },
-              { name: '技术栈', value: 'tech' }
-            ]
-          }
-        ]
+        params: []
       },
-      (args) => this._handleInfo(args)
+      () => this._handleInfo()
     );
 
     this.ctx.logger.info('项目信息插件已初始化');
@@ -58,65 +40,22 @@ class InfoPlugin extends AgentPlugin {
   }
 
   /**
-   * 从 package.json 加载项目信息
-   */
-  _loadPackageInfo() {
-    try {
-      // 从插件目录向上查找项目根目录的 package.json
-      const rootDir = path.resolve(__dirname, '..', '..');
-      const pkgPath = path.join(rootDir, 'package.json');
-      
-      if (fs.existsSync(pkgPath)) {
-        const pkg = JSON.parse(fs.readFileSync(pkgPath, 'utf-8'));
-        if (pkg.name) this.projectInfo.name = pkg.name;
-        if (pkg.version) this.projectInfo.version = pkg.version;
-        if (pkg.description) this.projectInfo.description = pkg.description;
-        if (pkg.author) this.projectInfo.author = typeof pkg.author === 'string' ? pkg.author : pkg.author.name || this.projectInfo.author;
-        if (pkg.license) this.projectInfo.license = pkg.license;
-        if (pkg.repository) {
-          this.projectInfo.repository = typeof pkg.repository === 'string' 
-            ? pkg.repository 
-            : pkg.repository.url || this.projectInfo.repository;
-        }
-        this.ctx.logger.info(`已从 package.json 加载项目信息 (v${this.projectInfo.version})`);
-      }
-    } catch (error) {
-      this.ctx.logger.warn(`读取 package.json 失败: ${error.message}`);
-    }
-  }
-
-  /**
    * 处理 /info 指令
    */
-  _handleInfo(args) {
-    const section = (args.section || 'all').toString().toLowerCase();
-
-    const parts = [];
-
-    // 基本信息
-    if (section === 'all' || section === 'basic') {
-      parts.push(
-        `📦 ${this.projectInfo.name}`,
-        `   版本: ${this.projectInfo.version}`,
-        `   描述: ${this.projectInfo.description}`,
-        `   作者: ${this.projectInfo.author}`,
-        `   许可: ${this.projectInfo.license}`,
-        `   仓库: ${this.projectInfo.repository}`
-      );
-    }
-
-    if (parts.length === 0) {
-      return {
-        command: 'info',
-        success: false,
-        error: `未知的信息类型: ${section}，可选值: all, basic, tech`
-      };
-    }
+  _handleInfo() {
+    const text = [
+      `📦 ${PROJECT_INFO.name}`,
+      `   版本: ${PROJECT_INFO.version}`,
+      `   描述: ${PROJECT_INFO.description}`,
+      `   作者: ${PROJECT_INFO.author}`,
+      `   许可: ${PROJECT_INFO.license}`,
+      `   仓库: ${PROJECT_INFO.repository}`
+    ].join('\n');
 
     return {
       command: 'info',
       success: true,
-      text: parts.join('\n')
+      text
     };
   }
 }

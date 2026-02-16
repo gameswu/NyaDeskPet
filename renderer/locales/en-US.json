@@ -26,7 +26,8 @@
     "reasoning": "Thinking",
     "deleteConversation": "Delete Conversation",
     "noConversations": "No conversations yet",
-    "toggleConversations": "Toggle conversation list"
+    "toggleConversations": "Toggle conversation list",
+    "asrUnavailable": "Speech recognition unavailable, please check ASR model in Settings"
   },
   "settings": {
     "title": "Settings",
@@ -68,6 +69,9 @@
     },
     "microphone": {
       "title": "Microphone",
+      "asrModel": "Speech Recognition Model",
+      "asrModelLoading": "Loading...",
+      "asrNoModel": "No ASR model found",
       "backgroundMode": "Allow Background Mode",
       "volumeThreshold": "Volume Threshold",
       "autoSend": "Auto Send After Recognition"
@@ -100,7 +104,8 @@
       "updateSource": "Update Source",
       "updateSourcePlaceholder": "https://github.com/owner/repo",
       "projectRepo": "Project Repo",
-      "donate": "Donate"
+      "donate": "Donate",
+      "usageHelp": "Usage Help"
     },
     "logs": {
       "title": "Log Management",
@@ -175,7 +180,13 @@
       "overview": "Overview",
       "tools": "Tools",
       "plugins": "Plugins",
-      "commands": "Commands"
+      "commands": "Commands",
+      "skills": "Skills"
+    },
+    "skills": {
+      "title": "Skill Management",
+      "description": "Manage Agent skills, enable or disable skills",
+      "empty": "No registered skills"
     },
     "commands": {
       "title": "Command Management",

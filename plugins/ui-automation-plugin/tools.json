@@ -1,0 +1,46 @@
+[
+  {
+    "name": "ui_screenshot",
+    "description": "对用户的屏幕进行截图。返回截图的 Base64 图片数据。",
+    "action": "screenshot",
+    "parameters": {
+      "type": "object",
+      "properties": {
+        "region": { "type": "string", "description": "截图区域（可选）：full（全屏）、active（活动窗口）" }
+      },
+      "required": []
+    },
+    "defaults": {
+      "region": "full"
+    }
+  },
+  {
+    "name": "ui_click",
+    "description": "在屏幕上指定坐标执行鼠标点击。",
+    "action": "click",
+    "parameters": {
+      "type": "object",
+      "properties": {
+        "x": { "type": "number", "description": "点击的 X 坐标（像素）" },
+        "y": { "type": "number", "description": "点击的 Y 坐标（像素）" },
+        "button": { "type": "string", "description": "鼠标按钮：left（左键）、right（右键）、middle（中键）", "enum": ["left", "right", "middle"] }
+      },
+      "required": ["x", "y"]
+    },
+    "defaults": {
+      "button": "left"
+    }
+  },
+  {
+    "name": "ui_type_text",
+    "description": "在当前焦点位置输入文本。",
+    "action": "typeText",
+    "parameters": {
+      "type": "object",
+      "properties": {
+        "text": { "type": "string", "description": "要输入的文本" }
+      },
+      "required": ["text"]
+    }
+  }
+]

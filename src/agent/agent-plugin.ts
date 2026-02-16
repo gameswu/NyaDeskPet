@@ -28,6 +28,7 @@ import * as path from 'path';
 import { app } from 'electron';
 import { toolManager, type ToolSchema, type ToolHandler, type OpenAIToolFormat } from './tools';
 import { commandRegistry, type CommandDefinition, type CommandHandler } from './commands';
+import { skillManager, type SkillSchema, type SkillHandler, type SkillInfo, type SkillResult, type SkillContext } from './skills';
 import type { LLMRequest, LLMResponse } from './provider';
 import type { SessionManager, OutgoingMessage } from './context';
 import type { ModelInfo, CharacterInfo } from './handler';
@@ -122,6 +123,7 @@ export interface AgentPluginContext {
     info(msg: string): void;
     warn(msg: string): void;
     error(msg: string): void;
+    debug(msg: string): void;
   };
   /** 获取插件配置 */
   getConfig(): Record<string, unknown>;
@@ -168,6 +170,17 @@ export interface AgentPluginContext {
   getPluginInstance(pluginName: string): AgentPlugin | null;
   /** 执行含工具循环的 LLM 调用（自动处理 tool_calls → 执行 → 继续） */
   executeWithToolLoop(request: LLMRequest, ctx: MessageContext): Promise<LLMResponse>;
+
+  // ====== Skills 技能系统 ======
+
+  /** 注册技能 */
+  registerSkill(schema: SkillSchema, handler: SkillHandler): void;
+  /** 注销技能 */
+  unregisterSkill(skillName: string): void;
+  /** 调用技能 */
+  invokeSkill(skillName: string, params: Record<string, unknown>, ctx: SkillContext): Promise<SkillResult>;
+  /** 获取所有技能信息 */
+  listSkills(): SkillInfo[];
 }
 
 // ==================== 插件基类 ====================
@@ -305,8 +318,8 @@ export class AgentPluginManager {
   private activeHandlerPluginName: string | null = null;
 
   constructor() {
-    // 插件源码目录：应用根目录/agent-plugins/
-    this.pluginsDir = path.join(app.getAppPath(), 'agent-plugins');
+    // 插件源码目录：asarUnpack 物理路径，确保原生文件操作可达
+    this.pluginsDir = path.join(app.getAppPath().replace('app.asar', 'app.asar.unpacked'), 'agent-plugins');
     // 插件持久化数据目录：userData/data/agent-plugins/
     this.pluginsDataDir = path.join(app.getPath('userData'), 'data', 'agent-plugins');
   }
@@ -842,7 +855,8 @@ export class AgentPluginManager {
       logger: {
         info: (msg: string) => logger.info(`[Plugin:${pluginName}] ${msg}`),
         warn: (msg: string) => logger.warn(`[Plugin:${pluginName}] ${msg}`),
-        error: (msg: string) => logger.error(`[Plugin:${pluginName}] ${msg}`)
+        error: (msg: string) => logger.error(`[Plugin:${pluginName}] ${msg}`),
+        debug: (msg: string) => logger.debug(`[Plugin:${pluginName}] ${msg}`)
       },
 
       getConfig: () => ({ ...record.config }),
@@ -945,7 +959,25 @@ export class AgentPluginManager {
           throw new Error('Handler 访问器未注入，无法执行工具循环');
         }
         return manager.handlerAccessor.executeWithToolLoop(request, ctx);
-      }
+      },
+
+      // ====== Skills 技能系统 ======
+
+      registerSkill: (schema: SkillSchema, handler: SkillHandler) => {
+        skillManager.register(schema, handler, pluginName);
+      },
+
+      unregisterSkill: (skillName: string) => {
+        skillManager.unregister(skillName);
+      },
+
+      invokeSkill: async (skillName: string, params: Record<string, unknown>, ctx: SkillContext): Promise<SkillResult> => {
+        return skillManager.invoke(skillName, params, ctx);
+      },
+
+      listSkills: (): SkillInfo[] => {
+        return skillManager.list();
+      },
     };
   }
 }

@@ -131,3 +131,16 @@ export {
   type CommandResponseData,
   type CommandsRegisterData
 } from './commands';
+
+// 技能系统
+export {
+  SkillManager,
+  skillManager,
+  type SkillSchema,
+  type SkillHandler,
+  type SkillContext,
+  type SkillResult,
+  type SkillDefinition,
+  type SkillInfo,
+  type SkillExample
+} from './skills';

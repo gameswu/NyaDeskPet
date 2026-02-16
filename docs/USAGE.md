@@ -301,6 +301,7 @@ huggingface-cli download csukuangfj/sherpa-onnx-sense-voice-zh-en-ja-ko-yue-2024
 |------|------|------|
 | 终端控制 | 执行命令、管理 Shell 会话 | `terminal.execute`, `terminal.session` |
 | UI 自动化 | 鼠标键盘模拟、截图 | `ui-automation.mouse`, `ui-automation.keyboard`, `ui-automation.screen` |
+| 文件编辑器 | 读取、创建、编辑文件，目录列表 | `file.read`, `file.write`, `file.edit` |
 
 前端插件为独立进程（Python 等语言），通过 WebSocket 通信。详见 前端插件开发指南。
 

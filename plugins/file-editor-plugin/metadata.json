@@ -1,0 +1,79 @@
+{
+  "id": "file-editor",
+  "name": "file-editor",
+  "version": "1.0.0",
+  "author": "gameswu",
+  "type": "system",
+  "url": "ws://localhost:8769",
+  "autoStart": false,
+  "permissions": [
+    {
+      "id": "file.read",
+      "dangerLevel": "low",
+      "i18n": {
+        "zh-CN": {
+          "name": "读取文件",
+          "description": "允许插件读取文件内容和目录列表"
+        },
+        "en-US": {
+          "name": "Read Files",
+          "description": "Allow plugin to read file contents and list directories"
+        }
+      }
+    },
+    {
+      "id": "file.write",
+      "dangerLevel": "high",
+      "i18n": {
+        "zh-CN": {
+          "name": "写入文件",
+          "description": "允许插件创建和覆盖文件内容"
+        },
+        "en-US": {
+          "name": "Write Files",
+          "description": "Allow plugin to create and overwrite file contents"
+        }
+      }
+    },
+    {
+      "id": "file.edit",
+      "dangerLevel": "medium",
+      "i18n": {
+        "zh-CN": {
+          "name": "编辑文件",
+          "description": "允许插件按范围替换文件内容"
+        },
+        "en-US": {
+          "name": "Edit Files",
+          "description": "Allow plugin to replace file content by range"
+        }
+      }
+    }
+  ],
+  "capabilities": [
+    "readFile",
+    "writeFile",
+    "editFile",
+    "listDirectory"
+  ],
+  "i18n": {
+    "zh-CN": {
+      "displayName": "文件读写编辑",
+      "description": "读取、创建、编辑文件内容，列出目录，并在图形界面中展示操作 Diff",
+      "category": "系统工具"
+    },
+    "en-US": {
+      "displayName": "File Editor",
+      "description": "Read, create, edit file contents, list directories, and display operation diffs in a GUI",
+      "category": "System Tools"
+    }
+  },
+  "icon": "file-edit",
+  "iconFile": null,
+  "command": {
+    "win32": [".venv\\Scripts\\python.exe", "main.py"],
+    "darwin": [".venv/bin/python3", "main.py"],
+    "linux": [".venv/bin/python3", "main.py"]
+  },
+  "workingDirectory": "plugins/file-editor-plugin"
+}

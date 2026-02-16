@@ -1,0 +1,82 @@
+{
+  "allowed_directories": {
+    "type": "string",
+    "description": "允许操作的目录白名单，用逗号分隔（留空则不限制）",
+    "hint": "例如: /Users/me/projects,/tmp  —— 仅允许在这些目录及其子目录中进行文件操作",
+    "default": "",
+    "i18n": {
+      "zh-CN": {
+        "description": "允许操作的目录白名单，用逗号分隔（留空则不限制）",
+        "hint": "例如: /Users/me/projects,/tmp  —— 仅允许在这些目录及其子目录中进行文件操作"
+      },
+      "en-US": {
+        "description": "Allowed directories whitelist, comma separated (empty means no restriction)",
+        "hint": "e.g.: /Users/me/projects,/tmp — Only allow file operations within these directories"
+      }
+    }
+  },
+  "max_file_size": {
+    "type": "int",
+    "description": "可读取的最大文件大小（字节）",
+    "hint": "超过此大小的文件将被拒绝读取，以避免内存问题",
+    "default": 5242880,
+    "i18n": {
+      "zh-CN": {
+        "description": "可读取的最大文件大小（字节）",
+        "hint": "超过此大小的文件将被拒绝读取，以避免内存问题"
+      },
+      "en-US": {
+        "description": "Maximum readable file size (bytes)",
+        "hint": "Files exceeding this size will be rejected to avoid memory issues"
+      }
+    }
+  },
+  "backup_before_edit": {
+    "type": "boolean",
+    "description": "编辑文件前是否自动创建备份",
+    "hint": "启用后，编辑和覆盖操作前会在同目录下创建 .bak 备份文件",
+    "default": true,
+    "i18n": {
+      "zh-CN": {
+        "description": "编辑文件前是否自动创建备份",
+        "hint": "启用后，编辑和覆盖操作前会在同目录下创建 .bak 备份文件"
+      },
+      "en-US": {
+        "description": "Create backup before editing",
+        "hint": "When enabled, a .bak backup file will be created before edit and overwrite operations"
+      }
+    }
+  },
+  "show_ui": {
+    "type": "boolean",
+    "description": "是否弹出图形界面显示文件操作",
+    "hint": "启用后，每次文件读写编辑都会在独立窗口中展示 Diff 视图",
+    "default": true,
+    "i18n": {
+      "zh-CN": {
+        "description": "是否弹出图形界面显示文件操作",
+        "hint": "启用后，每次文件读写编辑都会在独立窗口中展示 Diff 视图"
+      },
+      "en-US": {
+        "description": "Show GUI for file operations",
+        "hint": "When enabled, each file operation will be displayed in a diff view window"
+      }
+    }
+  },
+  "ui_port": {
+    "type": "int",
+    "description": "UI 进程通信端口",
+    "hint": "Diff 视图 UI 窗口的 UDP 通信端口，不同插件应使用不同端口以避免冲突",
+    "default": 19098,
+    "i18n": {
+      "zh-CN": {
+        "description": "UI 进程通信端口",
+        "hint": "Diff 视图 UI 窗口的 UDP 通信端口，不同插件应使用不同端口以避免冲突"
+      },
+      "en-US": {
+        "description": "UI process communication port",
+        "hint": "UDP port for diff view UI window communication, each plugin should use a different port to avoid conflicts"
+      }
+    }
+  }
+}

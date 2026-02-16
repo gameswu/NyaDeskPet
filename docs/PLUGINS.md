@@ -63,6 +63,7 @@ sequenceDiagram
 |------|------|------|
 | 终端控制 | `plugins/terminal-plugin` | 执行系统命令、管理 Shell 会话 |
 | UI 自动化 | `plugins/ui-automation-plugin` | 鼠标键盘模拟、屏幕截图 |
+| 文件编辑器 | `plugins/file-editor-plugin` | 读取、创建、编辑文件内容，列出目录，图形化 Diff 展示 |
 
 ## 插件目录结构
 

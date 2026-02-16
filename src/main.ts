@@ -12,6 +12,7 @@ import { agentPluginManager } from './agent/agent-plugin';
 import { commandRegistry } from './agent/commands';
 import { mcpManager } from './agent/mcp-client';
 import { toolManager } from './agent/tools';
+import { skillManager } from './agent/skills';
 
 // GPU 优化：添加命令行开关以提高 Windows + NVIDIA 显卡的稳定性
 // 这些开关可以缓解 GPU 进程相关的错误（如 command_buffer_proxy_impl 错误）
@@ -621,6 +622,33 @@ ipcMain.handle('open-external', async (_event: IpcMainInvokeEvent, url: string) 
   await shell.openExternal(url);
 });
 
+// 打开使用帮助窗口
+let helpWindow: BrowserWindow | null = null;
+ipcMain.handle('open-help-window', (_event: IpcMainInvokeEvent, theme?: string, locale?: string) => {
+  if (helpWindow && !helpWindow.isDestroyed()) {
+    helpWindow.focus();
+    return { success: true };
+  }
+  helpWindow = new BrowserWindow({
+    width: 960,
+    height: 700,
+    minWidth: 700,
+    minHeight: 500,
+    title: 'NyaDeskPet - 使用帮助',
+    autoHideMenuBar: true,
+    webPreferences: {
+      contextIsolation: true,
+      nodeIntegration: false,
+    }
+  });
+  const query: Record<string, string> = {};
+  if (theme) query.theme = theme;
+  if (locale) query.locale = locale;
+  helpWindow.loadFile('renderer/help.html', { query });
+  helpWindow.on('closed', () => { helpWindow = null; });
+  return { success: true };
+});
+
 // 获取应用版本
 ipcMain.handle('get-app-version', () => {
   return app.getVersion();
@@ -630,10 +658,11 @@ ipcMain.handle('get-app-version', () => {
 
 /**
  * 初始化 ASR 服务
+ * @param modelName 可选的模型名称
  */
-ipcMain.handle('asr-initialize', async () => {
-  const success = await asrService.initialize();
-  return { success };
+ipcMain.handle('asr-initialize', async (_event: IpcMainInvokeEvent, modelName?: string) => {
+  const success = await asrService.initialize(modelName);
+  return { success, error: success ? undefined : asrService.getLastError() };
 });
 
 /**
@@ -641,6 +670,33 @@ ipcMain.handle('asr-initialize', async () => {
  */
 ipcMain.handle('asr-is-ready', () => {
   return { ready: asrService.isReady() };
+});
+
+/**
+ * 获取可用的 ASR 模型列表
+ */
+ipcMain.handle('asr-list-models', () => {
+  const models = asrService.getAvailableModels();
+  return { models };
+});
+
+/**
+ * 切换 ASR 模型
+ */
+ipcMain.handle('asr-switch-model', async (_event: IpcMainInvokeEvent, modelName: string) => {
+  const success = await asrService.switchModel(modelName);
+  return { success, error: success ? undefined : asrService.getLastError() };
+});
+
+/**
+ * 获取 ASR 当前状态
+ */
+ipcMain.handle('asr-get-status', () => {
+  return {
+    ready: asrService.isReady(),
+    currentModel: asrService.getCurrentModel(),
+    error: asrService.getLastError(),
+  };
 });
 
 /**
@@ -870,7 +926,7 @@ ipcMain.handle('get-auto-launch', () => {
  */
 ipcMain.handle('plugin:read-manifest', async (_event: IpcMainInvokeEvent, pluginName: string) => {
   try {
-    const appPath = app.isPackaged ? process.resourcesPath : app.getAppPath();
+    const appPath = app.getAppPath().replace('app.asar', 'app.asar.unpacked');
     const manifestPath = path.join(appPath, 'plugins', pluginName, 'metadata.json');
     
     if (!fs.existsSync(manifestPath)) {
@@ -907,7 +963,7 @@ ipcMain.handle('plugin:read-manifest', async (_event: IpcMainInvokeEvent, plugin
  */
 ipcMain.handle('plugin:scan-directory', async () => {
   try {
-    const appPath = app.isPackaged ? process.resourcesPath : app.getAppPath();
+    const appPath = app.getAppPath().replace('app.asar', 'app.asar.unpacked');
     const pluginsPath = path.join(appPath, 'plugins');
     
     if (!fs.existsSync(pluginsPath)) {
@@ -952,8 +1008,8 @@ ipcMain.handle('plugin:start', async (_event: IpcMainInvokeEvent, args: { name: 
       throw new Error(`不支持的平台: ${platform}`);
     }
 
-    // 获取工作目录路径
-    const appPath = app.isPackaged ? process.resourcesPath : app.getAppPath();
+    // 获取工作目录路径（asarUnpack 物理路径，子进程无法访问 asar 虚拟路径）
+    const appPath = app.getAppPath().replace('app.asar', 'app.asar.unpacked');
     const workingDir = args.workingDirectory || 'plugins';
     const pluginPath = path.join(appPath, workingDir);
     
@@ -1151,7 +1207,7 @@ function ensurePluginDataDirectory(pluginId: string): string {
 // 打开插件目录
 ipcMain.handle('plugin:open-directory', async (_event: IpcMainInvokeEvent, args: { name: string }) => {
   try {
-    const appPath = app.isPackaged ? process.resourcesPath : app.getAppPath();
+    const appPath = app.getAppPath().replace('app.asar', 'app.asar.unpacked');
     const pluginPath = path.join(appPath, 'plugins', args.name);
     
     if (fs.existsSync(pluginPath)) {
@@ -1573,6 +1629,23 @@ ipcMain.handle('agent:set-command-filter-enabled', (_event, enabled: boolean) =>
 ipcMain.handle('agent:get-command-filter-enabled', () => {
   const handler = agentServer.getHandler();
   return { enabled: handler.getCommandFilterEnabled() };
+});
+
+// ==================== Skills 技能管理 IPC ====================
+
+/**
+ * 获取所有技能信息
+ */
+ipcMain.handle('agent:get-skills', () => {
+  return skillManager.list();
+});
+
+/**
+ * 设置技能启用/禁用
+ */
+ipcMain.handle('agent:set-skill-enabled', (_event: IpcMainInvokeEvent, name: string, enabled: boolean) => {
+  const result = skillManager.setEnabled(name, enabled);
+  return { success: result };
 });
 
 // ==================== MCP 管理 IPC ====================

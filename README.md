@@ -78,7 +78,7 @@
 
 | 文档 | 说明 |
 |------|------|
-| [使用指南](docs/USAGE.md) | 安装、配置、运行、打包 |
+| [使用指南](docs/USAGE.md) | 安装、配置、运行使用指南 |
 | [API 规范](docs/API.md) | WebSocket 消息协议 |
 | [开发指南](docs/DEVELOPMENT.md) | 架构设计、核心模块 |
 | [前端插件开发](docs/PLUGINS.md) | 前端插件 WebSocket 协议与开发流程 |

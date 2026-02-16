@@ -729,6 +729,25 @@ details.reasoning-block[open] > .reasoning-summary::after {
   stroke: white;
 }
 
+/* 麦克风不可用状态 */
+.input-btn.asr-disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+  border-color: #ddd;
+  color: #aaa;
+  position: relative;
+}
+
+.input-btn.asr-disabled:hover {
+  background: white;
+  border-color: #ddd;
+  color: #aaa;
+}
+
+.input-btn.asr-disabled svg {
+  stroke: #bbb;
+}
+
 .input-wrapper {
   display: flex;
   gap: 8px;
@@ -2855,76 +2874,87 @@ details.reasoning-block[open] > .reasoning-summary::after {
 }
 
 /* 关于页面链接卡片 */
-.about-cards {
+/* 关于 - 链接栏 */
+.about-links-bar {
   display: flex;
-  gap: 8px;
+  align-items: center;
+  gap: 6px;
   margin-top: 12px;
-}
-
-.about-card {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 7px 12px;
+  padding: 6px 10px;
   border-radius: 8px;
-  text-decoration: none;
-  color: inherit;
-  transition: all 0.2s ease;
-  cursor: pointer;
-  border: 1px solid var(--border-color, #e0e0e0);
   background: var(--card-bg, #fafafa);
-  font-size: 12px;
+  border: 1px solid var(--border-color, #e0e0e0);
+  overflow-x: auto;
+  white-space: nowrap;
+  scrollbar-width: thin;
+  scrollbar-color: rgba(0,0,0,0.15) transparent;
 }
 
-.about-card:hover {
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
+.about-links-bar::-webkit-scrollbar {
+  height: 4px;
 }
 
-.about-card-github:hover {
-  border-color: #333;
-  background: #f6f8fa;
+.about-links-bar::-webkit-scrollbar-track {
+  background: transparent;
 }
 
-.about-card-donate:hover {
-  border-color: #946ce6;
-  background: #f8f4ff;
+.about-links-bar::-webkit-scrollbar-thumb {
+  background: rgba(0,0,0,0.12);
+  border-radius: 4px;
 }
 
-.about-card-icon {
-  display: flex;
+.about-links-bar::-webkit-scrollbar-thumb:hover {
+  background: rgba(0,0,0,0.22);
+}
+
+.about-link {
+  display: inline-flex;
   align-items: center;
-  justify-content: center;
-  width: 26px;
-  height: 26px;
+  gap: 5px;
+  padding: 3px 8px;
   border-radius: 6px;
-  flex-shrink: 0;
-}
-
-.about-card-github .about-card-icon {
-  background: #24292e;
-  color: #fff;
-}
-
-.about-card-donate .about-card-icon {
-  background: #946ce6;
-  color: #fff;
-}
-
-.about-card-title {
+  text-decoration: none;
+  color: #555;
   font-size: 12px;
   font-weight: 500;
+  transition: color 0.2s, background 0.2s;
+  flex-shrink: 0;
+  cursor: pointer;
 }
 
-.about-card-arrow {
-  width: 12px;
-  height: 12px;
-  opacity: 0.3;
+.about-link:hover {
+  background: rgba(0,0,0,0.04);
+}
+
+.about-link-github:hover {
+  color: #24292e;
+}
+
+.about-link-donate:hover {
+  color: #946ce6;
+}
+
+.about-link-help:hover {
+  color: #2196F3;
+}
+
+.about-link svg,
+.about-link i {
   flex-shrink: 0;
+  opacity: 0.6;
   transition: opacity 0.2s;
 }
 
-.about-card:hover .about-card-arrow {
-  opacity: 0.7;
+.about-link:hover svg,
+.about-link:hover i {
+  opacity: 1;
+}
+
+.about-link-sep {
+  color: #ccc;
+  font-size: 14px;
+  user-select: none;
+  flex-shrink: 0;
 }
 
 .update-status.no-update {
@@ -2982,6 +3012,34 @@ details.reasoning-block[open] > .reasoning-summary::after {
 
 .btn-secondary:hover {
   background: #e0e0e0;
+}
+
+/* ==================== ASR 模型选择 ==================== */
+.asr-model-select-wrapper {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.asr-model-select-wrapper .setting-select {
+  flex: 1;
+}
+
+.asr-model-status {
+  font-size: 11px;
+  white-space: nowrap;
+}
+
+.asr-model-status.ready {
+  color: #4CAF50;
+}
+
+.asr-model-status.error {
+  color: #f44336;
+}
+
+.asr-model-status.loading {
+  color: #ff9800;
 }
 
 /* ==================== 暗黑主题 ==================== */
@@ -3925,20 +3983,55 @@ body.dark-theme {
   color: #e57373;
 }
 
-.dark-theme .about-card {
+/* 暗黑: 关于链接栏 */
+.dark-theme .about-links-bar {
   border-color: #444;
   background: #2a2a2a;
+}
+
+.dark-theme .about-links-bar::-webkit-scrollbar-thumb {
+  background: rgba(255,255,255,0.12);
+}
+
+.dark-theme .about-links-bar::-webkit-scrollbar-thumb:hover {
+  background: rgba(255,255,255,0.22);
+}
+
+.dark-theme .about-link {
+  color: #aaa;
+}
+
+.dark-theme .about-link:hover {
+  background: rgba(255,255,255,0.06);
+}
+
+.dark-theme .about-link-github:hover {
   color: #e0e0e0;
 }
 
-.dark-theme .about-card-github:hover {
-  border-color: #888;
-  background: #333;
+.dark-theme .about-link-donate:hover {
+  color: #b388ff;
 }
 
-.dark-theme .about-card-donate:hover {
-  border-color: #a07de8;
-  background: #332a45;
+.dark-theme .about-link-help:hover {
+  color: #64b5f6;
+}
+
+.dark-theme .about-link-sep {
+  color: #555;
+}
+
+/* \u6697\u9ed1: ASR \u4e0d\u53ef\u7528 */
+.dark-theme .input-btn.asr-disabled {
+  opacity: 0.4;
+  border-color: #555;
+  color: #666;
+}
+
+.dark-theme .input-btn.asr-disabled:hover {
+  background: #2a2a2a;
+  border-color: #555;
+  color: #666;
 }
 
 /* 自定义对话框 */
@@ -6623,4 +6716,134 @@ body.dark-theme {
 
 .dark-theme .toggle-switch-small input:checked + .toggle-slider-small {
   background-color: #4a9eff;
+}
+
+/* ==================== Agent 技能面板 ==================== */
+.agent-skills-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-top: 8px;
+}
+
+.agent-skills-stats {
+  font-size: 12px;
+  color: #888;
+}
+
+.agent-skill-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.agent-skill-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 12px;
+  background: #f8f9fa;
+  border-radius: 8px;
+  border: 1px solid #eee;
+  transition: all 0.15s;
+}
+
+.agent-skill-item:hover {
+  border-color: #ddd;
+  background: #f0f4f8;
+}
+
+.agent-skill-info {
+  flex: 1;
+  min-width: 0;
+}
+
+.agent-skill-name {
+  font-weight: 600;
+  font-size: 14px;
+  color: #7c4dff;
+  font-family: monospace;
+}
+
+.agent-skill-desc {
+  font-size: 12px;
+  color: #888;
+  margin-top: 2px;
+}
+
+.agent-skill-meta {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  font-size: 11px;
+  color: #bbb;
+  margin-top: 3px;
+}
+
+.agent-skill-category {
+  background: #ede7f6;
+  padding: 1px 6px;
+  border-radius: 3px;
+  color: #7c4dff;
+}
+
+.agent-skill-source {
+  background: #eee;
+  padding: 1px 6px;
+  border-radius: 3px;
+}
+
+.agent-skill-params {
+  display: flex;
+  gap: 4px;
+}
+
+.agent-skill-param {
+  font-size: 10px;
+  padding: 1px 5px;
+  border-radius: 3px;
+  background: #e8eaf6;
+  color: #3f51b5;
+  font-family: monospace;
+}
+
+.agent-skill-empty {
+  text-align: center;
+  padding: 24px;
+  color: #999;
+  font-size: 13px;
+}
+
+/* 暗黑: 技能面板 */
+.dark-theme .agent-skill-item {
+  background: #2a2a2a;
+  border-color: #3a3a3a;
+}
+
+.dark-theme .agent-skill-item:hover {
+  background: #333;
+  border-color: #444;
+}
+
+.dark-theme .agent-skill-name {
+  color: #b388ff;
+}
+
+.dark-theme .agent-skill-desc {
+  color: #999;
+}
+
+.dark-theme .agent-skill-category {
+  background: #3a2e4f;
+  color: #b388ff;
+}
+
+.dark-theme .agent-skill-source {
+  background: #3a3a3a;
+  color: #999;
+}
+
+.dark-theme .agent-skill-param {
+  background: #2e3050;
+  color: #90caf9;
 }

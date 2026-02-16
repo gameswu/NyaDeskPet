@@ -1,6 +1,6 @@
 /**
  * ASR 服务（主进程）
- * 使用 Sherpa-ONNX 进行语音识别
+ * 使用 Sherpa-ONNX 进行语音识别，支持多模型切换
  */
 
 import * as path from 'path';
@@ -8,7 +8,9 @@ import * as fs from 'fs';
 import { app } from 'electron';
 import { logger } from './logger';
 
-// Sherpa-ONNX 类型定义
+// ==================== 类型定义 ====================
+
+/** Sherpa-ONNX 模型配置 */
 interface SherpaConfig {
   modelPath: string;
   tokensPath: string;
@@ -16,61 +18,143 @@ interface SherpaConfig {
   numThreads: number;
 }
 
+/** 语音识别结果 */
 interface RecognitionResult {
   text: string;
   confidence?: number;
 }
 
+/** 可用 ASR 模型信息 */
+export interface ASRModelInfo {
+  /** 模型目录名 */
+  name: string;
+  /** 模型文件路径 */
+  modelFile: string;
+  /** tokens 文件路径 */
+  tokensFile: string;
+  /** 模型文件大小（字节） */
+  size: number;
+}
+
+/** ASR 默认模型名 */
+const DEFAULT_MODEL_NAME = 'sense-voice-small';
+
+// ==================== ASRService ====================
+
 class ASRService {
   private recognizer: any = null;
   private isInitialized: boolean = false;
-  private modelConfig: SherpaConfig;
+  private modelConfig: SherpaConfig | null = null;
+  /** 当前加载的模型名 */
+  private currentModelName: string = '';
+  /** 初始化错误信息（供前端显示） */
+  private lastError: string = '';
 
-  constructor() {
-    // 获取应用根目录路径
-    const appPath = app.getAppPath();
-    
-    // 打包后，资源文件可能在 resources/app.asar 或 resources/app 中
-    // app.getAppPath() 会返回正确的路径
-    const modelBasePath = path.join(appPath, 'models', 'asr', 'sense-voice-small');
-    
-    this.modelConfig = {
-      modelPath: path.join(modelBasePath, 'model.int8.onnx'),
-      tokensPath: path.join(modelBasePath, 'tokens.txt'),
-      provider: 'cpu',
-      numThreads: 4
-    };
+  /**
+   * 获取 models/asr 的物理路径（asarUnpack 兼容）
+   */
+  private getModelsBasePath(): string {
+    return path.join(
+      app.getAppPath().replace('app.asar', 'app.asar.unpacked'),
+      'models', 'asr'
+    );
+  }
+
+  /**
+   * 扫描可用的 ASR 模型
+   * 遍历 models/asr/ 下的子目录，查找包含 *.onnx + tokens.txt 的目录
+   */
+  public getAvailableModels(): ASRModelInfo[] {
+    const basePath = this.getModelsBasePath();
+    const models: ASRModelInfo[] = [];
+
+    if (!fs.existsSync(basePath)) {
+      logger.warn('[ASR] 模型目录不存在:', basePath);
+      return models;
+    }
+
+    try {
+      const entries = fs.readdirSync(basePath, { withFileTypes: true });
+      for (const entry of entries) {
+        if (!entry.isDirectory()) continue;
+
+        const dirPath = path.join(basePath, entry.name);
+        const tokensFile = path.join(dirPath, 'tokens.txt');
+
+        // 查找 .onnx 模型文件（优先 int8，其次任意 onnx）
+        const files = fs.readdirSync(dirPath);
+        const onnxFiles = files.filter(f => f.endsWith('.onnx'));
+        if (onnxFiles.length === 0 || !fs.existsSync(tokensFile)) continue;
+
+        // 优先选择 int8 量化模型
+        const modelFile = onnxFiles.find(f => f.includes('int8')) || onnxFiles[0];
+        const modelFilePath = path.join(dirPath, modelFile);
+
+        let size = 0;
+        try {
+          size = fs.statSync(modelFilePath).size;
+        } catch { /* ignore */ }
+
+        models.push({
+          name: entry.name,
+          modelFile: modelFilePath,
+          tokensFile,
+          size,
+        });
+      }
+    } catch (error) {
+      logger.error('[ASR] 扫描模型目录失败:', error);
+    }
+
+    return models;
   }
 
   /**
    * 初始化 ASR 识别器
+   * @param modelName 模型名（目录名），不传则使用默认模型
    */
-  public async initialize(): Promise<boolean> {
+  public async initialize(modelName?: string): Promise<boolean> {
+    const targetModel = modelName || DEFAULT_MODEL_NAME;
+    this.lastError = '';
+
     try {
-      logger.info('[ASR] 开始初始化...');
-      
-      // 检查模型文件是否存在
-      if (!fs.existsSync(this.modelConfig.modelPath)) {
-        logger.error('[ASR] 模型文件不存在:', this.modelConfig.modelPath);
-        logger.error('[ASR] 请确保模型文件已正确放置在 models/asr/sense-voice-small/ 目录');
-        return false;
-      }
-      
-      if (!fs.existsSync(this.modelConfig.tokensPath)) {
-        logger.error('[ASR] Tokens 文件不存在:', this.modelConfig.tokensPath);
+      logger.info(`[ASR] 开始初始化，模型: ${targetModel}`);
+
+      // 查找模型
+      const models = this.getAvailableModels();
+      const model = models.find(m => m.name === targetModel);
+
+      if (!model) {
+        this.lastError = `ASR 模型不存在: ${targetModel}`;
+        logger.error(`[ASR] ${this.lastError}`);
+        logger.error('[ASR] 可用模型:', models.map(m => m.name).join(', ') || '无');
         return false;
       }
 
-      // 直接加载 sherpa-onnx-node 包（让 Node.js 自动从 node_modules 解析）
+      // 配置
+      this.modelConfig = {
+        modelPath: model.modelFile,
+        tokensPath: model.tokensFile,
+        provider: 'cpu',
+        numThreads: 4,
+      };
+
+      // 加载 sherpa-onnx-node
       let sherpa;
       try {
         sherpa = require('sherpa-onnx-node');
       } catch (loadError) {
-        logger.error('[ASR] 加载 sherpa-onnx-node 模块失败:', loadError);
-        logger.error('[ASR] 请确保 sherpa-onnx-node 已正确安装');
+        this.lastError = 'sherpa-onnx-node 模块加载失败，请确保已正确安装';
+        logger.error(`[ASR] ${this.lastError}: ${loadError}`);
         return false;
       }
-      
+
+      // 销毁旧识别器
+      if (this.recognizer) {
+        this.recognizer = null;
+        this.isInitialized = false;
+      }
+
       // 创建识别器配置
       const config = {
         'featConfig': {
@@ -86,18 +170,29 @@ class ASRService {
           'numThreads': this.modelConfig.numThreads,
           'provider': this.modelConfig.provider,
           'debug': 0,
-        }
+        },
       };
 
       // 创建识别器实例
       this.recognizer = new sherpa.OfflineRecognizer(config);
       this.isInitialized = true;
-      logger.info('[ASR] 初始化成功');
+      this.currentModelName = targetModel;
+      logger.info(`[ASR] 初始化成功，当前模型: ${targetModel}`);
       return true;
     } catch (error) {
-      logger.error('[ASR] 初始化失败:', error);
+      this.lastError = `初始化失败: ${(error as Error).message}`;
+      logger.error('[ASR]', this.lastError);
       return false;
     }
+  }
+
+  /**
+   * 切换 ASR 模型（重新初始化）
+   */
+  public async switchModel(modelName: string): Promise<boolean> {
+    logger.info(`[ASR] 切换模型: ${this.currentModelName} → ${modelName}`);
+    this.destroy();
+    return this.initialize(modelName);
   }
 
   /**
@@ -186,6 +281,20 @@ class ASRService {
    */
   public isReady(): boolean {
     return this.isInitialized;
+  }
+
+  /**
+   * 获取当前加载的模型名
+   */
+  public getCurrentModel(): string {
+    return this.currentModelName;
+  }
+
+  /**
+   * 获取最近一次初始化错误
+   */
+  public getLastError(): string {
+    return this.lastError;
   }
 
   /**

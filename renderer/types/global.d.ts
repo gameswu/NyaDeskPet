@@ -37,9 +37,12 @@ export interface ElectronAPI {
   getAppVersion: () => Promise<string>;
   
   // ASR 服务
-  asrInitialize: () => Promise<{ success: boolean }>;
+  asrInitialize: (modelName?: string) => Promise<{ success: boolean; error?: string }>;
   asrIsReady: () => Promise<{ ready: boolean }>;
   asrRecognize: (audioData: string) => Promise<{ success: boolean; text?: string; confidence?: number; error?: string }>;
+  asrListModels: () => Promise<{ models: Array<{ name: string; modelFile: string; tokensFile: string; size: number }> }>;
+  asrSwitchModel: (modelName: string) => Promise<{ success: boolean; error?: string }>;
+  asrGetStatus: () => Promise<{ ready: boolean; currentModel: string; error: string }>;
   
   // 日志系统
   loggerUpdateConfig: (config: any) => Promise<{ success: boolean }>;
@@ -129,6 +132,13 @@ export interface ElectronAPI {
   // 指令系统
   agentGetCommands: () => Promise<CommandDefinition[]>;
   agentSetCommandEnabled: (name: string, enabled: boolean) => Promise<{ success: boolean }>;
+  
+  // 技能系统
+  agentGetSkills: () => Promise<AgentSkillInfo[]>;
+  agentSetSkillEnabled: (name: string, enabled: boolean) => Promise<{ success: boolean }>;
+  
+  // 使用帮助
+  openHelpWindow: (theme?: 'light' | 'dark', locale?: string) => Promise<{ success: boolean }>;
   
   // 对话管理
   agentGetConversations: (limit?: number) => Promise<ConversationItem[]>;
@@ -897,6 +907,7 @@ export interface AppSettings {
   micBackgroundMode: boolean;
   micVolumeThreshold: number;
   micAutoSend: boolean;
+  asrModel: string;
   enableEyeTracking: boolean;
   autoLaunch: boolean;
   logEnabled: boolean;
@@ -1038,6 +1049,18 @@ export interface AgentToolInfo {
   mcpServer?: string;
   enabled: boolean;
   i18n?: Record<string, { description?: string }>;
+}
+
+// ============ Agent 技能接口 ============
+export interface AgentSkillInfo {
+  name: string;
+  description: string;
+  category: string;
+  instructions: string;
+  source: string;
+  enabled: boolean;
+  exampleCount: number;
+  parameterNames: string[];
 }
 
 // ============ MCP 服务器接口 ============

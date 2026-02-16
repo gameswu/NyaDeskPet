@@ -26,7 +26,8 @@
     "reasoning": "思考过程",
     "deleteConversation": "删除对话",
     "noConversations": "暂无对话记录",
-    "toggleConversations": "展开/收起对话列表"
+    "toggleConversations": "展开/收起对话列表",
+    "asrUnavailable": "语音识别不可用，请在设置中检查 ASR 模型"
   },
   "settings": {
     "title": "设置",
@@ -68,6 +69,9 @@
     },
     "microphone": {
       "title": "麦克风",
+      "asrModel": "语音识别模型",
+      "asrModelLoading": "加载中...",
+      "asrNoModel": "未找到 ASR 模型",
       "backgroundMode": "允许背景工作",
       "volumeThreshold": "音量阈值",
       "autoSend": "识别后自动发送"
@@ -100,7 +104,8 @@
       "updateSource": "更新源",
       "updateSourcePlaceholder": "https://github.com/owner/repo",
       "projectRepo": "项目地址",
-      "donate": "捐赠支持"
+      "donate": "捐赠支持",
+      "usageHelp": "使用帮助"
     },
     "logs": {
       "title": "日志管理",
@@ -176,7 +181,13 @@
       "overview": "概览",
       "tools": "工具",
       "plugins": "插件",
-      "commands": "指令"
+      "commands": "指令",
+      "skills": "技能"
+    },
+    "skills": {
+      "title": "技能管理",
+      "description": "管理 Agent 技能，可启用或禁用技能",
+      "empty": "暂无已注册的技能"
     },
     "commands": {
       "title": "指令管理",

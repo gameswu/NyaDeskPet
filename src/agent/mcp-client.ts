@@ -279,7 +279,7 @@ class MCPConnection {
     if (this.config.workingDirectory) {
       cwd = path.isAbsolute(this.config.workingDirectory)
         ? this.config.workingDirectory
-        : path.join(app.getAppPath(), this.config.workingDirectory);
+        : path.join(app.getAppPath().replace('app.asar', 'app.asar.unpacked'), this.config.workingDirectory);
     }
 
     return new StdioClientTransport({
