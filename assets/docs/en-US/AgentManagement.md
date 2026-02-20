@@ -1,6 +1,6 @@
 # Agent Management
 
-Agent plugins are extension modules running in the main process, responsible for enhancing AI's reasoning and tool capabilities. NyaDeskPet includes 10 built-in Agent plugins that work together to implement the character's core functionality.
+Agent plugins are extension modules running in the main process, responsible for enhancing AI's reasoning and tool capabilities. NyaDeskPet includes 13 built-in Agent plugins that work together to implement the character's core functionality.
 
 ## Table of Contents
 - [Agent Management](#agent-management)
@@ -32,7 +32,7 @@ Agent plugins are extension modules running in the main process, responsible for
 
 ## Built-in Plugin Descriptions
 
-NyaDeskPet's 10 built-in Agent plugins are divided into two categories:
+NyaDeskPet's 13 built-in Agent plugins are divided into two categories:
 
 ### Core Handler Plugin
 
@@ -55,6 +55,9 @@ Handler plugins can **fully take over** the message processing flow. `core-agent
 | **web-tools** | Web tools — provides `fetch_url` and `search_web` tools |
 | **input-collector** | Input collector — debounce-collects consecutive inputs to avoid message fragmentation |
 | **image-transcriber** | Image transcriber — transcribes uploaded images into text descriptions |
+| **planning** | Task planning — LLM-based multi-step task decomposition and execution, with Sub-Agent creation and management |
+| **scheduler** | Task scheduling — time-based one-time/recurring task scheduling, with Planning plugin integration |
+| **image-gen** | Image generation — calls image generation-capable Providers to generate images |
 
 ---
 

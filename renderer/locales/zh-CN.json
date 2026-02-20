@@ -39,7 +39,6 @@
       "logs": "日志",
       "about": "关于"
     },
-    "cancel": "取消",
     "model": {
       "title": "Live2D 模型",
       "path": "模型路径",
@@ -81,8 +80,7 @@
       "useCustom": "启用自定义角色",
       "name": "桌宠名称",
       "namePlaceholder": "例如：小喵",
-      "personality": "人设描述",
-      "personalityPlaceholder": "描述桌宠的性格、特点、说话风格等..."
+      "personality": "人设描述"
     },
     "appearance": {
       "title": "外观",
@@ -138,7 +136,8 @@
     "checking": "正在检查更新...",
     "hasUpdate": "发现新版本 {version}！<br><a href=\"#\">点击下载</a>",
     "noUpdate": "已是最新版本",
-    "error": "检查更新失败: {error}"
+    "error": "检查更新失败: {error}",
+    "viewChangelog": "查看更新日志"
   },
   "messages": {
     "settingsReset": "已恢复默认设置",
@@ -1066,7 +1065,6 @@
       "deactivate": "停用",
       "reload": "重载",
       "config": "配置",
-      "saveConfig": "保存配置",
       "uninstall": "卸载",
       "uninstallConfirm": "确定要卸载此插件吗？此操作不可撤销。",
       "statusLoaded": "已加载",

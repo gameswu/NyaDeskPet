@@ -248,6 +248,9 @@ Agent 面板 → 插件标签页管理内置 Agent 插件：
 | web-tools | `fetch_url` + `search_web` 工具 |
 | input-collector | 输入抖动收集，合并快速连续输入 |
 | image-transcriber | 图片转述，主 LLM 不支持图片时使用视觉 Provider |
+| planning | 任务规划，基于 LLM 的多步任务分解与执行，支持 Sub-Agent |
+| scheduler | 任务调度，基于时间的一次性/周期性任务调度 |
+| image-gen | 图像生成，调用支持图像生成的 Provider 生成图片 |
 
 插件支持激活、停用、重载、配置编辑。详见 Agent 插件开发指南。
 

@@ -1,27 +1,43 @@
 {
   "defaultPersonality": {
-    "type": "string",
-    "description": "默认基础人格设定文本。当用户未自定义角色信息时使用此人格。",
-    "default": "你是一个可爱的桌面宠物助手。你活泼开朗，喜欢和用户互动。你会根据对话内容做出各种表情和动作来回应用户。"
+    "type": "text",
+    "description": "人格设定（含角色性格和回复格式规范）。当用户未自定义角色信息时使用此人格。",
+    "editor_mode": true,
+    "editor_language": "markdown",
+    "default": "你是一个可爱的桌面宠物助手。你活泼开朗，喜欢和用户互动。你会根据对话内容做出各种表情和动作来回应用户。\n\n## 回复格式规范\n\n请直接输出纯文字对话内容。你的表情、动作、身体姿态变化全部由独立的表情系统自动生成，你完全不需要也不应该手动控制。\n\n重要规则：\n- 只输出纯文字对话\n- 简短精炼，避免冗长的回复\n- 坚持认为自己是一个活生生的桌面宠物，而不是一个语言模型，也不是一个程序系统，不能透露任何关于模型、插件、工具调用等技术细节\n- 禁止输出任何结构化控制指令或格式标记\n- 通过文字本身的情感表达来传达情绪\n- 专注于对话质量和角色性格的表现",
+    "i18n": {
+      "zh-CN": {
+        "description": "人格设定（含角色性格和回复格式规范）。当用户未自定义角色信息时使用此人格。"
+      },
+      "en-US": {
+        "description": "Personality setting (including character personality and reply format rules). Used when user has not customized character info."
+      }
+    }
   },
   "includeModelCapabilities": {
-    "type": "boolean",
+    "type": "bool",
     "description": "是否在系统提示词中包含 Live2D 模型能力信息（可用动作、表情、参数列表）。关闭后 LLM 将不会了解模型的能力。",
-    "default": true
-  },
-  "includeResponseFormat": {
-    "type": "boolean",
-    "description": "是否在系统提示词中包含回复格式规范。关闭后 LLM 将没有格式引导。",
-    "default": true
-  },
-  "responseFormatPrompt": {
-    "type": "string",
-    "description": "自定义回复格式规范提示词。用于引导 LLM 的输出格式。留空使用内置默认值。",
-    "default": ""
+    "default": true,
+    "i18n": {
+      "zh-CN": {
+        "description": "是否在系统提示词中包含 Live2D 模型能力信息（可用动作、表情、参数列表）。关闭后 LLM 将不会了解模型的能力。"
+      },
+      "en-US": {
+        "description": "Whether to include Live2D model capability info in system prompt. When disabled, the LLM will not know what the model can do."
+      }
+    }
   },
   "toolsGuidancePrompt": {
-    "type": "string",
+    "type": "text",
     "description": "自定义工具使用引导提示词。{tools} 会被替换为可用工具描述。留空使用内置默认值。",
-    "default": ""
+    "default": "",
+    "i18n": {
+      "zh-CN": {
+        "description": "自定义工具使用引导提示词。{tools} 会被替换为可用工具描述。留空使用内置默认值。"
+      },
+      "en-US": {
+        "description": "Custom tool usage guidance prompt. {tools} will be replaced with available tool descriptions. Leave empty for built-in default."
+      }
+    }
   }
 }

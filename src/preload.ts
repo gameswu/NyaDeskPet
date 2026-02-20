@@ -34,6 +34,9 @@ const electronAPI = {
   openExternal: (url: string) => ipcRenderer.invoke('open-external', url),
   getAppVersion: () => ipcRenderer.invoke('get-app-version'),
   
+  // Monaco Editor worker
+  readMonacoWorker: () => ipcRenderer.invoke('read-monaco-worker'),
+  
   // ASR 服务
   asrInitialize: (modelName?: string) => ipcRenderer.invoke('asr-initialize', modelName),
   asrIsReady: () => ipcRenderer.invoke('asr-is-ready'),

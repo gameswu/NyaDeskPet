@@ -834,6 +834,37 @@ details.reasoning-block[open] > .reasoning-summary::after {
   transition: width 0.3s;
 }
 
+/* 对话气泡附件 */
+.dialogue-attachment {
+  margin-top: 6px;
+  max-width: 100%;
+}
+
+.dialogue-image {
+  max-width: 100%;
+  max-height: 120px;
+  border-radius: 6px;
+  cursor: zoom-in;
+  display: block;
+  object-fit: contain;
+  transition: transform 0.2s;
+}
+
+.dialogue-image:hover {
+  transform: scale(1.03);
+}
+
+.dialogue-file {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 8px;
+  background: rgba(0, 0, 0, 0.05);
+  border-radius: 4px;
+  font-size: 12px;
+  color: #555;
+}
+
 /* 交互区域 */
 #interaction-area {
   position: absolute;
@@ -2977,6 +3008,85 @@ details.reasoning-block[open] > .reasoning-summary::after {
   text-decoration: none;
 }
 
+/* 更新日志预览 */
+.update-changelog {
+  margin-top: 10px;
+  border: 1px solid rgba(0, 0, 0, 0.1);
+  border-radius: 6px;
+  overflow: hidden;
+}
+
+.update-changelog-summary {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 10px;
+  cursor: pointer;
+  font-size: 12px;
+  font-weight: 500;
+  color: inherit;
+  opacity: 0.8;
+  user-select: none;
+  list-style: none;
+}
+
+.update-changelog-summary::-webkit-details-marker {
+  display: none;
+}
+
+.update-changelog-summary::before {
+  content: '▶';
+  font-size: 9px;
+  transition: transform 0.2s;
+}
+
+.update-changelog[open] .update-changelog-summary::before {
+  transform: rotate(90deg);
+}
+
+.update-changelog-summary:hover {
+  opacity: 1;
+}
+
+.update-changelog-content {
+  padding: 8px 12px;
+  font-size: 12px;
+  line-height: 1.6;
+  border-top: 1px solid rgba(0, 0, 0, 0.08);
+  max-height: 300px;
+  overflow-y: auto;
+  color: inherit;
+}
+
+.update-changelog-content h2,
+.update-changelog-content h3,
+.update-changelog-content h4 {
+  margin: 8px 0 4px;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.update-changelog-content h2 {
+  font-size: 14px;
+}
+
+.update-changelog-content p {
+  margin: 2px 0;
+}
+
+.update-changelog-content .changelog-list-item {
+  padding-left: 4px;
+  margin: 2px 0;
+}
+
+.update-changelog-content code {
+  background: rgba(0, 0, 0, 0.06);
+  padding: 1px 4px;
+  border-radius: 3px;
+  font-size: 11px;
+  font-family: monospace;
+}
+
 .settings-footer {
   padding: 20px;
   border-top: 1px solid #eee;
@@ -3952,6 +4062,11 @@ body.dark-theme {
   color: #e0e0e0;
 }
 
+.dark-theme .dialogue-file {
+  background: rgba(255, 255, 255, 0.08);
+  color: #bbb;
+}
+
 /* UI切换按钮 - 暗黑主题 */
 .dark-theme .toggle-ui-btn {
   background: rgba(40, 40, 40, 0.9);
@@ -3981,6 +4096,18 @@ body.dark-theme {
 .dark-theme .update-status.error {
   background: rgba(244, 67, 54, 0.2);
   color: #e57373;
+}
+
+.dark-theme .update-changelog {
+  border-color: rgba(255, 255, 255, 0.1);
+}
+
+.dark-theme .update-changelog-content {
+  border-top-color: rgba(255, 255, 255, 0.08);
+}
+
+.dark-theme .update-changelog-content code {
+  background: rgba(255, 255, 255, 0.1);
 }
 
 /* 暗黑: 关于链接栏 */
@@ -6846,4 +6973,46 @@ body.dark-theme {
 .dark-theme .agent-skill-param {
   background: #2e3050;
   color: #90caf9;
+}
+
+/* ==================== Monaco Editor 容器样式 ==================== */
+
+.monaco-editor-container {
+  border: 1px solid #ddd;
+  border-radius: 8px;
+  overflow: hidden;
+  transition: border-color 0.2s ease;
+  --monaco-border: #ddd;
+}
+
+.monaco-editor-container:focus-within {
+  border-color: #4CAF50;
+  box-shadow: 0 0 0 2px rgba(76, 175, 80, 0.15);
+}
+
+/* 设置面板中的 Monaco Editor 容器 */
+.setting-item .monaco-editor-container {
+  width: 100%;
+  min-height: 150px;
+}
+
+.setting-item .monaco-editor-container:focus-within {
+  border-color: #4a9eff;
+  box-shadow: 0 0 0 2px rgba(74, 158, 255, 0.15);
+}
+
+/* 暗色主题 */
+.dark-theme .monaco-editor-container {
+  border-color: #424242;
+  --monaco-border: #424242;
+}
+
+.dark-theme .monaco-editor-container:focus-within {
+  border-color: #4CAF50;
+  box-shadow: 0 0 0 2px rgba(76, 175, 80, 0.2);
+}
+
+.dark-theme .setting-item .monaco-editor-container:focus-within {
+  border-color: #4a9eff;
+  box-shadow: 0 0 0 2px rgba(74, 158, 255, 0.2);
 }

@@ -1,16 +1,16 @@
 {
   "tapMaxTokens": {
-    "type": "number",
+    "type": "int",
     "description": "触碰事件 LLM 回复的最大 token 数。数值越小回复越简短。",
     "default": 200
   },
   "enableTTS": {
-    "type": "boolean",
+    "type": "bool",
     "description": "是否启用 TTS 语音合成。关闭后 AI 回复将只显示文字，不播放语音。",
     "default": true
   },
   "enableToolCalling": {
-    "type": "boolean",
+    "type": "bool",
     "description": "是否允许 AI 使用工具（Function Calling）。关闭后 AI 将无法调用已注册的工具。",
     "default": true
   },

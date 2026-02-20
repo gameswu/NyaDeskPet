@@ -46,9 +46,6 @@ const WELCOME_DURATION_MS = 5000;
 /** 弹窗状态提示自动隐藏延迟（ms） */
 const DIALOG_STATUS_HIDE_DELAY_MS = 3000;
 
-/** 文本字段使用 textarea 的长度阈值 */
-const TEXTAREA_LENGTH_THRESHOLD = 80;
-
 /** 对话列表延迟刷新（ms） */
 const CONVERSATION_REFRESH_DELAY_MS = 500;
 
@@ -196,6 +193,8 @@ async function initializeApp(): Promise<void> {
       
       // 如果启用了自动发送，直接发送消息
       if (settings.micAutoSend) {
+        // 显示用户消息到聊天界面
+        addChatMessage(text, true);
         sendUserMessage(text);
       } else {
         // 否则追加到输入框（保留原有内容）
@@ -345,11 +344,11 @@ function setupEventListeners(): void {
     } else if (message.type === 'sync_command') {
       // sync_command 包含动作+对话的组合消息，提取其中的对话文本显示在聊天记录中
       // 文本已由后端 protocol-adapter 清洗过
-      const data = message.data as { actions?: Array<{ type: string; text?: string; reasoningContent?: string }> };
+      const data = message.data as { actions?: Array<{ type: string; text?: string; reasoningContent?: string; attachment?: { type: 'image' | 'file'; url: string; name?: string } }> };
       if (data.actions) {
         const dialogueAction = data.actions.find(a => a.type === 'dialogue');
-        if (dialogueAction?.text) {
-          addChatMessage(dialogueAction.text, false, { reasoningContent: dialogueAction.reasoningContent });
+        if (dialogueAction?.text || dialogueAction?.attachment) {
+          addChatMessage(dialogueAction.text || '', false, { attachment: dialogueAction.attachment, reasoningContent: dialogueAction.reasoningContent });
         }
       }
     }
@@ -2076,7 +2075,7 @@ async function refreshAgentPlugins(): Promise<void> {
                 }
               }
             } else if (action === 'config') {
-              showPluginConfigDialog(plugin);
+              await showPluginConfigDialog(plugin);
             } else if (action === 'open-data-dir') {
               const result = await window.electronAPI.agentOpenPluginDataDir(name);
               if (!result.success) {
@@ -2128,122 +2127,40 @@ async function refreshAgentPlugins(): Promise<void> {
 }
 
 /**
- * 显示插件配置弹窗（模态覆盖层）
+ * 显示插件配置弹窗（复用 PluginConfigUI，通过 Agent 插件 IPC 加载/保存）
  */
-function showPluginConfigDialog(plugin: any): void {
+async function showPluginConfigDialog(plugin: any): Promise<void> {
   if (!plugin.configSchema) return;
 
   // 移除已存在的弹窗
   hidePluginConfigDialog();
 
-  const configTitle = `${plugin.name} - ${window.i18nManager.t('agent.agentPlugins.config')}`;
-
-  // 渲染配置字段 HTML
-  let fieldsHtml = '';
-  for (const [key, field] of Object.entries(plugin.configSchema as Record<string, any>)) {
-    const currentValue = plugin.config?.[key] ?? field.default;
-    let inputHtml = '';
-
-    if (field.type === 'boolean') {
-      inputHtml = `<label class="plugin-config-switch">
-        <input type="checkbox" data-config-key="${key}" ${currentValue ? 'checked' : ''}>
-        <span class="plugin-config-slider"></span>
-      </label>`;
-    } else if (field.type === 'select' && field.options) {
-      const optionsHtml = field.options.map((opt: any) =>
-        `<option value="${opt.value}" ${opt.value === String(currentValue) ? 'selected' : ''}>${opt.label}</option>`
-      ).join('');
-      inputHtml = `<select class="plugin-config-input" data-config-key="${key}">${optionsHtml}</select>`;
-    } else if (field.type === 'number') {
-      inputHtml = `<input type="number" class="plugin-config-input" data-config-key="${key}" value="${currentValue !== undefined ? currentValue : ''}">`;
-    } else if (field.type === 'string' && String(currentValue || '').length > TEXTAREA_LENGTH_THRESHOLD) {
-      inputHtml = `<textarea class="plugin-config-textarea" data-config-key="${key}" rows="4">${currentValue ?? ''}</textarea>`;
-    } else {
-      inputHtml = `<input type="text" class="plugin-config-input" data-config-key="${key}" value="${currentValue !== undefined ? String(currentValue).replace(/"/g, '&quot;') : ''}">`;
-    }
-
-    fieldsHtml += `<div class="plugin-config-field">
-      <label class="plugin-config-label">${key}</label>
-      <div class="plugin-config-description">${field.description || ''}</div>
-      ${inputHtml}
-    </div>`;
-  }
-
-  // 创建模态覆盖层
-  const overlay = document.createElement('div');
-  overlay.id = 'agent-plugin-config-overlay';
-  overlay.className = 'plugin-config-dialog-overlay';
-  overlay.innerHTML = `
-    <div class="plugin-config-dialog">
-      <div class="plugin-config-header">
-        <h3><i data-lucide="settings" style="width: 20px; height: 20px;"></i> ${configTitle}</h3>
-        <button class="close-btn" id="btn-agent-config-close">
-          <i data-lucide="x" style="width: 20px; height: 20px;"></i>
-        </button>
-      </div>
-      <div class="plugin-config-body">
-        <div class="plugin-config-fields">
-          ${fieldsHtml}
-        </div>
-      </div>
-      <div class="plugin-config-footer">
-        <div></div>
-        <div class="plugin-config-footer-right">
-          <button class="plugin-config-btn secondary" id="btn-agent-config-cancel">
-            ${window.i18nManager.t('settings.cancel') || '取消'}
-          </button>
-          <button class="plugin-config-btn primary" id="btn-agent-config-save">
-            ${window.i18nManager.t('agent.agentPlugins.saveConfig') || '保存配置'}
-          </button>
-        </div>
-      </div>
-    </div>
-  `;
-
-  document.body.appendChild(overlay);
-
-  // 刷新图标
-  if (window.lucide) {
-    window.lucide.createIcons();
-  }
-
-  // 点击覆盖层关闭
-  overlay.addEventListener('click', (e) => {
-    if (e.target === overlay) hidePluginConfigDialog();
-  });
-
-  // 关闭按钮
-  document.getElementById('btn-agent-config-close')?.addEventListener('click', () => hidePluginConfigDialog());
-  document.getElementById('btn-agent-config-cancel')?.addEventListener('click', () => hidePluginConfigDialog());
-
-  // 保存按钮
-  document.getElementById('btn-agent-config-save')?.addEventListener('click', async () => {
-    const config: Record<string, unknown> = {};
-    overlay.querySelectorAll('[data-config-key]').forEach((el) => {
-      const key = (el as HTMLElement).dataset.configKey!;
-      if (el instanceof HTMLInputElement) {
-        if (el.type === 'checkbox') config[key] = el.checked;
-        else if (el.type === 'number') config[key] = parseFloat(el.value) || 0;
-        else config[key] = el.value;
-      } else if (el instanceof HTMLSelectElement) {
-        config[key] = el.value;
-      } else if (el instanceof HTMLTextAreaElement) {
-        config[key] = el.value;
+  await window.pluginConfigUI.showConfigDialog(
+    plugin.name,
+    `${plugin.name} - ${window.i18nManager.t('agent.agentPlugins.config')}`,
+    plugin.configSchema,
+    {
+      // 自定义加载：直接使用 plugin 对象中已有的 config
+      loadConfig: async () => {
+        return plugin.config || {};
+      },
+      // 自定义保存：通过 Agent 插件 IPC 通道保存
+      saveConfig: async (_pluginId: string, config: Record<string, unknown>) => {
+        try {
+          const result = await window.electronAPI.agentSavePluginConfig(plugin.name, config);
+          return result.success;
+        } catch (error) {
+          window.logger.error('保存插件配置失败:', error);
+          return false;
+        }
+      },
+      // 保存成功后刷新插件列表
+      onSaved: () => {
+        refreshAgentPlugins();
+        refreshToolList();
       }
-    });
-
-    try {
-      const result = await window.electronAPI.agentSavePluginConfig(plugin.name, config);
-      if (result.success) {
-        hidePluginConfigDialog();
-        await refreshAgentPlugins();
-      } else {
-        window.logger.error('保存插件配置失败:', result.error);
-      }
-    } catch (error) {
-      window.logger.error('保存插件配置失败:', error);
     }
-  });
+  );
 }
 
 /**
@@ -3432,9 +3349,14 @@ function updateCustomBackendFieldsVisibility(mode: 'builtin' | 'custom'): void {
 }
 
 /**
+ * 设置面板中人格编辑器的 Monaco 实例 ID
+ */
+let personalityEditorId: string | null = null;
+
+/**
  * 显示设置面板
  */
-function showSettingsPanel(): void {
+async function showSettingsPanel(): Promise<void> {
   const panel = document.getElementById('settings-panel');
   if (!panel) return;
 
@@ -3459,7 +3381,7 @@ function showSettingsPanel(): void {
   (document.getElementById('setting-enable-eye-tracking') as HTMLInputElement).checked = settings.enableEyeTracking;
   (document.getElementById('setting-use-custom-character') as HTMLInputElement).checked = settings.useCustomCharacter;
   (document.getElementById('setting-custom-name') as HTMLInputElement).value = settings.customName;
-  (document.getElementById('setting-custom-personality') as HTMLTextAreaElement).value = settings.customPersonality;
+
   (document.getElementById('setting-mic-background-mode') as HTMLInputElement).checked = settings.micBackgroundMode || false;
   (document.getElementById('setting-mic-threshold') as HTMLInputElement).value = String(settings.micVolumeThreshold || 30);
   (document.getElementById('mic-threshold-value') as HTMLSpanElement).textContent = String(settings.micVolumeThreshold || 30);
@@ -3490,7 +3412,40 @@ function showSettingsPanel(): void {
   // 加载触碰配置
   loadTapConfigUI();
 
+  // 先显示面板，确保容器有实际尺寸
   panel.classList.add('show');
+
+  // 等待一帧，确保布局完成后再初始化 Monaco Editor
+  await new Promise<void>(resolve => requestAnimationFrame(() => resolve()));
+
+  // 初始化人格编辑器 Monaco Editor（必须在面板可见后创建，否则容器尺寸为 0）
+  const personalityContainer = document.getElementById('setting-custom-personality') as HTMLElement;
+  if (personalityContainer) {
+    // 销毁旧的编辑器实例
+    if (personalityEditorId) {
+      window.monacoManager.destroyEditor(personalityEditorId);
+      personalityEditorId = null;
+    }
+    try {
+      await window.monacoManager.load();
+      personalityEditorId = await window.monacoManager.createEditor({
+        container: personalityContainer,
+        value: settings.customPersonality || '',
+        language: 'markdown',
+        minHeight: 180,
+        maxHeight: 400,
+      });
+    } catch (err) {
+      window.logger.error('Monaco Editor 加载失败，回退到 textarea:', err);
+      // 回退：将容器替换为 textarea
+      const textarea = document.createElement('textarea');
+      textarea.id = 'setting-custom-personality-fallback';
+      textarea.rows = 8;
+      textarea.value = settings.customPersonality || '';
+      textarea.className = 'plugin-config-textarea';
+      personalityContainer.parentElement?.replaceChild(textarea, personalityContainer);
+    }
+  }
 }
 
 /**
@@ -3500,6 +3455,11 @@ function hideSettingsPanel(): void {
   const panel = document.getElementById('settings-panel');
   if (panel) {
     panel.classList.remove('show');
+  }
+  // 销毁人格编辑器 Monaco 实例
+  if (personalityEditorId) {
+    window.monacoManager.destroyEditor(personalityEditorId);
+    personalityEditorId = null;
   }
 }
 
@@ -3521,7 +3481,14 @@ async function saveSettings(): Promise<void> {
   const enableEyeTracking = (document.getElementById('setting-enable-eye-tracking') as HTMLInputElement).checked;
   const useCustomCharacter = (document.getElementById('setting-use-custom-character') as HTMLInputElement).checked;
   const customName = (document.getElementById('setting-custom-name') as HTMLInputElement).value;
-  const customPersonality = (document.getElementById('setting-custom-personality') as HTMLTextAreaElement).value;
+  // 从 Monaco Editor 或回退 textarea 读取人格描述
+  let customPersonality = '';
+  if (personalityEditorId) {
+    customPersonality = window.monacoManager.getValue(personalityEditorId);
+  } else {
+    const fallback = document.getElementById('setting-custom-personality-fallback') as HTMLTextAreaElement | null;
+    customPersonality = fallback?.value || '';
+  }
   const micBackgroundMode = (document.getElementById('setting-mic-background-mode') as HTMLInputElement).checked;
   const micVolumeThreshold = parseFloat((document.getElementById('setting-mic-threshold') as HTMLInputElement).value);
   const micAutoSend = (document.getElementById('setting-mic-auto-send') as HTMLInputElement).checked;
@@ -4106,6 +4073,34 @@ async function checkForUpdates(): Promise<void> {
           window.electronAPI.openExternal(result.releaseUrl!);
         });
       }
+
+      // 更新日志预览
+      if (result.releaseNotes) {
+        const changelogContainer = document.createElement('details');
+        changelogContainer.className = 'update-changelog';
+        const summary = document.createElement('summary');
+        summary.className = 'update-changelog-summary';
+        const summaryIcon = document.createElement('i');
+        summaryIcon.setAttribute('data-lucide', 'file-text');
+        summaryIcon.style.cssText = 'width: 13px; height: 13px;';
+        summary.appendChild(summaryIcon);
+        const summaryLabel = document.createElement('span');
+        summaryLabel.textContent = window.i18nManager.t('update.viewChangelog');
+        summary.appendChild(summaryLabel);
+        changelogContainer.appendChild(summary);
+
+        const changelogContent = document.createElement('div');
+        changelogContent.className = 'update-changelog-content';
+        // 简单渲染 Markdown：标题、列表、加粗
+        changelogContent.innerHTML = renderSimpleMarkdown(result.releaseNotes);
+        changelogContainer.appendChild(changelogContent);
+
+        statusEl.appendChild(changelogContainer);
+
+        if (window.lucide) {
+          window.lucide.createIcons();
+        }
+      }
     } else {
       statusEl.className = 'update-status no-update';
       statusEl.textContent = window.i18nManager.t('update.noUpdate');
@@ -4116,6 +4111,42 @@ async function checkForUpdates(): Promise<void> {
   } finally {
     if (btnCheckUpdate) btnCheckUpdate.disabled = false;
   }
+}
+
+/**
+ * 简单 Markdown 渲染（用于更新日志预览）
+ * 支持标题、无序列表、加粗、行内代码
+ */
+function renderSimpleMarkdown(md: string): string {
+  return md
+    .split('\n')
+    .map(line => {
+      const trimmed = line.trim();
+      if (!trimmed) return '';
+      // 标题
+      if (trimmed.startsWith('### ')) return `<h4>${escapeHtml(trimmed.slice(4))}</h4>`;
+      if (trimmed.startsWith('## ')) return `<h3>${escapeHtml(trimmed.slice(3))}</h3>`;
+      if (trimmed.startsWith('# ')) return `<h2>${escapeHtml(trimmed.slice(2))}</h2>`;
+      // 列表项
+      if (trimmed.startsWith('- ') || trimmed.startsWith('* ')) {
+        const content = trimmed.slice(2);
+        return `<div class="changelog-list-item">• ${formatInlineMarkdown(content)}</div>`;
+      }
+      // 普通段落
+      return `<p>${formatInlineMarkdown(trimmed)}</p>`;
+    })
+    .filter(Boolean)
+    .join('\n');
+}
+
+/** 处理行内 Markdown 格式（加粗、行内代码） */
+function formatInlineMarkdown(text: string): string {
+  let html = escapeHtml(text);
+  // 加粗 **text**
+  html = html.replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>');
+  // 行内代码 `code`
+  html = html.replace(/`(.+?)`/g, '<code>$1</code>');
+  return html;
 }
 
 /**

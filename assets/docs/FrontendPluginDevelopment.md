@@ -110,6 +110,11 @@ NyaDeskPet 发送：
 }
 ```
 
+插件也可以发送连接确认消息（可选）：
+```json
+{ "type": "connected", "message": "Plugin ready" }
+```
+
 ### 2. 配置请求（getConfig）
 
 NyaDeskPet 发送：

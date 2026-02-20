@@ -1,0 +1,40 @@
+{
+  "providerInstanceId": {
+    "type": "string",
+    "default": "primary",
+    "description": "用于图像生成的 Provider 实例 ID，设为 'primary' 则使用主 LLM",
+    "i18n": {
+      "zh-CN": { "description": "用于图像生成的 Provider 实例 ID，设为 'primary' 则使用主 LLM" },
+      "en-US": { "description": "Provider instance ID for image generation. Set to 'primary' to use the primary LLM" }
+    }
+  },
+  "model": {
+    "type": "string",
+    "default": "",
+    "description": "图像生成模型名称（留空则使用 Provider 配置的模型）",
+    "i18n": {
+      "zh-CN": { "description": "图像生成模型名称（留空则使用 Provider 配置的模型）" },
+      "en-US": { "description": "Image generation model name (leave empty to use Provider's configured model)" }
+    }
+  },
+  "defaultSize": {
+    "type": "string",
+    "default": "1024x1024",
+    "description": "默认图像尺寸（如 1024x1024、1792x1024、1024x1792）",
+    "options": ["256x256", "512x512", "1024x1024", "1792x1024", "1024x1792"],
+    "i18n": {
+      "zh-CN": { "description": "默认图像尺寸（如 1024x1024、1792x1024、1024x1792）" },
+      "en-US": { "description": "Default image size (e.g. 1024x1024, 1792x1024, 1024x1792)" }
+    }
+  },
+  "defaultQuality": {
+    "type": "string",
+    "default": "standard",
+    "description": "默认图像质量（standard 或 hd）",
+    "options": ["standard", "hd"],
+    "i18n": {
+      "zh-CN": { "description": "默认图像质量（standard 或 hd）" },
+      "en-US": { "description": "Default image quality (standard or hd)" }
+    }
+  }
+}

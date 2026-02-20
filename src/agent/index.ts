@@ -84,6 +84,7 @@ export {
   type AgentPluginContext,
   type AgentPluginInfo,
   type PluginProviderInfo,
+  type PluginProviderConfig,
   type ProviderAccessor,
   type HandlerAccessor,
   type MessageContext,
@@ -144,3 +145,21 @@ export {
   type SkillInfo,
   type SkillExample
 } from './skills';
+
+// 多模态工具
+export {
+  type MultimodalContent,
+  type MultimodalContentType,
+  type ProviderCapabilities,
+  buildMultimodalMessage,
+  toDataUrl,
+  fromDataUrl,
+  fromChatMessageImage,
+  toChatMessageImage,
+  estimateContentSize,
+  isImageContent,
+  isFileContent,
+  isContentSupported,
+  describeContents,
+  validateContent
+} from './multimodal';

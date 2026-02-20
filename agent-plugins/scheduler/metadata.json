@@ -1,0 +1,12 @@
+{
+  "name": "scheduler",
+  "author": "gameswu",
+  "desc": "任务调度插件 — 提供基于时间的任务调度能力，支持一次性和周期性任务，并支持与 Planning 插件配合使用",
+  "version": "1.0.0",
+  "entry": "main.js",
+  "autoActivate": true,
+  "i18n": {
+    "zh-CN": { "desc": "任务调度插件 — 提供基于时间的任务调度能力，支持一次性和周期性任务，并支持与 Planning 插件配合使用" },
+    "en-US": { "desc": "Scheduler plugin — provides time-based task scheduling with one-time and recurring tasks, integrates with Planning plugin" }
+  }
+}

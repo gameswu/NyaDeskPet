@@ -3,25 +3,33 @@
  * 根据Schema渲染配置表单
  */
 
-import type { PluginConfigDefinition, PluginConfigSchema } from '../types/global';
+import type { PluginConfigDefinition, PluginConfigSchema, ConfigDialogOptions } from '../types/global';
 
 class PluginConfigUI {
   private currentPluginId: string | null = null;
   private currentSchema: PluginConfigDefinition | null = null;
   private currentConfig: { [key: string]: any } = {};
+  /** 当前对话框中活跃的 Monaco Editor 实例 ID 映射（data-key -> editorId） */
+  private activeEditors: Map<string, string> = new Map();
+  /** 自定义配置回调 */
+  private customOptions: ConfigDialogOptions | null = null;
   
   /**
    * 显示插件配置对话框
+   * @param options 可选的自定义加载/保存回调（用于 Agent 插件等非标准配置存储）
    */
-  public async showConfigDialog(pluginId: string, pluginName: string, schema: PluginConfigDefinition): Promise<void> {
+  public async showConfigDialog(pluginId: string, pluginName: string, schema: PluginConfigDefinition, options?: ConfigDialogOptions): Promise<void> {
     this.currentPluginId = pluginId;
     this.currentSchema = schema;
+    this.customOptions = options || null;
     
     // 获取默认配置
     const defaultConfig = window.pluginConfigManager.getDefaultConfig(schema);
     
-    // 加载已保存的配置
-    const savedConfig = await window.pluginConfigManager.getConfig(pluginId);
+    // 加载已保存的配置（支持自定义加载回调）
+    const savedConfig = this.customOptions?.loadConfig
+      ? await this.customOptions.loadConfig(pluginId)
+      : await window.pluginConfigManager.getConfig(pluginId);
     
     // 合并配置：默认值 + 已保存值（已保存的优先）
     this.currentConfig = this.mergeConfig(defaultConfig, savedConfig);
@@ -29,7 +37,11 @@ class PluginConfigUI {
     // 如果是首次打开（savedConfig 为空或无关键字段），自动保存默认配置
     const isEmpty = Object.keys(savedConfig).length === 0;
     if (isEmpty) {
-      await window.pluginConfigManager.saveConfig(pluginId, this.currentConfig);
+      if (this.customOptions?.saveConfig) {
+        await this.customOptions.saveConfig(pluginId, this.currentConfig);
+      } else {
+        await window.pluginConfigManager.saveConfig(pluginId, this.currentConfig);
+      }
       window.logger.info(`[PluginConfigUI] 首次打开插件 ${pluginId}，已保存默认配置`);
     }
     
@@ -69,6 +81,10 @@ class PluginConfigUI {
     
     // 绑定事件
     this.bindEvents(dialog);
+
+    // 等待一帧确保对话框布局完成后再初始化 Monaco Editor
+    await new Promise<void>(resolve => requestAnimationFrame(() => resolve()));
+    await this.initMonacoEditors(dialog);
   }
 
   /**
@@ -162,13 +178,13 @@ class PluginConfigUI {
         }
         return `<input type="text" class="plugin-config-input" data-key="${key}" value="${value ?? ''}">`;
       
-      case 'text':
-        if (field.editor_mode) {
-          return `<textarea class="plugin-config-textarea editor" data-key="${key}" 
-                           data-language="${field.editor_language || 'json'}" 
-                           rows="10">${value ?? ''}</textarea>`;
-        }
-        return `<textarea class="plugin-config-textarea" data-key="${key}" rows="5">${value ?? ''}</textarea>`;
+      case 'text': {
+        const lang = field.editor_language || (field.editor_mode ? 'json' : 'plaintext');
+        const minH = field.editor_mode ? 200 : 150;
+        return `<div class="monaco-editor-container" data-key="${key}" 
+                     data-language="${lang}" data-min-height="${minH}"
+                     data-initial-value="${encodeURIComponent(String(value ?? ''))}"></div>`;
+      }
       
       case 'list':
         return `<div class="plugin-config-list" data-key="${key}">
@@ -182,10 +198,14 @@ class PluginConfigUI {
         if (field.items) {
           return this.renderConfigForm(field.items, value || {}, key);
         }
-        return `<textarea class="plugin-config-textarea" data-key="${key}" rows="5">${JSON.stringify(value || {}, null, 2)}</textarea>`;
+        return `<div class="monaco-editor-container" data-key="${key}"
+                     data-language="json" data-min-height="150"
+                     data-initial-value="${encodeURIComponent(JSON.stringify(value || {}, null, 2))}"></div>`;
       
       case 'dict':
-        return `<textarea class="plugin-config-textarea" data-key="${key}" rows="5">${JSON.stringify(value || {}, null, 2)}</textarea>`;
+        return `<div class="monaco-editor-container" data-key="${key}"
+                     data-language="json" data-min-height="150"
+                     data-initial-value="${encodeURIComponent(JSON.stringify(value || {}, null, 2))}"></div>`;
       
       default:
         return `<input type="text" class="plugin-config-input" data-key="${key}" value="${value ?? ''}">`;
@@ -253,8 +273,71 @@ class PluginConfigUI {
     
     // 点击遮罩关闭
     dialog.addEventListener('click', () => {
+      this.cleanupEditors();
       dialog.remove();
     });
+
+    // 监听关闭按钮（需要清理编辑器）
+    const closeBtn = dialog.querySelector('.close-btn');
+    closeBtn?.addEventListener('click', () => {
+      this.cleanupEditors();
+    });
+  }
+
+  /**
+   * 初始化对话框中的 Monaco Editor 实例
+   */
+  private async initMonacoEditors(dialog: HTMLElement): Promise<void> {
+    const containers = Array.from(dialog.querySelectorAll<HTMLElement>('.monaco-editor-container[data-key]'));
+    if (containers.length === 0) return;
+
+    try {
+      await window.monacoManager.load();
+    } catch (err) {
+      window.logger.error('[PluginConfigUI] Monaco Editor 加载失败，回退到 textarea:', err);
+      // 回退：将容器替换为 textarea
+      containers.forEach(container => {
+        const key = container.getAttribute('data-key') || '';
+        const value = decodeURIComponent(container.getAttribute('data-initial-value') || '');
+        const textarea = document.createElement('textarea');
+        textarea.className = 'plugin-config-textarea';
+        textarea.setAttribute('data-key', key);
+        textarea.rows = 5;
+        textarea.value = value;
+        container.parentElement?.replaceChild(textarea, container);
+      });
+      return;
+    }
+
+    for (const container of containers) {
+      const key = container.getAttribute('data-key') || '';
+      const lang = container.getAttribute('data-language') || 'plaintext';
+      const minHeight = parseInt(container.getAttribute('data-min-height') || '150');
+      const value = decodeURIComponent(container.getAttribute('data-initial-value') || '');
+
+      try {
+        const editorId = await window.monacoManager.createEditor({
+          container,
+          value,
+          language: lang,
+          minHeight,
+          maxHeight: 500,
+        });
+        this.activeEditors.set(key, editorId);
+      } catch (err) {
+        window.logger.error(`[PluginConfigUI] 创建 Monaco Editor 失败 (${key}):`, err);
+      }
+    }
+  }
+
+  /**
+   * 清理当前对话框中的 Monaco Editor 实例
+   */
+  private cleanupEditors(): void {
+    for (const [, editorId] of this.activeEditors) {
+      window.monacoManager.destroyEditor(editorId);
+    }
+    this.activeEditors.clear();
   }
 
   /**
@@ -305,8 +388,11 @@ class PluginConfigUI {
       }
       
       case 'text': {
-        const textarea = document.querySelector<HTMLTextAreaElement>(`textarea[data-key="${key}"]`);
-        return textarea?.value || '';
+        const editorId = this.activeEditors.get(key);
+        if (editorId) {
+          return window.monacoManager.getValue(editorId);
+        }
+        return '';
       }
       
       case 'list': {
@@ -322,21 +408,27 @@ class PluginConfigUI {
           }
           return nestedConfig;
         }
-        const textarea = document.querySelector<HTMLTextAreaElement>(`textarea[data-key="${key}"]`);
-        try {
-          return JSON.parse(textarea?.value || '{}');
-        } catch {
-          return {};
+        const objEditorId = this.activeEditors.get(key);
+        if (objEditorId) {
+          try {
+            return JSON.parse(window.monacoManager.getValue(objEditorId) || '{}');
+          } catch {
+            return {};
+          }
         }
+        return {};
       }
       
       case 'dict': {
-        const textarea = document.querySelector<HTMLTextAreaElement>(`textarea[data-key="${key}"]`);
-        try {
-          return JSON.parse(textarea?.value || '{}');
-        } catch {
-          return {};
+        const dictEditorId = this.activeEditors.get(key);
+        if (dictEditorId) {
+          try {
+            return JSON.parse(window.monacoManager.getValue(dictEditorId) || '{}');
+          } catch {
+            return {};
+          }
         }
+        return {};
       }
       
       default:
@@ -359,9 +451,13 @@ class PluginConfigUI {
       return;
     }
     
-    // 保存配置
-    const success = await window.pluginConfigManager.saveConfig(this.currentPluginId, config);
+    // 保存配置（支持自定义保存回调）
+    const success = this.customOptions?.saveConfig
+      ? await this.customOptions.saveConfig(this.currentPluginId, config)
+      : await window.pluginConfigManager.saveConfig(this.currentPluginId, config);
     if (success) {
+      this.cleanupEditors();
+      this.customOptions?.onSaved?.();
       alert('配置已保存');
       document.querySelector('.plugin-config-dialog-overlay')?.remove();
     } else {
@@ -379,8 +475,16 @@ class PluginConfigUI {
       return;
     }
     
-    const success = await window.pluginConfigManager.resetConfig(this.currentPluginId, this.currentSchema);
+    let success: boolean;
+    if (this.customOptions?.saveConfig) {
+      const defaultConfig = window.pluginConfigManager.getDefaultConfig(this.currentSchema);
+      success = await this.customOptions.saveConfig(this.currentPluginId, defaultConfig);
+    } else {
+      success = await window.pluginConfigManager.resetConfig(this.currentPluginId, this.currentSchema);
+    }
     if (success) {
+      this.cleanupEditors();
+      this.customOptions?.onSaved?.();
       alert('已恢复默认设置');
       document.querySelector('.plugin-config-dialog-overlay')?.remove();
     } else {

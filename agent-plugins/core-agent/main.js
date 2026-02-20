@@ -252,9 +252,15 @@ class CoreAgentPlugin extends AgentPlugin {
 
     // 自动转述模式
     if (isImage && data.fileData && imageTranscriber?.isAvailable?.() && imageTranscriber.autoTranscribe && imageTranscriber.transcribeImage) {
+      // 构建图片附件 data URL 供前端渲染
+      const imageDataUrl = `data:${data.fileType};base64,${data.fileData}`;
       mctx.addReply({
         type: 'dialogue',
-        data: { text: `正在识别图片 ${data.fileName}...`, duration: 3000 }
+        data: {
+          text: `正在识别图片 ${data.fileName}...`,
+          duration: 3000,
+          attachment: { type: 'image', url: imageDataUrl, name: data.fileName }
+        }
       });
 
       try {

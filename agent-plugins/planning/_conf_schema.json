@@ -1,0 +1,47 @@
+{
+  "planMaxTokens": {
+    "type": "int",
+    "description": "任务规划 LLM 的最大 token 数。数值越大允许更复杂的计划。",
+    "default": 2000,
+    "i18n": {
+      "zh-CN": { "description": "任务规划 LLM 的最大 token 数。数值越大允许更复杂的计划。" },
+      "en-US": { "description": "Max tokens for planning LLM calls. Higher values allow more complex plans." }
+    }
+  },
+  "subAgentMaxTokens": {
+    "type": "int",
+    "description": "Sub-Agent 执行任务时 LLM 的最大 token 数。",
+    "default": 1500,
+    "i18n": {
+      "zh-CN": { "description": "Sub-Agent 执行任务时 LLM 的最大 token 数。" },
+      "en-US": { "description": "Max tokens for Sub-Agent LLM calls during task execution." }
+    }
+  },
+  "maxPlanSteps": {
+    "type": "int",
+    "description": "单个计划允许的最大步骤数。防止 LLM 生成过于冗长的计划。",
+    "default": 10,
+    "i18n": {
+      "zh-CN": { "description": "单个计划允许的最大步骤数。防止 LLM 生成过于冗长的计划。" },
+      "en-US": { "description": "Maximum number of steps per plan. Prevents overly long plans." }
+    }
+  },
+  "maxSubAgents": {
+    "type": "int",
+    "description": "同时允许的最大 Sub-Agent 数量。",
+    "default": 5,
+    "i18n": {
+      "zh-CN": { "description": "同时允许的最大 Sub-Agent 数量。" },
+      "en-US": { "description": "Maximum number of concurrent Sub-Agents allowed." }
+    }
+  },
+  "autoExecute": {
+    "type": "bool",
+    "description": "创建计划后是否自动开始执行。关闭则需手动调用 execute_plan。",
+    "default": true,
+    "i18n": {
+      "zh-CN": { "description": "创建计划后是否自动开始执行。关闭则需手动调用 execute_plan。" },
+      "en-US": { "description": "Auto-execute plans after creation. If disabled, requires manual execute_plan call." }
+    }
+  }
+}

@@ -18,6 +18,8 @@ Agent 插件运行在 Electron 主进程中，可以注册工具、指令，或�
   - [插件上下文 (this.ctx)](#插件上下文-thisctx)
     - [通用能力](#通用能力)
     - [Provider 操作](#provider-操作)
+    - [多模态能力](#多模态能力)
+    - [Skills 技能系统](#skills-技能系统)
     - [Handler 专用](#handler-专用)
   - [MessageContext](#messagecontext)
   - [工具循环](#工具循环)
@@ -236,6 +238,39 @@ class MyHandler extends AgentPlugin {
 | `getProviders()` | 获取所有 LLM Provider 信息 |
 | `getPrimaryProviderId()` | 获取主 Provider 实例 ID |
 | `callProvider(instanceId, request)` | 调用指定 Provider 进行 LLM 推理 |
+| `getProviderConfig(instanceId)` | 获取 Provider 配置详情（返回 `PluginProviderConfig`） |
+
+`PluginProviderConfig` 类型：
+
+```typescript
+interface PluginProviderConfig {
+  instanceId: string;
+  providerId: string;
+  displayName: string;
+  apiKey?: string;
+  baseUrl?: string;
+  model?: string;
+}
+```
+
+### 多模态能力
+
+| 方法 | 说明 |
+|------|------|
+| `getPrimaryCapabilities()` | 获取主 LLM 的多模态能力声明 |
+| `buildMultimodalMessage(role, text, content?)` | 构建带附件的聊天消息 |
+| `toDataUrl(content)` | 将 `MultimodalContent` 转为 Data URL |
+| `fromDataUrl(dataUrl, fileName?)` | 从 Data URL 解析为 `MultimodalContent` |
+| `isContentSupported(content)` | 检查主 Provider 是否支持指定内容类型 |
+
+### Skills 技能系统
+
+| 方法 | 说明 |
+|------|------|
+| `registerSkill(schema, handler)` | 注册技能 |
+| `unregisterSkill(name)` | 注销技能 |
+| `invokeSkill(name, params, ctx)` | 调用技能 |
+| `listSkills()` | 列出所有已注册技能 |
 
 ### Handler 专用
 

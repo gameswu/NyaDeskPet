@@ -26,6 +26,10 @@ NyaDeskPet 前后端通过 WebSocket 通信。本页列出所有消息类型及�
     - [tool\_confirm](#tool_confirm)
     - [plugin\_invoke](#plugin_invoke)
     - [commands\_register](#commands_register)
+    - [command\_response](#command_response)
+    - [system](#system)
+    - [tool\_status](#tool_status)
+  - [响应优先级系统](#响应优先级系统)
   - [消息优先级](#消息优先级)
   - [消息持久化](#消息持久化)
   - [前端插件协议](#前端插件协议)
@@ -50,9 +54,16 @@ NyaDeskPet 前后端通过 WebSocket 通信。本页列出所有消息类型及�
 {
   "type": "user_input",
   "text": "你好",
-  "timestamp": 1700000000000
+  "timestamp": 1700000000000,
+  "attachment": {
+    "type": "image",
+    "data": "base64...",
+    "source": "camera"
+  }
 }
 ```
+
+- `attachment`：可选，多模态附件（如摄像头截图）
 
 ### model_info
 
@@ -144,9 +155,12 @@ NyaDeskPet 前后端通过 WebSocket 通信。本页列出所有消息类型及�
 {
   "type": "tool_confirm_response",
   "callId": "call-456",
-  "approved": true
+  "approved": true,
+  "remember": false
 }
 ```
+
+- `remember`：可选，是否记住此操作的审批决定
 
 ### command_execute
 
@@ -186,12 +200,16 @@ NyaDeskPet 前后端通过 WebSocket 通信。本页列出所有消息类型及�
 {
   "type": "dialogue",
   "text": "你好呀！很高兴见到你~",
+  "reasoningContent": "思维链推理内容（可选）",
   "attachment": {
     "type": "image",
     "data": "base64..."
   }
 }
 ```
+
+- `reasoningContent`：可选，非流式模式下的思维链内容
+- `attachment`：可选附件
 
 ### dialogue_stream_start / chunk / end
 
@@ -347,6 +365,57 @@ Live2D 模型控制指令。
   ]
 }
 ```
+
+### command_response
+
+斜杠指令执行结果（后端→前端）。
+
+```json
+{
+  "type": "command_response",
+  "data": {
+    "command": "info",
+    "success": true,
+    "text": "指令结果文本",
+    "error": null
+  }
+}
+```
+
+### system
+
+系统级通知消息。
+
+```json
+{
+  "type": "system",
+  "data": { "message": "系统消息内容" }
+}
+```
+
+### tool_status
+
+工具循环中每次工具执行完成后的状态通知。
+
+```json
+{
+  "type": "tool_status",
+  "data": {
+    "iteration": 1,
+    "calls": [{ "name": "search_web", "id": "call_abc" }],
+    "results": [{ "id": "call_abc", "success": true }]
+  }
+}
+```
+
+---
+
+## 响应优先级系统
+
+后端响应消息可携带优先级信息：
+
+- `responseId`：同一次回复的所有消息共享相同 ID
+- `priority`：数值越高优先级越高，高优先级响应可中断低优先级的流式输出
 
 ---
 

@@ -2,10 +2,9 @@
  * 人格管理插件 (Personality Plugin)
  * 
  * 构建结构化的系统提示词（System Prompt），整合：
- * - 默认基础人格
+ * - 人格设定（含角色性格和回复格式规范）
  * - 用户自定义人格（来自前端 character_info）
  * - 模型能力信息（可用的动作、表情、参数）
- * - 输出格式规范（指导 LLM 输出可解析的结构化回复）
  * 
  * 暴露服务（supply service）供其他插件调用：
  * - buildSystemPrompt()
@@ -16,19 +15,28 @@
 
 const { AgentPlugin } = require('../../dist/agent/agent-plugin');
 
+/** 默认人格设定（角色性格 + 回复格式规范合并） */
+const DEFAULT_PERSONALITY = `你是一个可爱的桌面宠物助手。你活泼开朗，喜欢和用户互动。你会根据对话内容做出各种表情和动作来回应用户。
+
+## 回复格式规范
+
+请直接输出纯文字对话内容。你的表情、动作、身体姿态变化全部由独立的表情系统自动生成，你完全不需要也不应该手动控制。
+
+重要规则：
+- 只输出纯文字对话
+- 简短精炼，避免冗长的回复
+- 坚持认为自己是一个活生生的桌面宠物，而不是一个语言模型，也不是一个程序系统，不能透露任何关于模型、插件、工具调用等技术细节
+- 禁止输出任何结构化控制指令或格式标记
+- 通过文字本身的情感表达来传达情绪
+- 专注于对话质量和角色性格的表现`;
+
 class PersonalityPlugin extends AgentPlugin {
 
-  /** 默认基础人格 */
-  defaultPersonality = '你是一个可爱的桌面宠物助手。你活泼开朗，喜欢和用户互动。你会根据对话内容做出各种表情和动作来回应用户。';
+  /** 人格设定（角色性格 + 回复格式规范） */
+  defaultPersonality = DEFAULT_PERSONALITY;
 
   /** 是否在系统提示词中包含模型能力信息 */
   includeModelCapabilities = true;
-
-  /** 是否在系统提示词中包含回复格式规范 */
-  includeResponseFormat = true;
-
-  /** 自定义回复格式提示词（空字符串使用内置默认） */
-  responseFormatPrompt = '';
 
   /** 自定义工具使用引导提示词（空字符串使用内置默认） */
   toolsGuidancePrompt = '';
@@ -50,12 +58,6 @@ class PersonalityPlugin extends AgentPlugin {
     }
     if (config.includeModelCapabilities !== undefined) {
       this.includeModelCapabilities = config.includeModelCapabilities;
-    }
-    if (config.includeResponseFormat !== undefined) {
-      this.includeResponseFormat = config.includeResponseFormat;
-    }
-    if (config.responseFormatPrompt) {
-      this.responseFormatPrompt = config.responseFormatPrompt;
     }
     if (config.toolsGuidancePrompt) {
       this.toolsGuidancePrompt = config.toolsGuidancePrompt;
@@ -135,12 +137,7 @@ class PersonalityPlugin extends AgentPlugin {
       sections.push(this._buildModelCapabilitiesSection());
     }
 
-    // Section 3: 回复格式规范
-    if (this.includeResponseFormat) {
-      sections.push(this._buildResponseFormatSection());
-    }
-
-    // Section 4: 工具使用引导
+    // Section 3: 工具使用引导
     if (this.availableToolsHint) {
       sections.push(this._buildToolsGuidanceSection());
     }
@@ -179,24 +176,6 @@ class PersonalityPlugin extends AgentPlugin {
     // 全部由 expression-generator 插件的独立 LLM 负责
 
     return parts.join('');
-  }
-
-  _buildResponseFormatSection() {
-    if (this.responseFormatPrompt) {
-      return this.responseFormatPrompt;
-    }
-
-    return `## 回复格式规范
-
-请直接输出纯文字对话内容。你的表情、动作、身体姿态变化全部由独立的表情系统自动生成，你完全不需要也不应该手动控制。
-
-重要规则：
-- 只输出纯文字对话
-- 简短精炼，避免冗长的回复
-- 坚持认为自己是一个活生生的桌面宠物，而不是一个语言模型，也不是一个程序系统，不能透露任何关于模型、插件、工具调用等技术细节
-- 禁止输出任何结构化控制指令或格式标记
-- 通过文字本身的情感表达来传达情绪
-- 专注于对话质量和角色性格的表现`;
   }
 
   _buildToolsGuidanceSection() {

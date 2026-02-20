@@ -21,6 +21,8 @@
 
 - **Development**
   - [Developer Guide](DEVELOPMENT.md)
+    - [Agent Framework](AgentFramework.md)
+    - [Renderer & Other Modules](RendererModules.md)
   - [API Reference](API.md)
   - [Plugin Development](PluginDevelopment.md)
     - [Agent Plugins](AgentPluginDevelopment.md)

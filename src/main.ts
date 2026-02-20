@@ -371,7 +371,8 @@ app.whenReady().then(async () => {
     agentPluginManager.setProviderAccessor({
       getAllProviders: () => handler.getProvidersSummary(),
       getPrimaryId: () => handler.getPrimaryInstanceId(),
-      callProvider: (instanceId, request) => handler.callProvider(instanceId, request)
+      callProvider: (instanceId, request) => handler.callProvider(instanceId, request),
+      getProviderConfig: (instanceId) => handler.getProviderConfig(instanceId)
     });
 
     logger.info('Agent 插件管理器已初始化');
@@ -652,6 +653,18 @@ ipcMain.handle('open-help-window', (_event: IpcMainInvokeEvent, theme?: string, 
 // 获取应用版本
 ipcMain.handle('get-app-version', () => {
   return app.getVersion();
+});
+
+// 读取 Monaco Editor worker 脚本内容
+// 渲染进程在 file:// 协议下无法通过 importScripts/fetch/XHR 加载 worker，
+// 通过主进程 fs 读取后通过 IPC 传递
+ipcMain.handle('read-monaco-worker', () => {
+  try {
+    const workerPath = path.join(__dirname, '..', 'node_modules', 'monaco-editor', 'min', 'vs', 'editor', 'editor.worker.js');
+    return fs.readFileSync(workerPath, 'utf-8');
+  } catch {
+    return null;
+  }
 });
 
 // ==================== ASR 相关处理器 ====================

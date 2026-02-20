@@ -5,17 +5,17 @@
     "default": ""
   },
   "temperature": {
-    "type": "number",
+    "type": "float",
     "description": "表情生成 LLM 的温度参数。较高的值会产生更丰富多样的表情。",
     "default": 0.7
   },
   "maxTokens": {
-    "type": "number",
+    "type": "int",
     "description": "表情生成 LLM 的最大输出 token 数。通常 300 即可满足 JSON 输出需求。",
     "default": 300
   },
   "enabled": {
-    "type": "boolean",
+    "type": "bool",
     "description": "是否启用 LLM 表情生成。关闭后将不生成表情指令，模型保持默认姿态。",
     "default": true
   }

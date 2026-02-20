@@ -26,6 +26,10 @@ NyaDeskPet communicates between frontend and backend via WebSocket. This page li
     - [tool\_confirm](#tool_confirm)
     - [plugin\_invoke](#plugin_invoke)
     - [commands\_register](#commands_register)
+    - [command\_response](#command_response)
+    - [system](#system)
+    - [tool\_status](#tool_status)
+  - [Response Priority System](#response-priority-system)
   - [Message Priority](#message-priority)
   - [Message Persistence](#message-persistence)
   - [Frontend Plugin Protocol](#frontend-plugin-protocol)
@@ -50,9 +54,16 @@ Text message sent by the user.
 {
   "type": "user_input",
   "text": "Hello",
-  "timestamp": 1700000000000
+  "timestamp": 1700000000000,
+  "attachment": {
+    "type": "image",
+    "data": "base64...",
+    "source": "camera"
+  }
 }
 ```
+
+- `attachment`: Optional, multimodal attachment (e.g. camera capture)
 
 ### model_info
 
@@ -144,9 +155,12 @@ User's response to a tool call confirmation request.
 {
   "type": "tool_confirm_response",
   "callId": "call-456",
-  "approved": true
+  "approved": true,
+  "remember": false
 }
 ```
+
+- `remember`: Optional, whether to remember this approval decision
 
 ### command_execute
 
@@ -186,12 +200,16 @@ Complete conversation reply.
 {
   "type": "dialogue",
   "text": "Hello! Nice to meet you~",
+  "reasoningContent": "Reasoning chain content (optional)",
   "attachment": {
     "type": "image",
     "data": "base64..."
   }
 }
 ```
+
+- `reasoningContent`: Optional, thinking/reasoning process in non-streaming mode
+- `attachment`: Optional attachment
 
 ### dialogue_stream_start / chunk / end
 
@@ -347,6 +365,57 @@ Register slash commands (triggered by Agent plugins).
   ]
 }
 ```
+
+### command_response
+
+Slash command execution result (backend → frontend).
+
+```json
+{
+  "type": "command_response",
+  "data": {
+    "command": "info",
+    "success": true,
+    "text": "Command result text",
+    "error": null
+  }
+}
+```
+
+### system
+
+System-level notification message.
+
+```json
+{
+  "type": "system",
+  "data": { "message": "System message content" }
+}
+```
+
+### tool_status
+
+Status notification after each tool execution in the tool loop.
+
+```json
+{
+  "type": "tool_status",
+  "data": {
+    "iteration": 1,
+    "calls": [{ "name": "search_web", "id": "call_abc" }],
+    "results": [{ "id": "call_abc", "success": true }]
+  }
+}
+```
+
+---
+
+## Response Priority System
+
+Backend response messages can carry priority information:
+
+- `responseId`: All messages from the same reply share the same ID
+- `priority`: Higher value = higher priority; high-priority responses can interrupt low-priority streaming output
 
 ---
 

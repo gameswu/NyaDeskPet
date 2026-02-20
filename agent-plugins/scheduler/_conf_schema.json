@@ -1,0 +1,47 @@
+{
+  "maxTasks": {
+    "type": "int",
+    "description": "允许的最大调度任务数量。",
+    "default": 20,
+    "i18n": {
+      "zh-CN": { "description": "允许的最大调度任务数量。" },
+      "en-US": { "description": "Maximum number of scheduled tasks allowed." }
+    }
+  },
+  "tickInterval": {
+    "type": "int",
+    "description": "调度器检查间隔（秒）。降低此值可提高定时精度但增加资源消耗。",
+    "default": 30,
+    "i18n": {
+      "zh-CN": { "description": "调度器检查间隔（秒）。降低此值可提高定时精度但增加资源消耗。" },
+      "en-US": { "description": "Scheduler tick interval in seconds. Lower values improve precision but increase resource usage." }
+    }
+  },
+  "taskMaxTokens": {
+    "type": "int",
+    "description": "调度任务执行时 LLM 的最大 token 数。",
+    "default": 1500,
+    "i18n": {
+      "zh-CN": { "description": "调度任务执行时 LLM 的最大 token 数。" },
+      "en-US": { "description": "Max tokens for LLM calls during scheduled task execution." }
+    }
+  },
+  "enablePlanningIntegration": {
+    "type": "bool",
+    "description": "是否启用与 Planning 插件的集成。启用后可在调度任务中创建和执行计划。",
+    "default": true,
+    "i18n": {
+      "zh-CN": { "description": "是否启用与 Planning 插件的集成。启用后可在调度任务中创建和执行计划。" },
+      "en-US": { "description": "Enable Planning plugin integration. When enabled, scheduled tasks can create and execute plans." }
+    }
+  },
+  "persistTasks": {
+    "type": "bool",
+    "description": "是否将调度任务持久化到磁盘。启用后重启应用不会丢失任务。",
+    "default": true,
+    "i18n": {
+      "zh-CN": { "description": "是否将调度任务持久化到磁盘。启用后重启应用不会丢失任务。" },
+      "en-US": { "description": "Persist scheduled tasks to disk. Tasks survive app restarts when enabled." }
+    }
+  }
+}

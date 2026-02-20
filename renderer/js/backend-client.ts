@@ -256,7 +256,7 @@ class BackendClient implements IBackendClient {
       if (!displayText && data.attachment) {
         displayText = `[${data.attachment.type === 'image' ? '图片' : '文件'}]`;
       }
-      window.dialogueManager.showDialogue(displayText, data.duration);
+      window.dialogueManager.showDialogue(displayText, data.duration, true, data.attachment);
     }
   }
 

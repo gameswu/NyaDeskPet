@@ -32,6 +32,7 @@ import { skillManager, type SkillSchema, type SkillHandler, type SkillInfo, type
 import type { LLMRequest, LLMResponse } from './provider';
 import type { SessionManager, OutgoingMessage } from './context';
 import type { ModelInfo, CharacterInfo } from './handler';
+import type { MultimodalContent, ProviderCapabilities } from './multimodal';
 
 // ==================== 类型定义 ====================
 
@@ -43,6 +44,16 @@ export interface PluginProviderInfo {
   enabled: boolean;
   status: 'idle' | 'connecting' | 'connected' | 'error';
   isPrimary: boolean;
+}
+
+/** Provider 实例配置信息（插件可见，用于直接调用 API） */
+export interface PluginProviderConfig {
+  instanceId: string;
+  providerId: string;
+  displayName: string;
+  apiKey?: string;
+  baseUrl?: string;
+  model?: string;
 }
 
 /** 插件元信息 */
@@ -69,12 +80,19 @@ export interface AgentPluginMetadata {
   i18n?: Record<string, { desc?: string }>;
 }
 
-/** 插件配置 Schema 字段 */
+/** 插件配置 Schema 字段（与前端 PluginConfigSchema 规范一致） */
 export interface PluginConfigField {
-  type: 'string' | 'number' | 'boolean' | 'select';
-  description: string;
+  type: 'string' | 'text' | 'int' | 'float' | 'bool' | 'object' | 'list' | 'dict';
+  description?: string;
+  hint?: string;
+  obvious_hint?: boolean;
   default?: unknown;
-  options?: { value: string; label: string }[];
+  items?: Record<string, PluginConfigField>;
+  invisible?: boolean;
+  options?: string[];
+  editor_mode?: boolean;
+  editor_language?: string;
+  i18n?: Record<string, { description?: string; hint?: string; options?: string[] }>;
 }
 
 /** 插件配置 Schema */
@@ -145,6 +163,12 @@ export interface AgentPluginContext {
    * @returns LLM 响应
    */
   callProvider(instanceId: string, request: LLMRequest): Promise<LLMResponse>;
+  /**
+   * 获取指定 Provider 实例的配置信息（apiKey / baseUrl / model 等）
+   * @param instanceId Provider 实例 ID。传入 'primary' 可自动使用主 LLM
+   * @returns 配置信息，不存在时返回 null
+   */
+  getProviderConfig(instanceId: string): PluginProviderConfig | null;
 
   // ====== Handler 插件扩展能力 ======
 
@@ -181,6 +205,38 @@ export interface AgentPluginContext {
   invokeSkill(skillName: string, params: Record<string, unknown>, ctx: SkillContext): Promise<SkillResult>;
   /** 获取所有技能信息 */
   listSkills(): SkillInfo[];
+
+  // ====== Multimodal 多模态支持 ======
+
+  /** 获取主 LLM Provider 的能力声明 */
+  getPrimaryCapabilities(): ProviderCapabilities;
+  /**
+   * 构建带多模态附件的 ChatMessage
+   * @param role 消息角色
+   * @param text 文本内容
+   * @param content 多模态内容（可选）
+   * @returns ChatMessage
+   */
+  buildMultimodalMessage(role: 'system' | 'user' | 'assistant' | 'tool', text: string, content?: MultimodalContent): import('./provider').ChatMessage;
+  /**
+   * 将多模态内容转为 data URL
+   * @param content 多模态内容
+   * @returns data URL 或 null
+   */
+  toDataUrl(content: MultimodalContent): string | null;
+  /**
+   * 从 data URL 解析多模态内容
+   * @param dataUrl data URL 字符串
+   * @param fileName 可选文件名
+   * @returns MultimodalContent 或 null
+   */
+  fromDataUrl(dataUrl: string, fileName?: string): MultimodalContent | null;
+  /**
+   * 检查 Provider 是否支持指定多模态内容
+   * @param content 多模态内容
+   * @returns 是否支持
+   */
+  isContentSupported(content: MultimodalContent): boolean;
 }
 
 // ==================== 插件基类 ====================
@@ -276,6 +332,8 @@ export interface ProviderAccessor {
   getPrimaryId(): string;
   /** 调用指定 Provider 实例 */
   callProvider(instanceId: string, request: LLMRequest): Promise<LLMResponse>;
+  /** 获取指定 Provider 实例的配置（apiKey / baseUrl / model 等） */
+  getProviderConfig(instanceId: string): PluginProviderConfig | null;
 }
 
 /** Handler 访问器接口（为 handlerPlugin 提供深度访问） */
@@ -302,6 +360,8 @@ export interface HandlerAccessor {
   executeWithToolLoop(request: LLMRequest, ctx: MessageContext): Promise<LLMResponse>;
   /** 注册已连接的前端插件（触发 plugin-tool-bridge 工具注册） */
   registerConnectedPlugins(plugins: Array<{ pluginId: string; pluginName: string; capabilities: string[] }>): void;
+  /** 获取主 LLM Provider 的能力声明 */
+  getPrimaryCapabilities(): ProviderCapabilities;
 }
 
 export class AgentPluginManager {
@@ -904,6 +964,14 @@ export class AgentPluginManager {
         return manager.providerAccessor.callProvider(instanceId, request);
       },
 
+      getProviderConfig: (instanceId: string): PluginProviderConfig | null => {
+        if (!manager.providerAccessor) {
+          logger.warn(`[Plugin:${pluginName}] Provider 访问器未注入，无法获取配置`);
+          return null;
+        }
+        return manager.providerAccessor.getProviderConfig(instanceId);
+      },
+
       // ====== Handler 扩展能力（handlerPlugin 专用） ======
 
       getSessions: (): SessionManager => {
@@ -977,6 +1045,33 @@ export class AgentPluginManager {
 
       listSkills: (): SkillInfo[] => {
         return skillManager.list();
+      },
+
+      // ====== Multimodal 多模态支持 ======
+
+      getPrimaryCapabilities: (): import('./multimodal').ProviderCapabilities => {
+        return manager.handlerAccessor?.getPrimaryCapabilities() ?? { text: true, vision: false, file: false, toolCalling: true };
+      },
+
+      buildMultimodalMessage: (role: import('./provider').ChatMessage['role'], text: string, content?: import('./multimodal').MultimodalContent) => {
+        const { buildMultimodalMessage: build } = require('./multimodal');
+        return build(role, text, content);
+      },
+
+      toDataUrl: (content: import('./multimodal').MultimodalContent): string | null => {
+        const { toDataUrl: convert } = require('./multimodal');
+        return convert(content);
+      },
+
+      fromDataUrl: (dataUrl: string, fileName?: string): import('./multimodal').MultimodalContent | null => {
+        const { fromDataUrl: parse } = require('./multimodal');
+        return parse(dataUrl, fileName);
+      },
+
+      isContentSupported: (content: import('./multimodal').MultimodalContent): boolean => {
+        const caps = manager.handlerAccessor?.getPrimaryCapabilities() ?? { text: true, vision: false, file: false, toolCalling: true };
+        const { isContentSupported: check } = require('./multimodal');
+        return check(caps, content);
       },
     };
   }

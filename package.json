@@ -1,6 +1,6 @@
 {
   "name": "nya-desk-pet",
-  "version": "1.0.1",
+  "version": "1.0.2",
   "description": "跨平台 Live2D 桌面宠物应用",
   "main": "dist/main.js",
   "scripts": {
@@ -51,6 +51,7 @@
     "lucide": "^0.563.0",
     "marked": "^17.0.2",
     "mermaid": "^11.12.2",
+    "monaco-editor": "^0.52.2",
     "node-edge-tts": "^1.2.10",
     "pixi-live2d-display": "^0.4.0",
     "pixi.js": "^7.3.2",

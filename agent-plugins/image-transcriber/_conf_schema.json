@@ -10,12 +10,12 @@
     "default": "请详细描述这张图片的内容，包括画面中的主要元素、文字、颜色、布局等。用中文回复。"
   },
   "maxTokens": {
-    "type": "number",
+    "type": "int",
     "description": "视觉模型回复的最大 token 数。",
     "default": 500
   },
   "autoTranscribe": {
-    "type": "boolean",
+    "type": "bool",
     "description": "是否自动转述。开启后，收到图片时会自动调用视觉模型进行描述并将结果添加到对话上下文。关闭则仅注册 describe_image 工具供 LLM 主动调用。",
     "default": true
   }

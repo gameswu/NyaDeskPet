@@ -39,7 +39,6 @@
       "logs": "Logs",
       "about": "About"
     },
-    "cancel": "Cancel",
     "model": {
       "title": "Live2D Model",
       "path": "Model Path",
@@ -81,8 +80,7 @@
       "useCustom": "Enable Custom Character",
       "name": "Pet Name",
       "namePlaceholder": "e.g.: Mimi",
-      "personality": "Personality Description",
-      "personalityPlaceholder": "Describe the pet's personality, traits, speaking style, etc..."
+      "personality": "Personality Description"
     },
     "appearance": {
       "title": "Appearance",
@@ -138,7 +136,8 @@
     "checking": "Checking for updates...",
     "hasUpdate": "New version {version} available!<br><a href=\"#\">Click to download</a>",
     "noUpdate": "You're up to date",
-    "error": "Update check failed: {error}"
+    "error": "Update check failed: {error}",
+    "viewChangelog": "View Changelog"
   },
   "messages": {
     "settingsReset": "Settings reset to defaults",
@@ -1065,7 +1064,6 @@
       "deactivate": "Deactivate",
       "reload": "Reload",
       "config": "Config",
-      "saveConfig": "Save Config",
       "uninstall": "Uninstall",
       "uninstallConfirm": "Are you sure you want to uninstall this plugin? This action cannot be undone.",
       "statusLoaded": "Loaded",

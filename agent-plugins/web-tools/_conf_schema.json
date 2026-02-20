@@ -1,26 +1,32 @@
 {
   "searchEngine": {
-    "type": "select",
+    "type": "string",
     "description": "搜索引擎。search_web 工具使用的搜索引擎。",
     "default": "bing",
-    "options": [
-      { "value": "bing", "label": "Bing" },
-      { "value": "google", "label": "Google" },
-      { "value": "duckduckgo", "label": "DuckDuckGo" }
-    ]
+    "options": ["bing", "google", "duckduckgo"],
+    "i18n": {
+      "zh-CN": {
+        "description": "搜索引擎。search_web 工具使用的搜索引擎。",
+        "options": ["Bing", "Google", "DuckDuckGo"]
+      },
+      "en-US": {
+        "description": "Search engine used by the search_web tool.",
+        "options": ["Bing", "Google", "DuckDuckGo"]
+      }
+    }
   },
   "maxContentLength": {
-    "type": "number",
+    "type": "int",
     "description": "fetch_url 返回给 LLM 的最大字符数。过大会消耗大量 token。",
     "default": 8000
   },
   "requestTimeout": {
-    "type": "number",
+    "type": "int",
     "description": "HTTP 请求超时时间（毫秒）。",
     "default": 15000
   },
   "searchResultCount": {
-    "type": "number",
+    "type": "int",
     "description": "搜索结果返回条数。",
     "default": 5
   }

@@ -23,7 +23,7 @@ NyaDeskPet supports in-app update checking, and you can also download new versio
 2. Switch to the **About** tab
 3. Click the **Check for Updates** button
 
-The app will automatically compare the current version with the latest version. If a new version is available, an update prompt will be displayed.
+The app will automatically compare the current version with the latest version. If a new version is available, an update prompt will be displayed, along with a **changelog preview** to help you understand the changes in the new version.
 
 ---
 

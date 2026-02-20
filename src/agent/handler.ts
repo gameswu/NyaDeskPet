@@ -457,6 +457,25 @@ export class AgentHandler {
   }
 
   /**
+   * 获取指定 Provider 实例的配置信息（供插件使用）
+   * 支持 'primary' 作为 instanceId 自动选择主 LLM
+   */
+  public getProviderConfig(instanceId: string): { instanceId: string; providerId: string; displayName: string; apiKey?: string; baseUrl?: string; model?: string } | null {
+    const targetId = instanceId === 'primary' ? this.primaryInstanceId : instanceId;
+    if (!targetId) return null;
+    const entry = this.providerInstances.get(targetId);
+    if (!entry) return null;
+    return {
+      instanceId: targetId,
+      providerId: entry.config.providerId,
+      displayName: entry.config.displayName,
+      apiKey: entry.config.config.apiKey,
+      baseUrl: entry.config.config.baseUrl,
+      model: entry.config.config.model,
+    };
+  }
+
+  /**
    * 调用指定 Provider 实例进行 LLM 对话
    * 供插件系统使用，支持 'primary' 作为 instanceId 自动选择主 LLM
    */
@@ -1794,9 +1813,15 @@ export class AgentHandler {
             content: `[用户上传了图片: ${data.fileName}]\n\n图片描述: ${result.description}`
           });
 
+          // 构建图片附件 data URL 供前端渲染
+          const imageDataUrl = `data:${data.fileType};base64,${data.fileData}`;
           ctx.addReply({
             type: 'dialogue',
-            data: { text: `📷 ${data.fileName}\n\n${result.description}`, duration: 8000 }
+            data: {
+              text: `📷 ${data.fileName}\n\n${result.description}`,
+              duration: 8000,
+              attachment: { type: 'image' as const, url: imageDataUrl, name: data.fileName }
+            }
           });
           return;
         } else {
@@ -2135,7 +2160,8 @@ export class AgentHandler {
         } else {
           logger.warn('[AgentHandler] 无 handler 插件或 handler 插件不支持 registerConnectedPlugins');
         }
-      }
+      },
+      getPrimaryCapabilities: () => handler.getPrimaryCapabilities()
     };
   }
 

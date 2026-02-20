@@ -50,6 +50,9 @@
 | `web-tools` | 普通 | ✅ | `fetch_url` + `search_web` 工具 |
 | `input-collector` | 普通 | ✅ | 输入抖动收集 |
 | `image-transcriber` | 普通 | ✅ | 图片转述 |
+| `planning` | 普通 | ✅ | 任务规划，基于 LLM 的多步任务分解与执行，支持 Sub-Agent |
+| `scheduler` | 普通 | ✅ | 任务调度，基于时间的一次性/周期性任务调度 |
+| `image-gen` | 普通 | ✅ | 图像生成，调用支持图像生成的 Provider 生成图片 |
 
 ## 快速开始
 
@@ -161,6 +164,39 @@ abstract class AgentPlugin {
 | `getProviders()` | 获取所有 Provider 摘要列表 |
 | `getPrimaryProviderId()` | 获取主 LLM 的 instanceId |
 | `callProvider(instanceId, request)` | 调用指定 Provider（`'primary'` 为快捷方式） |
+| `getProviderConfig(instanceId)` | 获取 Provider 配置详情（返回 `PluginProviderConfig`） |
+
+`PluginProviderConfig` 类型：
+
+```typescript
+interface PluginProviderConfig {
+  instanceId: string;
+  providerId: string;
+  displayName: string;
+  apiKey?: string;
+  baseUrl?: string;
+  model?: string;
+}
+```
+
+#### 多模态能力
+
+| 方法 | 说明 |
+|------|------|
+| `getPrimaryCapabilities()` | 获取主 LLM 的多模态能力声明 |
+| `buildMultimodalMessage(role, text, content?)` | 构建带附件的聊天消息 |
+| `toDataUrl(content)` | 将 `MultimodalContent` 转为 Data URL |
+| `fromDataUrl(dataUrl, fileName?)` | 从 Data URL 解析为 `MultimodalContent` |
+| `isContentSupported(content)` | 检查主 Provider 是否支持指定内容类型 |
+
+#### Skills 技能系统
+
+| 方法 | 说明 |
+|------|------|
+| `registerSkill(schema, handler)` | 注册技能 |
+| `unregisterSkill(name)` | 注销技能 |
+| `invokeSkill(name, params, ctx)` | 调用技能 |
+| `listSkills()` | 列出所有已注册技能 |
 
 #### Handler 插件专用
 

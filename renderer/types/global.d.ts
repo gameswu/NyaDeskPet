@@ -36,6 +36,9 @@ export interface ElectronAPI {
   openExternal: (url: string) => Promise<void>;
   getAppVersion: () => Promise<string>;
   
+  // Monaco Editor worker
+  readMonacoWorker: () => Promise<string | null>;
+  
   // ASR 服务
   asrInitialize: (modelName?: string) => Promise<{ success: boolean; error?: string }>;
   asrIsReady: () => Promise<{ ready: boolean }>;
@@ -179,6 +182,7 @@ declare global {
     cameraManager: CameraManager;
     microphoneManager: MicrophoneManager;
     responseController: ResponseController;
+    monacoManager: MonacoManager;
     logger: any;
     app: AppDebugInterface;
     PIXI: typeof import('pixi.js');
@@ -625,9 +629,19 @@ export interface PluginConfigManager {
   getLocalizedOptions(field: PluginConfigSchema, locale: string): string[];
 }
 
+// 插件配置对话框选项
+export interface ConfigDialogOptions {
+  /** 自定义加载配置回调（不传则使用 pluginConfigManager） */
+  loadConfig?: (pluginId: string) => Promise<{ [key: string]: any }>;
+  /** 自定义保存配置回调（不传则使用 pluginConfigManager） */
+  saveConfig?: (pluginId: string, config: { [key: string]: any }) => Promise<boolean>;
+  /** 保存成功后的额外回调 */
+  onSaved?: () => void;
+}
+
 // 插件配置UI接口
 export interface PluginConfigUI {
-  showConfigDialog(pluginId: string, pluginName: string, schema: PluginConfigDefinition): Promise<void>;
+  showConfigDialog(pluginId: string, pluginName: string, schema: PluginConfigDefinition, options?: ConfigDialogOptions): Promise<void>;
   addListItem(key: string): void;
   removeListItem(key: string, index: number): void;
   saveConfig(): Promise<void>;
@@ -643,14 +657,36 @@ export interface PluginPermissionManager {
   clearPermissions(pluginId: string): Promise<void>;
 }
 
+// Monaco Editor 管理器接口
+export interface MonacoManager {
+  load(): Promise<void>;
+  createEditor(config: {
+    container: HTMLElement;
+    value: string;
+    language?: string;
+    theme?: 'vs' | 'vs-dark';
+    minHeight?: number;
+    maxHeight?: number;
+    readOnly?: boolean;
+    onChange?: (value: string) => void;
+  }): Promise<string>;
+  getValue(id: string): string;
+  setValue(id: string, value: string): void;
+  destroyEditor(id: string): void;
+  destroyAll(): void;
+  updateTheme(): void;
+  isLoaded(): boolean;
+  replaceTextarea(textarea: HTMLTextAreaElement, language?: string): Promise<string>;
+}
+
 export interface BackendConfig {
   httpUrl?: string;
   wsUrl?: string;
 }
 
 export interface BackendMessage {
-  type: 'dialogue' | 'dialogue_stream_start' | 'dialogue_stream_chunk' | 'dialogue_stream_end' | 'live2d' | 'system' | 'user_input' | 'model_info' | 'tap_event' | 'sync_command' | 'character_info' | 'audio_stream_start' | 'audio_chunk' | 'audio_stream_end' | 'file_upload' | 'plugin_invoke' | 'plugin_response' | 'plugin_status' | 'plugin_message' | 'tool_confirm' | 'tool_confirm_response' | 'commands_register' | 'command_execute' | 'command_response';
-  data?: DialogueData | DialogueStreamStartData | DialogueStreamChunkData | DialogueStreamEndData | Live2DCommandData | AudioStreamStartData | AudioChunkData | AudioStreamEndData | SyncCommandData | ModelInfo | CharacterInfo | FileUploadData | PluginInvokeData | PluginResponseData | PluginStatusData | PluginMessageData | ToolConfirmData | ToolConfirmResponseData | CommandsRegisterData | CommandExecuteData | CommandResponseData | unknown;
+  type: 'dialogue' | 'dialogue_stream_start' | 'dialogue_stream_chunk' | 'dialogue_stream_end' | 'live2d' | 'system' | 'user_input' | 'model_info' | 'tap_event' | 'sync_command' | 'character_info' | 'audio_stream_start' | 'audio_chunk' | 'audio_stream_end' | 'file_upload' | 'plugin_invoke' | 'plugin_response' | 'plugin_status' | 'plugin_message' | 'tool_confirm' | 'tool_confirm_response' | 'tool_status' | 'commands_register' | 'command_execute' | 'command_response';
+  data?: DialogueData | DialogueStreamStartData | DialogueStreamChunkData | DialogueStreamEndData | Live2DCommandData | AudioStreamStartData | AudioChunkData | AudioStreamEndData | SyncCommandData | ModelInfo | CharacterInfo | FileUploadData | PluginInvokeData | PluginResponseData | PluginStatusData | PluginMessageData | ToolConfirmData | ToolConfirmResponseData | ToolStatusData | CommandsRegisterData | CommandExecuteData | CommandResponseData | unknown;
   text?: string;
   timestamp?: number;
   action?: string;
@@ -728,6 +764,16 @@ export interface ToolConfirmResponseData {
   approved: boolean;
   /** 用户是否选择「记住此操作」 */
   remember?: boolean;
+}
+
+/** 工具执行状态通知（后端→前端） */
+export interface ToolStatusData {
+  /** 当前工具循环迭代次数 */
+  iteration: number;
+  /** 本次迭代调用的工具列表 */
+  calls: Array<{ name: string; id: string }>;
+  /** 各工具的执行结果 */
+  results: Array<{ id: string; success: boolean }>;
 }
 
 // ============ 对话管理类型 ============
@@ -852,8 +898,8 @@ export interface DialogueManager {
   isShowing: boolean;
   currentTimeout: number | null;
   typewriterTimeout: number | null;
-  showDialogue(text: string, duration?: number, typewriter?: boolean): void;
-  typewriterEffect(text: string, duration: number): void;
+  showDialogue(text: string, duration?: number, typewriter?: boolean, attachment?: { type: 'image' | 'file'; url: string; name?: string }): void;
+  typewriterEffect(text: string, duration: number, attachment?: { type: 'image' | 'file'; url: string; name?: string }): void;
   startAutoHide(duration: number): void;
   hideDialogue(): void;
   clearTimeouts(): void;
@@ -1103,15 +1149,6 @@ export interface ResponseController {
 // ============ Agent 插件接口 ============
 export type AgentPluginStatus = 'loaded' | 'active' | 'error' | 'disabled';
 
-export interface AgentPluginConfigField {
-  type: 'string' | 'number' | 'boolean' | 'select';
-  description: string;
-  default?: unknown;
-  options?: { value: string; label: string }[];
-}
-
-export type AgentPluginConfigSchema = Record<string, AgentPluginConfigField>;
-
 export interface AgentPluginInfo {
   name: string;
   author: string;
@@ -1120,7 +1157,8 @@ export interface AgentPluginInfo {
   repo?: string;
   status: AgentPluginStatus;
   error?: string;
-  configSchema?: AgentPluginConfigSchema;
+  /** 配置 Schema（与前端插件统一使用 PluginConfigDefinition） */
+  configSchema?: PluginConfigDefinition;
   config?: Record<string, unknown>;
   toolCount: number;
   dirName: string;

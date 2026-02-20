@@ -27,6 +27,10 @@
     - [sync\_command — 组合指令](#sync_command--组合指令)
     - [plugin\_invoke — 插件调用请求](#plugin_invoke--插件调用请求)
     - [commands\_register — 指令注册](#commands_register--指令注册)
+    - [command\_response — 指令执行结果](#command_response--指令执行结果)
+    - [system — 系统消息](#system--系统消息)
+    - [tool\_status — 工具执行状态](#tool_status--工具执行状态)
+  - [响应优先级系统](#响应优先级系统)
   - [前端插件协议](#前端插件协议)
     - [连接握手](#连接握手)
     - [配置请求](#配置请求)
@@ -50,9 +54,19 @@
 {
   "type": "user_input",
   "text": "用户输入的文本",
-  "timestamp": 1234567890
+  "timestamp": 1234567890,
+  "attachment": {
+    "type": "image",
+    "data": "<base64 图片数据>",
+    "source": "camera"
+  }
 }
 ```
+
+- `attachment`：可选，多模态附件。当摄像头启用时自动附带截图
+  - `type`：附件类型（`image` / `file`）
+  - `data`：Base64 编码数据
+  - `source`：来源标识（如 `camera`）
 
 ### model_info — 模型信息
 
@@ -199,10 +213,13 @@
   "type": "tool_confirm_response",
   "data": {
     "confirmId": "tc_123_abc",
-    "approved": true
+    "approved": true,
+    "remember": false
   }
 }
 ```
+
+- `remember`：可选，用户是否选择「记住此操作」，后续相同工具自动批准/拒绝
 
 ### command_execute — 斜杠指令执行
 
@@ -250,6 +267,7 @@
   "data": {
     "text": "回复文本",
     "duration": 5000,
+    "reasoningContent": "思维链内容（可选）",
     "attachment": {
       "type": "image",
       "url": "base64 或 URL",
@@ -259,7 +277,8 @@
 }
 ```
 
-- `attachment` 可选
+- `reasoningContent`：可选，非流式模式下的思维链/推理过程（如 DeepSeek thinking mode）
+- `attachment`：可选，附件（图片或文件）
 
 ### 流式对话
 
@@ -446,6 +465,7 @@ LLM 请求调用插件来源的工具时，先向前端发送确认：
 
 - `type`：`motion` / `expression` / `dialogue`
 - `waitComplete`：是否等待当前动作完成后再执行下一个
+- `dialogue` 类型的 action 也支持 `reasoningContent` 和 `attachment` 字段
 
 ### plugin_invoke — 插件调用请求
 
@@ -496,6 +516,77 @@ sequenceDiagram
   }
 }
 ```
+
+### command_response — 指令执行结果
+
+斜杠指令执行后后端返回结果：
+
+```json
+{
+  "type": "command_response",
+  "data": {
+    "command": "info",
+    "success": true,
+    "text": "指令执行结果文本",
+    "error": null
+  }
+}
+```
+
+- `text`：执行成功时的结果文本
+- `error`：执行失败时的错误信息
+
+### system — 系统消息
+
+后端发送的系统级通知消息：
+
+```json
+{
+  "type": "system",
+  "data": {
+    "message": "系统消息内容"
+  }
+}
+```
+
+### tool_status — 工具执行状态
+
+工具循环中每次工具执行完成后发送，通知前端当前工具调用进度：
+
+```json
+{
+  "type": "tool_status",
+  "data": {
+    "iteration": 1,
+    "calls": [
+      { "name": "search_web", "id": "call_abc" }
+    ],
+    "results": [
+      { "id": "call_abc", "success": true }
+    ]
+  }
+}
+```
+
+- `iteration`：当前工具循环迭代次数
+- `calls`：本次迭代调用的工具列表
+- `results`：各工具的执行结果（成功/失败）
+
+## 响应优先级系统
+
+后端发出的响应消息可携带优先级信息，用于前端中断控制：
+
+```json
+{
+  "responseId": "resp_123_abc",
+  "priority": 10,
+  "type": "dialogue",
+  "data": { "text": "..." }
+}
+```
+
+- `responseId`：同一次回复的所有消息共享相同 ID（对话、流式、音频等）
+- `priority`：数值越高优先级越高，高优先级响应可中断正在播放的低优先级响应
 
 ## 前端插件协议
 

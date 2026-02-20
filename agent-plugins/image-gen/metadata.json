@@ -1,0 +1,12 @@
+{
+  "name": "image-gen",
+  "author": "gameswu",
+  "desc": "绘图插件 — 封装 generate_image 工具，调用支持图像生成的 Provider 返回绘图结果",
+  "version": "1.0.0",
+  "entry": "main.js",
+  "autoActivate": true,
+  "i18n": {
+    "zh-CN": { "desc": "绘图插件 — 封装 generate_image 工具，调用支持图像生成的 Provider 返回绘图结果" },
+    "en-US": { "desc": "Image generation plugin — wraps a generate_image tool that calls an image-generation-capable Provider to produce images" }
+  }
+}

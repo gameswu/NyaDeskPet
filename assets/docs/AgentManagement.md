@@ -1,6 +1,6 @@
 # 内置 Agent 管理
 
-Agent 插件是运行在主进程中的扩展模块，负责增强 AI 的推理和工具能力。NyaDeskPet 内置了 10 个 Agent 插件，它们协同工作来实现角色的核心功能。
+Agent 插件是运行在主进程中的扩展模块，负责增强 AI 的推理和工具能力。NyaDeskPet 内置了 13 个 Agent 插件，它们协同工作来实现角色的核心功能。
 
 ## 目录
 - [内置 Agent 管理](#内置-agent-管理)
@@ -32,7 +32,7 @@ Agent 插件是运行在主进程中的扩展模块，负责增强 AI 的推理�
 
 ## 内置插件说明
 
-NyaDeskPet 的 10 个内置 Agent 插件分为两类：
+NyaDeskPet 的 13 个内置 Agent 插件分为两类：
 
 ### 核心 Handler 插件
 
@@ -55,6 +55,9 @@ Handler 插件可以 **完全接管** 消息处理流程。`core-agent` 是默�
 | **web-tools** | 网页工具——提供 `fetch_url` 和 `search_web` 工具 |
 | **input-collector** | 输入收集——抖动收集连续输入，避免消息碎片化 |
 | **image-transcriber** | 图片转述——将上传的图片转述为文字描述 |
+| **planning** | 任务规划——基于 LLM 的多步任务分解与执行，支持 Sub-Agent 的创建和管理 |
+| **scheduler** | 任务调度——基于时间的一次性/周期性任务调度，支持与 Planning 插件配合使用 |
+| **image-gen** | 图像生成——调用支持图像生成的 Provider 生成图片 |
 
 ---
 

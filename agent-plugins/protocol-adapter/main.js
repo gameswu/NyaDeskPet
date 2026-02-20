@@ -40,35 +40,37 @@ class ProtocolAdapterPlugin extends AgentPlugin {
    * 解析 LLM 纯文本回复（不再提取 XML 标签）
    * @param {string} rawText 
    * @param {string} [reasoningContent]
-   * @returns {{ text: string, actions: Array, reasoningContent?: string }}
+   * @param {{ type: 'image' | 'file', url: string, name?: string }} [attachment]
+   * @returns {{ text: string, actions: Array, reasoningContent?: string, attachment?: object }}
    */
-  parseResponse(rawText, reasoningContent) {
+  parseResponse(rawText, reasoningContent, attachment) {
     // 对话 LLM 现在只输出纯文本，无需提取任何标签
     const cleanText = rawText.replace(/\n{3,}/g, '\n\n').trim();
-    return { text: cleanText, actions: [], reasoningContent };
+    return { text: cleanText, actions: [], reasoningContent, attachment };
   }
 
   /**
    * 将纯文本和动作列表组合为前端协议消息
    * 动作列表由 expression-generator 外部传入，不再从文本中提取
-   * @param {{ text: string, actions: Array, reasoningContent?: string }} parsed
+   * @param {{ text: string, actions: Array, reasoningContent?: string, attachment?: object }} parsed
    * @returns {Array} OutgoingMessage[]
    */
   toOutgoingMessages(parsed) {
     const messages = [];
 
     if (parsed.actions.length === 0) {
-      if (parsed.text) {
+      if (parsed.text || parsed.attachment) {
         messages.push({
           type: 'dialogue',
           data: {
             text: parsed.text,
-            duration: this._calculateDuration(parsed.text),
-            ...(parsed.reasoningContent ? { reasoningContent: parsed.reasoningContent } : {})
+            duration: this._calculateDuration(parsed.text || ''),
+            ...(parsed.reasoningContent ? { reasoningContent: parsed.reasoningContent } : {}),
+            ...(parsed.attachment ? { attachment: parsed.attachment } : {})
           }
         });
       }
-    } else if (!parsed.text) {
+    } else if (!parsed.text && !parsed.attachment) {
       for (const action of parsed.actions) {
         messages.push(this._actionToLive2DMessage(action));
       }
@@ -82,9 +84,10 @@ class ProtocolAdapterPlugin extends AgentPlugin {
       syncActions.push({
         type: 'dialogue',
         text: parsed.text,
-        duration: this._calculateDuration(parsed.text),
+        duration: this._calculateDuration(parsed.text || ''),
         waitComplete: false,
-        ...(parsed.reasoningContent ? { reasoningContent: parsed.reasoningContent } : {})
+        ...(parsed.reasoningContent ? { reasoningContent: parsed.reasoningContent } : {}),
+        ...(parsed.attachment ? { attachment: parsed.attachment } : {})
       });
 
       messages.push({

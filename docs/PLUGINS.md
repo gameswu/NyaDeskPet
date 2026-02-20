@@ -154,6 +154,13 @@ plugins/my-plugin/
 
 语言回退：请求的 locale 不支持时，回退到 `defaultLocale`。
 
+插件也可以发送连接确认消息（可选）：
+
+**插件 → 前端**
+```json
+{ "type": "connected", "message": "Plugin ready" }
+```
+
 ### 配置请求
 
 **插件 → 前端**

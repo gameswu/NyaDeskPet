@@ -1,0 +1,12 @@
+{
+  "name": "planning",
+  "author": "gameswu",
+  "desc": "任务规划插件 — 提供基于 LLM 的任务规划能力，支持多步任务分解和执行，并支持 Sub-Agent 的创建和管理",
+  "version": "1.0.0",
+  "entry": "main.js",
+  "autoActivate": true,
+  "i18n": {
+    "zh-CN": { "desc": "任务规划插件 — 提供基于 LLM 的任务规划能力，支持多步任务分解和执行，并支持 Sub-Agent 的创建和管理" },
+    "en-US": { "desc": "Planning plugin — provides LLM-based task planning with multi-step decomposition, execution, and Sub-Agent creation/management" }
+  }
+}

@@ -21,6 +21,8 @@
 
 - **开发**
   - [开发者指南](DEVELOPMENT.md)
+    - [Agent 框架](AgentFramework.md)
+    - [渲染进程与其他模块](RendererModules.md)
   - [API 参考](API.md)
   - [插件开发](PluginDevelopment.md)
     - [Agent 插件](AgentPluginDevelopment.md)

@@ -3,11 +3,33 @@
 ## Table of Contents
 - [Change Log](#change-log)
   - [Table of Contents](#table-of-contents)
-  - [1.0.1 - 2026.02.17](#101---20260217)
+  - [1.0.2 - 2026.02.20](#102---20260220)
     - [✨ Features](#-features)
     - [🐛 Bug Fixes](#-bug-fixes)
     - [🔧 Changes](#-changes)
+  - [1.0.1 - 2026.02.17](#101---20260217)
+    - [✨ Features](#-features-1)
+    - [🐛 Bug Fixes](#-bug-fixes-1)
+    - [🔧 Changes](#-changes-1)
   - [1.0.0 - 2026.02.15](#100---20260215)
+
+## 1.0.2 - 2026.02.20
+### ✨ Features
+- Update checker now provides a changelog preview when a new version is found, helping users understand the changes
+- Frontend supports image/file reply rendering, with built-in Agent protocol adaptation
+- Built-in Agent adds Planning plugin for LLM-based task planning, supporting multi-step task decomposition, execution, and Sub-Agent creation/management
+- Built-in Agent adds Scheduler plugin for time-based task scheduling, supporting one-time and recurring tasks, with Planning plugin integration
+- Built-in Agent adds Image Generation plugin for LLM-based image generation, supporting multiple image generation models with a unified interface
+- Built-in Agent Provider module adds provider config retrieval interface for plugins to access detailed provider instance configuration
+- Built-in Agent Provider module supports multimodal content (images/files) processing and delivery with a unified interface for plugins
+
+### 🐛 Bug Fixes
+- Fixed the issue where voice input was not displayed after automatic sending
+
+### 🔧 Changes
+- Merged personality settings and reply format rules in the built-in Agent Personality plugin into a single personality setting exposed to users, with a long text editor for easier editing
+- All long text input fields now use VSCode's Monaco Editor component for better editing experience and syntax highlighting
+- Unified configuration format between built-in Agent plugins and frontend plugins
 
 ## 1.0.1 - 2026.02.17
 ### ✨ Features

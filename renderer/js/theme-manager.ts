@@ -88,6 +88,11 @@ class ThemeManager implements IThemeManager {
       document.body.classList.remove('dark-theme');
     }
 
+    // 同步 Monaco Editor 主题
+    if (window.monacoManager?.isLoaded()) {
+      window.monacoManager.updateTheme();
+    }
+
     window.logger.info('应用主题:', this.currentTheme, '→', effectiveTheme);
   }
 }

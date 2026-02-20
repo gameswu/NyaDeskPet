@@ -67,7 +67,7 @@ graph TB
         Providers["LLM / TTS Providers"]
         Tools["ToolManager"]
         MCP["MCP Manager"]
-        AgentPlugins["Agent 插件 ×10"]
+        AgentPlugins["Agent 插件 ×13"]
         DB["SQLite"]
     end
 
@@ -115,6 +115,7 @@ NyaDeskPet/
 │       ├── commands.ts         # 斜杠指令注册表
 │       ├── agent-plugin.ts     # Agent 插件基类与管理框架
 │       ├── skills.ts           # Agent Skills 技能注册与管理
+│       ├── multimodal.ts       # 多模态内容处理工具
 │       ├── providers/          # LLM 各平台具体实现
 │       └── tts-providers/      # TTS 各平台具体实现
 ├── renderer/                   # 渲染进程
@@ -362,6 +363,17 @@ flowchart TD
 
 最大迭代 10 次。
 
+### 多模态内容处理 (Multimodal)
+
+- `multimodal.ts`：统一的多模态内容处理工具模块
+  - `MultimodalContent` 类型：统一表示图片/文件等附件内容（支持 Base64 和 URL 两种引用方式）
+  - `ProviderCapabilities` 类型：声明 Provider 的多模态能力（text / vision / file / toolCalling）
+  - `buildMultimodalMessage()`：构建带附件的聊天消息
+  - `toDataUrl()` / `fromDataUrl()`：Data URL 与 `MultimodalContent` 互转
+  - `isContentSupported()`：检查 Provider 是否支持指定内容类型
+  - `fromChatMessageImage()` / `toChatMessageImage()`：工具结果图片格式转换
+  - `describeContents()`：生成多模态内容的文本摘要
+
 ### Agent 插件系统
 
 - `AgentPlugin`：插件基类，提供 `initialize()` / `terminate()` 生命周期钩子
@@ -369,8 +381,10 @@ flowchart TD
   - 自动激活（`autoActivate: true`）
   - 依赖拓扑排序（`dependencies` 数组）
   - 上下文注入（`AgentPluginContext`）
+- `AgentPluginContext` 提供：工具/指令注册、Provider 调用（含 `getProviderConfig()` 获取配置详情）、多模态处理、技能系统、Handler 专用接口
 - Handler 插件钩子：`onUserInput` / `onTapEvent` / `onFileUpload` / `onPluginMessage` / `onModelInfo` / `onCharacterInfo`
 - 插件间通信：`ctx.getPluginInstance(name)` 获取已激活插件实例
+- 内置 13 个 Agent 插件（含 planning、scheduler、image-gen 等）
 
 > 详细开发指南见 AGENT_PLUGINS.md
 

@@ -110,6 +110,11 @@ Plugin responds:
 }
 ```
 
+Plugins can also send a connection confirmation message (optional):
+```json
+{ "type": "connected", "message": "Plugin ready" }
+```
+
 ### 2. Configuration Request (getConfig)
 
 NyaDeskPet sends:
