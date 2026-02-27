@@ -9,6 +9,8 @@
 
 完全开源的模块化桌宠框架，支持 Live2D 交互、内置 AI Agent。开箱即用，亦可高度定制。欢迎贡献插件、模型和功能！
 
+> 移动端移植项目 [NyaDeskPetAPP](https://github.com/gameswu/NyaDeskPetAPP) 同步开发中！
+
 ## 特性
 
 ### 🎭 AI 驱动 Live2D 模型
